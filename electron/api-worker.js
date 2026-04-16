@@ -499,7 +499,27 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
 
   for (let i = 0; i < 10; i++) {
     if (i > 0) onActivity({ phase: 'thinking', step: i })
-    const res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
+
+    // Stream tokens live via the Anthropic SDK's stream helper, then pull the
+    // assembled final message at the end — same shape as non-streaming create().
+    // Fall back to non-streaming on any failure.
+    let res
+    try {
+      const stream = client.messages.stream({
+        model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs,
+        ...(anthTools ? { tools: anthTools } : {}),
+      })
+      for await (const event of stream) {
+        if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          onActivity({ phase: 'token', text: event.delta.text })
+        }
+      }
+      res = await stream.finalMessage()
+    } catch (streamErr) {
+      process.stderr.write(`[worker] anthropic streaming failed (${streamErr.message}) — falling back\n`)
+      res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
+    }
+
     for (const b of res.content) { if (b.type === 'text') fullText += b.text }
     const tuBlocks = res.content.filter(b => b.type === 'tool_use')
     if (tuBlocks.length) {
