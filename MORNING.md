@@ -36,7 +36,7 @@ Every AI message shows 📋 Copy / 💾 Save buttons on hover. Every code block 
 
 **New OODA Rule 4:** fires when users switch models >25% of the time (≥3 switches in a batch). Uses raw `model_switched` events (already logged but previously unused in diagnosis). Suggests promoting whatever users switch TO as the new default.
 
-### `ac0c8bc` — feat: smart auto-scroll + keyboard shortcuts (also in this commit)
+### `44de109` — feat: smart auto-scroll + keyboard shortcuts
 - **Smart auto-scroll**: only yanks to bottom if you were already near it (<80px). Scroll up to re-read earlier turns and the chat stops jumping around during streaming.
 - **Cmd/Ctrl+K** — focus message input from anywhere
 - **Cmd/Ctrl+N** — new session
