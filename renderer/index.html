@@ -68,6 +68,20 @@
       transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     }
 
+    /* ── Spaces feature flag: when off, hide everything space-related ──
+       Code path stays alive; only surfaces are hidden. Flip
+       SPACES_ENABLED = true to bring them back. */
+    [data-spaces-enabled="false"] .space-selector,
+    [data-spaces-enabled="false"] .welcome-spaces,
+    [data-spaces-enabled="false"] .quick-actions {
+      display: none !important;
+    }
+    /* Kill the ambient space tint when spaces are hidden — just use the
+       default bg so the UI feels quiet. */
+    [data-spaces-enabled="false"] .main {
+      background: var(--bg) !important;
+    }
+
     /* ─── Space ambient tint ────────────────────────────────────────────────
        A very subtle radial gradient of the active space's color in the upper
        corner of the chat area. Strong enough to feel, soft enough to not
@@ -2434,6 +2448,15 @@
   </div>
 
   <script>
+    // ── Feature flags ─────────────────────────────────────────────────────
+    // Spaces (Health / Finance / Legal / etc.) are implemented but hidden
+    // from the UI for now — they add clutter without pulling their weight
+    // at current product stage. Flip to true to bring back the sidebar
+    // switcher, welcome-screen cards, command-palette entries, ambient
+    // tint, quick-actions, and custom-space creation UI.
+    const SPACES_ENABLED = false
+    document.documentElement.dataset.spacesEnabled = String(SPACES_ENABLED)
+
     // ── State ─────────────────────────────────────────────────────────────
     let messages = []
     let isStreaming = false
@@ -2570,15 +2593,17 @@
           action: () => { switchSession(s.id); closeCmdPalette() },
         })
       }
-      // Spaces
-      for (const sp of [...allSpaces, ...customSpaces]) {
-        items.push({
-          kind: 'space',
-          icon: sp.icon || '⚙️',
-          label: sp.name,
-          search: sp.name + ' ' + (sp.description || ''),
-          action: () => { switchSpace(sp.id); closeCmdPalette() },
-        })
+      // Spaces (skipped when the feature flag is off)
+      if (SPACES_ENABLED) {
+        for (const sp of [...allSpaces, ...customSpaces]) {
+          items.push({
+            kind: 'space',
+            icon: sp.icon || '⚙️',
+            label: sp.name,
+            search: sp.name + ' ' + (sp.description || ''),
+            action: () => { switchSpace(sp.id); closeCmdPalette() },
+          })
+        }
       }
       // Models (from the model dropdown)
       const select = document.getElementById('model-select')
@@ -3517,20 +3542,24 @@
       // Show welcome if no messages, otherwise show chat
       const activeSpaceObj = getCurrentSpace()
       const activeId = activeSpaceObj?.id
-      const allForWelcome = [...allSpaces, ...customSpaces]
-      const spaceCards = allForWelcome.map(sp => {
-        const active = sp.id === activeId ? ' active' : ''
-        return `<div class="welcome-space-card${active}" onclick="switchSpace('${sp.id}'); document.getElementById('input').focus()">
-          <div class="welcome-space-icon">${sp.icon || '⚙️'}</div>
-          <div class="welcome-space-name">${escapeHtml(sp.name)}</div>
-          <div class="welcome-space-desc">${escapeHtml(sp.description || '')}</div>
-        </div>`
-      }).join('')
+      let spaceCardsHtml = ''
+      if (SPACES_ENABLED) {
+        const allForWelcome = [...allSpaces, ...customSpaces]
+        const spaceCards = allForWelcome.map(sp => {
+          const active = sp.id === activeId ? ' active' : ''
+          return `<div class="welcome-space-card${active}" onclick="switchSpace('${sp.id}'); document.getElementById('input').focus()">
+            <div class="welcome-space-icon">${sp.icon || '⚙️'}</div>
+            <div class="welcome-space-name">${escapeHtml(sp.name)}</div>
+            <div class="welcome-space-desc">${escapeHtml(sp.description || '')}</div>
+          </div>`
+        }).join('')
+        spaceCardsHtml = `<div class="welcome-spaces">${spaceCards}</div>`
+      }
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
         <div class="welcome-title"><span class="welcome-gradient">Alaude</span> — what are we building?</div>
-        <div class="welcome-sub">Pick a space, drop a file, or just start typing. Local and cloud models in one window.</div>
-        <div class="welcome-spaces">${spaceCards}</div>
+        <div class="welcome-sub">Drop a file, or just start typing. Local and cloud models in one window.</div>
+        ${spaceCardsHtml}
         <div class="quick-actions" id="quick-actions"></div>
         <div class="welcome-hints">
           <span><kbd>⌘K</kbd> focus input</span>
