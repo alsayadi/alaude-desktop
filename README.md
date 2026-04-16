@@ -16,15 +16,13 @@
 
 ## What this is
 
-Alaude is a personal project — an Electron desktop app that talks to any LLM you can point it at. Built because I wanted a single AI surface that:
+Alaude is an Electron desktop app that talks to any LLM you can point it at. A single AI surface that:
 
-- Runs models **locally** when I don't trust sending something to the cloud
-- Runs **cloud models** (Claude, GPT-4, Gemini, GLM-5.1, Qwen, etc.) when I need the horsepower
-- Has **domain-specific "Spaces"** instead of the same prompt box for every task
-- Watches itself and tells me **what's slow / broken / under-used** via a built-in OODA loop
-- Can actually *run commands, write files, and open browser tabs* — not just chat
-
-The repo is public for transparency — I'm sharing how it's wired rather than running it as a product.
+- Runs models **locally** (via Ollama) when the prompt shouldn't leave the machine
+- Routes to **cloud models** (Claude, GPT-4, Gemini, GLM-5.1, Qwen, etc.) when heavier horsepower is needed
+- Exposes **domain-specific "Spaces"** — Health, Finance, Legal, Real Estate, Education, Marketing — each with its own system prompt and quick-actions, instead of the same prompt box for every task
+- Watches itself and surfaces **what's slow / broken / under-used** via a built-in OODA loop
+- Can actually *run commands, write files, and open browser tabs* when given a workspace folder — not just chat
 
 ---
 
@@ -156,10 +154,10 @@ npm run build:linux  # .AppImage + .deb
 - [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript), [openai](https://github.com/openai/openai-node), [@google/genai](https://github.com/googleapis/js-genai) — provider SDKs
 - Model weights: Google DeepMind (Gemma), Alibaba (Qwen), Meta (Llama), DeepSeek, Z.ai (GLM-5.1) — under their respective licenses
 
-Built over a few sessions with [Claude Code](https://www.anthropic.com/claude/code) doing a lot of the typing. The [build log](docs/build-log.md) covers the overnight push that shipped most of the features listed above.
+Built with heavy assist from [Claude Code](https://www.anthropic.com/claude/code). The [build log](docs/build-log.md) covers the session that shipped most of the features listed above.
 
 ---
 
 ## License
 
-[MIT](LICENSE) — 2026 Ahmed Alsayadi
+[MIT](LICENSE)

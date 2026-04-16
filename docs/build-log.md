@@ -112,7 +112,7 @@ The loop is behaving correctly. When you use the app for real and hit 10+ intera
 #    Pick any folder → pulse stops, hint disappears.
 
 # 3. OODA fixture — verify the loop end-to-end
-cd /Users/ahmed/Desktop/build/claude/alaude-desktop
+cd /path/to/alaude-desktop
 node electron/test-ooda-fixture.js
 # Should print a priority-1 diagnosis about Ollama connection errors.
 # Your real event log is untouched.
