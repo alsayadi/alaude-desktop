@@ -296,7 +296,7 @@ function groupByPair(outcomes, k1, k2) {
   return out
 }
 
-function orient(outcomes) {
+function orient(outcomes, extras = {}) {
   return {
     overall: statsFor(outcomes),
     bySpace: groupBy(outcomes, 'space'),
@@ -306,6 +306,10 @@ function orient(outcomes) {
     byQuickAction: groupBy(outcomes.filter(o => o.action), 'action'),
     bySpaceModel: groupByPair(outcomes, 'space', 'modelFamily'),
     byErrorType: groupBy(outcomes.filter(o => o.errorType), 'errorType'),
+    // Event-derived signals (not outcome-attributable)
+    modelSwitchRate: extras.modelSwitchRate ?? null,
+    modelSwitchCount: extras.modelSwitchCount ?? 0,
+    topSwitchedFrom: extras.topSwitchedFrom ?? null,
   }
 }
 
@@ -367,6 +371,18 @@ function diagnose(orientation) {
       param: `providers[${slowest.key}].timeout`,
       bucket: slowest.key,
       dimension: 'provider',
+    }
+  }
+
+  // Rule 4.5: High model-switch rate — users are unhappy with the default model
+  if (o.modelSwitchRate != null && o.modelSwitchRate > 0.25 && o.modelSwitchCount >= 3) {
+    return {
+      priority: 4,
+      problem: `Users switched models ${o.modelSwitchCount} times (${(o.modelSwitchRate * 100).toFixed(0)}% of interactions)${o.topSwitchedFrom ? ` — most common origin: "${o.topSwitchedFrom}"` : ''}`,
+      suggestion: `Review the default model choice — users are voting with their feet. If "${o.topSwitchedFrom || 'the default'}" keeps being switched away from, promote whatever they switch TO as the new default.`,
+      param: `defaultModel`,
+      bucket: o.topSwitchedFrom,
+      dimension: 'model',
     }
   }
 
@@ -490,7 +506,19 @@ function maybeRunBatch({ force = false } = {}) {
     }
     if (newOutcomes.length === 0) return { ran: false, newCount: 0, needed: MIN_BATCH_SIZE }
 
-    const orientation = orient(newOutcomes)
+    // Gather event-level signals over the same window as the new outcomes
+    const windowStart = newOutcomes[0].ts
+    const windowEvents = allEvents.filter(e => e.ts >= windowStart)
+    const switches = windowEvents.filter(e => e.kind === 'model_switched')
+    const switchCount = switches.length
+    const switchRate = newOutcomes.length ? switchCount / newOutcomes.length : 0
+    const topSwitchedFrom = topOf(switches.map(e => e.fromModel).filter(Boolean))
+
+    const orientation = orient(newOutcomes, {
+      modelSwitchCount: switchCount,
+      modelSwitchRate: switchRate,
+      topSwitchedFrom,
+    })
     const diagnosis = diagnose(orientation)
     const batchId = (state.batchCount || 0) + 1
     const batchMeta = {

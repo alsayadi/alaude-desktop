@@ -608,6 +608,57 @@
     }
     .msg-save:hover { border-color: var(--green); color: var(--green); }
 
+    .msg-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .msg:hover .msg-actions { opacity: 1; }
+    .msg-action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .msg-action-btn:hover { border-color: var(--green); color: var(--green); }
+    .msg-action-btn.copied { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+    /* Code-block copy button (floats in top-right of each <pre>) */
+    .msg-content .md-pre { position: relative; padding-top: 28px; }
+    .msg-content .md-pre-lang {
+      position: absolute;
+      top: 6px;
+      left: 12px;
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-family: 'SF Mono', Menlo, monospace;
+    }
+    .msg-content .md-pre-copy {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .msg-content .md-pre:hover .md-pre-copy { opacity: 1; }
+    .msg-content .md-pre-copy:hover { border-color: var(--green); color: var(--green); }
+    .msg-content .md-pre-copy.copied { color: var(--green); border-color: var(--green); opacity: 1; }
+
     .send-btn {
       width: 32px;
       height: 32px;
@@ -1720,8 +1771,11 @@
         const msg = messages[i]
         const roleClass = msg.role
         const roleLabel = msg.role === 'user' ? 'You' : 'Alaude'
-        const saveBtn = (!msg.streaming && msg.role === 'assistant' && msg.content.length > 50)
-          ? `<button class="msg-save" onclick="saveMessage(${i})">Save</button>`
+        const actions = (!msg.streaming && msg.role === 'assistant' && msg.content.length > 20)
+          ? `<div class="msg-actions">
+              <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
+              ${msg.content.length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
+             </div>`
           : ''
         html += `<div class="msg">
           <div class="msg-role ${roleClass}">${roleLabel}</div>
@@ -1729,7 +1783,7 @@
             ? renderActivityChips() + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
             : (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
           }</div>
-          ${saveBtn}
+          ${actions}
         </div>`
       }
 
@@ -1757,6 +1811,40 @@
         }
       }
     }
+
+    async function copyMessage(idx, btn) {
+      const msg = messages[idx]
+      if (!msg) return
+      try {
+        await navigator.clipboard.writeText(msg.content || '')
+        const orig = btn.innerHTML
+        btn.innerHTML = '✓ Copied'
+        btn.classList.add('copied')
+        setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied') }, 1400)
+        if (ux.lastAIResponseMessageId) {
+          logUx({ kind: 'response_copied', sessionId: ux.sessionId, messageId: ux.lastAIResponseMessageId })
+        }
+      } catch (err) {
+        console.error('Clipboard write failed:', err)
+      }
+    }
+
+    // Delegated handler for "Copy" buttons inside code blocks (added by renderMarkdown)
+    document.addEventListener('click', async (e) => {
+      const target = e.target.closest?.('.md-pre-copy')
+      if (!target) return
+      const pre = target.closest('.md-pre')
+      if (!pre) return
+      const codeEl = pre.querySelector('code')
+      if (!codeEl) return
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent)
+        const orig = target.innerHTML
+        target.innerHTML = '✓'
+        target.classList.add('copied')
+        setTimeout(() => { target.innerHTML = orig; target.classList.remove('copied') }, 1400)
+      } catch {}
+    })
 
     /**
      * Pure HTML entity escape — for UI strings, tool args, etc.
@@ -1852,7 +1940,7 @@
         const { lang, code } = codeBlocks[+i]
         const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const langCls = lang ? ` data-lang="${lang}"` : ''
-        return `<pre class="md-pre"${langCls}><code>${escCode}</code></pre>`
+        return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<button class="md-pre-copy" title="Copy code">📋</button><code>${escCode}</code></pre>`
       })
 
       // 7. Paragraphs — wrap runs of non-block content
