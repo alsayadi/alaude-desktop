@@ -2403,7 +2403,7 @@
       // Update session title from first message
       const session = sessions.find(s => s.id === currentSessionId)
       if (session && session.title === 'New session') {
-        session.title = text.slice(0, 40) + (text.length > 40 ? '...' : '')
+        session.title = generateSessionTitle(text)
         renderSessions()
       }
 
@@ -2594,6 +2594,33 @@
           logUx({ kind: 'response_copied', sessionId: ux.sessionId, messageId: ux.lastAIResponseMessageId })
         }
       }
+    }
+
+    // Extract a clean, short title from the first user message. Better than
+    // a raw 40-char slice — strips markdown/code markers, stops at sentence
+    // boundaries, caps at 8 words or 50 chars, capitalizes.
+    function generateSessionTitle(text) {
+      if (!text) return 'New session'
+      let t = String(text).trim()
+      // Drop a leading "--- File: foo ---" marker (file-attach preamble)
+      t = t.replace(/^---\s*File:[^\n]*---\s*\n?/gi, '').trim()
+      t = t.replace(/^\[Attached[^\]]*\]\s*\n?/gi, '').trim()
+      // Drop leading quotes, bullets, headers, backticks
+      t = t.replace(/^[#>*\-`"'\s]+/, '').trim()
+      // First non-empty line
+      t = t.split('\n').map(l => l.trim()).find(l => l.length > 0) || t
+      // Strip any fenced code block leftovers
+      t = t.replace(/`+/g, '').replace(/\*\*|__/g, '').replace(/\[|\]/g, '')
+      // Stop at sentence end if it's close
+      const m = t.match(/^(.+?[.!?])(\s|$)/)
+      if (m && m[1].length <= 60) t = m[1].replace(/[.!?]+$/, '')
+      // Cap at 8 words
+      const words = t.split(/\s+/)
+      if (words.length > 8) t = words.slice(0, 8).join(' ') + '…'
+      // Cap at 50 chars
+      if (t.length > 50) t = t.slice(0, 47).trimEnd() + '…'
+      if (!t) return 'New session'
+      return t.charAt(0).toUpperCase() + t.slice(1)
     }
 
     function formatRelTime(ts) {
