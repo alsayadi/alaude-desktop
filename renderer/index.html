@@ -243,6 +243,71 @@
     .session-item:hover { background: var(--bg-hover); color: var(--text); }
     .session-item.active { background: var(--bg-hover); color: var(--green); }
 
+    .session-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .session-item-title {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-item-delete {
+      flex-shrink: 0;
+      background: none;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 16px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .session-item:hover .session-item-delete { opacity: 0.7; }
+    .session-item-delete:hover { color: #e74c3c; opacity: 1; }
+
+    .sidebar-search {
+      padding: 0 16px 8px;
+    }
+    .sidebar-search-input {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: inherit;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      outline: none;
+    }
+    .sidebar-search-input:focus { border-color: var(--green); }
+
+    .msg-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .msg-model-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--green-dim);
+      color: var(--green);
+      font-family: 'SF Mono', Menlo, monospace;
+      letter-spacing: 0.02em;
+    }
+    .msg-timestamp {
+      font-size: 10px;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+    }
+
     .sidebar-footer {
       padding: 12px 16px;
       border-top: 1px solid var(--border);
@@ -329,16 +394,107 @@
     }
 
     .welcome-logo {
-      width: 64px;
-      height: 64px;
-      border-radius: 16px;
-      box-shadow: 0 0 30px var(--green-glow);
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      box-shadow: 0 0 40px var(--green-glow);
+      animation: welcomeFloat 4s ease-in-out infinite;
+    }
+    @keyframes welcomeFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+    .welcome-title { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+    .welcome-title .welcome-gradient {
+      background: linear-gradient(135deg, var(--green) 0%, #4ad28c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .welcome-sub { font-size: 14px; max-width: 420px; text-align: center; line-height: 1.55; color: var(--text-dim); }
+
+    .welcome-spaces {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      width: 100%;
+      max-width: 660px;
+      margin-top: 8px;
+    }
+    .welcome-space-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      text-align: left;
+    }
+    .welcome-space-card:hover {
+      border-color: var(--green);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+    }
+    .welcome-space-card.active {
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+    .welcome-space-icon { font-size: 24px; margin-bottom: 4px; }
+    .welcome-space-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .welcome-space-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+
+    .welcome-hints {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .welcome-hints kbd {
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--bg-sidebar);
+      color: var(--text-dim);
+      font-family: inherit;
+      font-size: 10px;
+      margin: 0 2px;
     }
 
-    .welcome-title { font-size: 20px; font-weight: 600; color: var(--text); }
-    .welcome-sub { font-size: 14px; max-width: 360px; text-align: center; line-height: 1.5; }
+    @keyframes msgSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .scroll-fab {
+      position: absolute;
+      bottom: 92px;
+      right: 22px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      font-size: 16px;
+    }
+    .scroll-fab.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .scroll-fab:hover { color: var(--green); border-color: var(--green); }
 
     .msg {
+      animation: msgSlideIn 0.22s ease-out;
       max-width: 720px;
       width: 100%;
       margin: 0 auto;
@@ -748,14 +904,15 @@
     .modal-overlay.show { display: flex; }
 
     .modal {
-      background: #fff;
+      background: var(--bg-input);
+      color: var(--text);
       border: 1px solid var(--border);
       border-radius: 14px;
       width: 480px;
       max-height: 80vh;
       overflow-y: auto;
       padding: 24px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      box-shadow: var(--shadow);
     }
 
     .modal h2 {
@@ -1223,6 +1380,83 @@
       font-size: 12px !important;
     }
 
+    /* ─── Command Palette ────────────────────────────────────────────────── */
+    .cmd-palette-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 200;
+      padding-top: 12vh;
+    }
+    .cmd-palette-overlay.show { display: flex; }
+    .cmd-palette {
+      width: 560px;
+      max-width: 90vw;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .cmd-palette-input {
+      width: 100%;
+      padding: 14px 18px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+      border-bottom: 1px solid var(--border);
+    }
+    .cmd-palette-input::placeholder { color: var(--text-faint); }
+    .cmd-palette-list {
+      max-height: 420px;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .cmd-section-header {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 8px 10px 4px;
+    }
+    .cmd-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .cmd-item:hover, .cmd-item.active {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+    .cmd-item.active .cmd-item-kind { color: var(--green); }
+    .cmd-item-icon { flex-shrink: 0; width: 20px; text-align: center; font-size: 14px; }
+    .cmd-item-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cmd-item-kind {
+      flex-shrink: 0;
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .cmd-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 13px;
+    }
+
     /* ─── Login Screen ──────────────────────────────────────────────────── */
     .login-screen {
       position: fixed;
@@ -1433,6 +1667,9 @@
       <div class="space-dropdown" id="space-dropdown"></div>
     </div>
     <button class="sidebar-new-btn" onclick="newSession()">+ New session</button>
+    <div class="sidebar-search">
+      <input id="session-search" class="sidebar-search-input" type="text" placeholder="Search sessions…" oninput="onSessionSearchInput(event)" />
+    </div>
     <div class="sidebar-label">Recent</div>
     <div class="sidebar-sessions" id="sessions"></div>
     <div class="sidebar-footer">
@@ -1487,6 +1724,7 @@
         <div class="drop-icon">📎</div>
         <div class="drop-text">Drop file here</div>
       </div>
+      <button id="scroll-fab" class="scroll-fab" onclick="scrollMessagesToBottom()" aria-label="Scroll to latest">↓</button>
     </div>
 
     <div class="file-chips" id="file-chips"></div>
@@ -1595,6 +1833,14 @@
         </div>
         <div class="lm-custom-hint">Any tag from <a href="#" onclick="window.alaude.openExternal('https://ollama.com/library'); return false" style="color:var(--green);text-decoration:none">ollama.com/library</a> works.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Command Palette (⌘P / Ctrl+P) -->
+  <div class="cmd-palette-overlay" id="cmd-palette-overlay" onclick="if(event.target===this)closeCmdPalette()">
+    <div class="cmd-palette">
+      <input id="cmd-palette-input" class="cmd-palette-input" type="text" placeholder="Jump to session, space, model…" autocomplete="off" spellcheck="false" />
+      <div id="cmd-palette-list" class="cmd-palette-list"></div>
     </div>
   </div>
 
@@ -1745,6 +1991,168 @@
       }
     })
 
+    // ── Command Palette ──────────────────────────────────────────────────
+    let cmdPaletteItems = []
+    let cmdPaletteActiveIdx = 0
+
+    function openCmdPalette() {
+      const overlay = document.getElementById('cmd-palette-overlay')
+      const input = document.getElementById('cmd-palette-input')
+      input.value = ''
+      cmdPaletteActiveIdx = 0
+      renderCmdPalette('')
+      overlay.classList.add('show')
+      requestAnimationFrame(() => input.focus())
+    }
+    function closeCmdPalette() {
+      document.getElementById('cmd-palette-overlay').classList.remove('show')
+    }
+
+    function buildCmdItems() {
+      const items = []
+      // Sessions
+      for (const s of sessions.slice(0, 20)) {
+        items.push({
+          kind: 'session',
+          icon: s.id === currentSessionId ? '●' : '○',
+          label: s.title || 'Untitled session',
+          search: (s.title || '') + ' ' + (s.messages?.map(m => m.content).join(' ').slice(0, 500) || ''),
+          action: () => { switchSession(s.id); closeCmdPalette() },
+        })
+      }
+      // Spaces
+      for (const sp of [...allSpaces, ...customSpaces]) {
+        items.push({
+          kind: 'space',
+          icon: sp.icon || '⚙️',
+          label: sp.name,
+          search: sp.name + ' ' + (sp.description || ''),
+          action: () => { switchSpace(sp.id); closeCmdPalette() },
+        })
+      }
+      // Models (from the model dropdown)
+      const select = document.getElementById('model-select')
+      for (const opt of Array.from(select.options)) {
+        if (!opt.value && !opt.textContent) continue
+        const group = opt.parentElement?.label || ''
+        items.push({
+          kind: `model${group ? ' · ' + group.toLowerCase() : ''}`,
+          icon: group.toLowerCase().includes('local') ? '🦙' : '☁️',
+          label: opt.textContent,
+          search: opt.textContent + ' ' + opt.value + ' ' + group,
+          action: () => { select.value = opt.value; changeModel(opt.value); closeCmdPalette() },
+        })
+      }
+      // Actions
+      items.push(
+        { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
+        { kind: 'action', icon: '🌙', label: 'Toggle theme', search: 'theme dark light', action: () => { toggleTheme(); closeCmdPalette() } },
+        { kind: 'action', icon: '📁', label: 'Pick workspace folder', search: 'workspace folder', action: () => { closeCmdPalette(); pickWorkspace() } },
+        { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
+        { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
+        { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
+      )
+      return items
+    }
+
+    // Simple fuzzy score: characters must appear in order, with bonus for contiguous matches
+    function fuzzyScore(text, query) {
+      if (!query) return 1
+      text = text.toLowerCase(); query = query.toLowerCase()
+      let score = 0, ti = 0, lastMatch = -2
+      for (const ch of query) {
+        const idx = text.indexOf(ch, ti)
+        if (idx < 0) return 0
+        if (idx === lastMatch + 1) score += 2 // bonus for contiguous
+        score += 1
+        lastMatch = idx
+        ti = idx + 1
+      }
+      return score / (text.length + query.length)
+    }
+
+    function renderCmdPalette(q) {
+      const all = buildCmdItems()
+      cmdPaletteItems = q
+        ? all.map(it => ({ it, score: fuzzyScore(it.search, q) })).filter(r => r.score > 0).sort((a, b) => b.score - a.score).map(r => r.it).slice(0, 30)
+        : all.slice(0, 30)
+      cmdPaletteActiveIdx = Math.min(cmdPaletteActiveIdx, Math.max(0, cmdPaletteItems.length - 1))
+
+      const list = document.getElementById('cmd-palette-list')
+      if (!cmdPaletteItems.length) {
+        list.innerHTML = '<div class="cmd-empty">No matches.</div>'
+        return
+      }
+
+      // Group by kind with headers (only when no query)
+      let html = ''
+      if (!q) {
+        const groups = {}
+        cmdPaletteItems.forEach((it, i) => { (groups[it.kind] ||= []).push({ it, i }) })
+        const order = ['action', 'session', 'space']
+        const seen = new Set()
+        for (const k of order) {
+          if (!groups[k]) continue
+          html += `<div class="cmd-section-header">${k === 'action' ? 'Actions' : k.charAt(0).toUpperCase() + k.slice(1) + 's'}</div>`
+          for (const { it, i } of groups[k]) { html += cmdItemHtml(it, i); seen.add(k) }
+        }
+        // Render any remaining kinds (e.g. model variants) under "Models"
+        const rest = Object.entries(groups).filter(([k]) => !seen.has(k))
+        if (rest.length) {
+          html += `<div class="cmd-section-header">Models</div>`
+          for (const [, items] of rest) for (const { it, i } of items) html += cmdItemHtml(it, i)
+        }
+      } else {
+        cmdPaletteItems.forEach((it, i) => { html += cmdItemHtml(it, i) })
+      }
+      list.innerHTML = html
+
+      // Scroll active into view
+      const active = list.querySelector('.cmd-item.active')
+      active?.scrollIntoView({ block: 'nearest' })
+    }
+    function cmdItemHtml(it, i) {
+      const active = i === cmdPaletteActiveIdx ? ' active' : ''
+      return `<div class="cmd-item${active}" onmouseenter="cmdPaletteActiveIdx=${i}; renderCmdPalette(document.getElementById('cmd-palette-input').value)" onclick="cmdPaletteItems[${i}]?.action()">
+        <span class="cmd-item-icon">${it.icon || ''}</span>
+        <span class="cmd-item-label">${escapeHtml(it.label)}</span>
+        <span class="cmd-item-kind">${it.kind}</span>
+      </div>`
+    }
+
+    // Wire palette input events after DOM is ready
+    setTimeout(() => {
+      const input = document.getElementById('cmd-palette-input')
+      if (!input) return
+      input.addEventListener('input', (e) => renderCmdPalette(e.target.value))
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); cmdPaletteActiveIdx = Math.min(cmdPaletteItems.length - 1, cmdPaletteActiveIdx + 1); renderCmdPalette(input.value) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); cmdPaletteActiveIdx = Math.max(0, cmdPaletteActiveIdx - 1); renderCmdPalette(input.value) }
+        else if (e.key === 'Enter') { e.preventDefault(); cmdPaletteItems[cmdPaletteActiveIdx]?.action() }
+        else if (e.key === 'Escape') { e.preventDefault(); closeCmdPalette() }
+      })
+    }, 0)
+
+    // ── Scroll-to-latest FAB ─────────────────────────────────────────────
+    function scrollMessagesToBottom() {
+      const c = document.getElementById('messages')
+      c.scrollTo({ top: c.scrollHeight, behavior: 'smooth' })
+    }
+    function updateScrollFab() {
+      const c = document.getElementById('messages')
+      const fab = document.getElementById('scroll-fab')
+      if (!c || !fab) return
+      const dist = c.scrollHeight - c.scrollTop - c.clientHeight
+      // Show FAB when we're > 200px from the bottom AND there are messages
+      const hasMessages = c.querySelector('.msg')
+      if (dist > 200 && hasMessages) fab.classList.add('show')
+      else fab.classList.remove('show')
+    }
+    setTimeout(() => {
+      const c = document.getElementById('messages')
+      if (c) c.addEventListener('scroll', updateScrollFab, { passive: true })
+    }, 0)
+
     // ── Theme (light / dark) ─────────────────────────────────────────────
     const LS_THEME = 'alaude:theme:v1'
     function applyTheme(theme) {
@@ -1799,6 +2207,11 @@
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault()
         toggleTheme()
+      }
+      // Cmd/Ctrl+P → open command palette
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault()
+        openCmdPalette()
       }
     })
 
@@ -1888,10 +2301,20 @@
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
-        messages[messages.length - 1] = { role: 'assistant', content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)' }
+        messages[messages.length - 1] = {
+          role: 'assistant',
+          content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)',
+          model,
+          ts: Date.now(),
+        }
       } catch (err) {
         console.error('[callAI] error:', err)
-        messages[messages.length - 1] = { role: 'assistant', content: `Error: ${err.message || String(err)}` }
+        messages[messages.length - 1] = {
+          role: 'assistant',
+          content: `Error: ${err.message || String(err)}`,
+          model,
+          ts: Date.now(),
+        }
       }
 
       isStreaming = false
@@ -1942,28 +2365,60 @@
         if (msg.streaming) {
           const chips = renderActivityChips()
           if (msg.content && msg.content.length > 0) {
-            // Tokens arriving — show rendered markdown + a blinking caret
             body = chips + renderMarkdown(msg.content) + '<span class="stream-caret"></span>'
           } else {
-            // No content yet — typing dots
             body = chips + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
           }
         } else {
           body = (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
         }
+        // Model + timestamp metadata on assistant responses
+        const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
+          ? `<span class="msg-model-badge">${escapeHtml(msg.model)}</span>`
+          : ''
+        const timestamp = (msg.ts && !msg.streaming)
+          ? `<span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>`
+          : ''
+        // Regenerate button on the LAST assistant message
+        const isLastAssistant = msg.role === 'assistant' && !msg.streaming && i === messages.length - 1
+        const regenBtn = isLastAssistant ? `<button class="msg-action-btn" onclick="regenerateLast()" title="Re-run with same / different model">↻ Regenerate</button>` : ''
+        const actionsFull = actions
+          ? actions.replace('</div>', regenBtn + '</div>')
+          : (isLastAssistant ? `<div class="msg-actions">${regenBtn}</div>` : '')
         html += `<div class="msg">
-          <div class="msg-role ${roleClass}">${roleLabel}</div>
+          <div class="msg-header">
+            <span class="msg-role ${roleClass}">${roleLabel}</span>
+            ${modelBadge}
+            ${timestamp}
+          </div>
           <div class="msg-content">${body}</div>
-          ${actions}
+          ${actionsFull}
         </div>`
       }
 
       // Show welcome if no messages, otherwise show chat
+      const activeSpaceObj = getCurrentSpace()
+      const activeId = activeSpaceObj?.id
+      const allForWelcome = [...allSpaces, ...customSpaces]
+      const spaceCards = allForWelcome.map(sp => {
+        const active = sp.id === activeId ? ' active' : ''
+        return `<div class="welcome-space-card${active}" onclick="switchSpace('${sp.id}'); document.getElementById('input').focus()">
+          <div class="welcome-space-icon">${sp.icon || '⚙️'}</div>
+          <div class="welcome-space-name">${escapeHtml(sp.name)}</div>
+          <div class="welcome-space-desc">${escapeHtml(sp.description || '')}</div>
+        </div>`
+      }).join('')
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
-        <div class="welcome-title">What can I help you with?</div>
-        <div class="welcome-sub">Drop files here, or try one of these:</div>
+        <div class="welcome-title"><span class="welcome-gradient">Alaude</span> — what are we building?</div>
+        <div class="welcome-sub">Pick a space, drop a file, or just start typing. Local and cloud models in one window.</div>
+        <div class="welcome-spaces">${spaceCards}</div>
         <div class="quick-actions" id="quick-actions"></div>
+        <div class="welcome-hints">
+          <span><kbd>⌘K</kbd> focus input</span>
+          <span><kbd>⌘P</kbd> jump anywhere</span>
+          <span><kbd>⌘⇧L</kbd> theme</span>
+        </div>
       </div>`
 
       // Smart auto-scroll: only stick to bottom if the user was already near it
@@ -1972,6 +2427,7 @@
       const wasNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 80
       container.innerHTML = (messages.length === 0 ? welcomeHtml : '') + html
       if (wasNearBottom) container.scrollTop = container.scrollHeight
+      updateScrollFab?.()
     }
 
     async function saveMessage(idx) {
@@ -1984,6 +2440,45 @@
           logUx({ kind: 'response_copied', sessionId: ux.sessionId, messageId: ux.lastAIResponseMessageId })
         }
       }
+    }
+
+    function formatRelTime(ts) {
+      const diff = Date.now() - ts
+      if (diff < 60_000) return 'just now'
+      if (diff < 3_600_000) return Math.floor(diff / 60_000) + 'm ago'
+      if (diff < 86_400_000) return Math.floor(diff / 3_600_000) + 'h ago'
+      return Math.floor(diff / 86_400_000) + 'd ago'
+    }
+
+    // Regenerate the last assistant message using the current model selection.
+    // The previous assistant message is dropped, and callAI is re-invoked with
+    // the preceding user message's context.
+    function regenerateLast() {
+      if (isStreaming) return
+      const lastAssistant = messages.length - 1
+      if (lastAssistant < 1 || messages[lastAssistant].role !== 'assistant') return
+      // Remove the assistant message and retry from the preceding user turn.
+      messages.pop()
+      renderMessages()
+      sendBtn.disabled = true
+      isStreaming = true
+      messages.push({ role: 'assistant', content: '', streaming: true })
+      renderMessages()
+
+      const messageId = newMessageId()
+      const uxMeta = {
+        messageId,
+        sessionId: ux.sessionId,
+        entry: 'regenerate',
+        action: null,
+        promptHash: ux.lastPromptHash,
+        hasAttachments: false,
+      }
+      ux.lastMessageId = messageId
+      ux.currentMessageId = messageId
+      // Piggy-back on callAI (the last user message is already in messages[])
+      const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
+      callAI(lastUserText, uxMeta)
     }
 
     async function copyMessage(idx, btn) {
@@ -2133,11 +2628,31 @@
     }
 
     // ── Sessions ─────────────────────────────────────────────────────────
+    let sessionSearchQuery = ''
+    function onSessionSearchInput(ev) {
+      sessionSearchQuery = (ev.target.value || '').toLowerCase().trim()
+      renderSessions()
+    }
     function renderSessions() {
       const container = document.getElementById('sessions')
-      container.innerHTML = sessions.map(s =>
-        `<div class="session-item ${s.id === currentSessionId ? 'active' : ''}" onclick="switchSession(${s.id})">${s.title}</div>`
-      ).join('')
+      let list = sessions
+      if (sessionSearchQuery) {
+        list = sessions.filter(s => {
+          const hay = ((s.title || '') + ' ' + (s.messages || []).map(m => m.content || '').join(' ')).toLowerCase()
+          return hay.includes(sessionSearchQuery)
+        })
+      }
+      if (!list.length) {
+        container.innerHTML = `<div style="color:var(--text-faint);font-size:12px;padding:14px 16px">No sessions match "${escapeHtml(sessionSearchQuery)}"</div>`
+        return
+      }
+      container.innerHTML = list.map(s => {
+        const active = s.id === currentSessionId ? 'active' : ''
+        return `<div class="session-item ${active}">
+          <span class="session-item-title" onclick="switchSession(${s.id})">${escapeHtml(s.title)}</span>
+          <button class="session-item-delete" onclick="event.stopPropagation(); if(confirm('Delete this session?')) deleteSession(${s.id})" title="Delete">×</button>
+        </div>`
+      }).join('')
     }
 
     function newSession() {
