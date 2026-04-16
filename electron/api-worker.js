@@ -365,7 +365,7 @@ function summarizeArgs(name, args) {
   return ''
 }
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id }) {
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -383,7 +383,9 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id }) {
     sysPrompt += '\n\n' + spacePrompt
   }
 
-  const onActivity = (activity) => emitActivity(id, activity)
+  // Wrap every activity event with the renderer messageId so the renderer can
+  // route tokens to the right lane in council / multi-model mode.
+  const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
     return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity })

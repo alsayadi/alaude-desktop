@@ -408,7 +408,7 @@ ipcMain.handle('chat', async (_, messagesRaw, model, workspacePath, spaceId, uxM
       resolve: (result) => { finalize(true, null, String(result || '').length); resolve(result) },
       reject: (err) => { finalize(false, err); reject(err) },
     })
-    const req = JSON.stringify({ id, messages: messagesRaw, model, workspacePath, spacePrompt }) + '\n'
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
 

@@ -674,6 +674,183 @@
       :root:not([data-theme]) .msg-content [style*="color:#999"] { color: var(--text-faint) !important; }
     }
 
+    /* ─── Council mode ────────────────────────────────────────────────────── */
+    .topbar-keys-btn.council-toggle.on {
+      border-color: var(--green);
+      color: var(--green);
+      background: var(--green-dim);
+    }
+    .council-slots {
+      display: flex;
+      gap: 6px;
+      max-width: 720px;
+      margin: 6px auto 0;
+      padding: 6px 8px;
+      background: var(--green-dim);
+      border: 1px solid var(--green);
+      border-radius: 7px;
+      flex-wrap: wrap;
+    }
+    .council-slot {
+      flex: 1;
+      min-width: 140px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-family: inherit;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      outline: none;
+    }
+    .council-slot:focus { border-color: var(--green); }
+    .council-slot-add {
+      padding: 5px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      color: var(--text-dim);
+    }
+    .council-slot-add:hover { border-color: var(--green); color: var(--green); }
+
+    /* Council message: multiple lanes side-by-side */
+    .msg.msg-council .msg-content {
+      padding: 0;
+    }
+    .council-lanes {
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .council-lanes.n2 { grid-template-columns: 1fr 1fr; }
+    .council-lanes.n3 { grid-template-columns: 1fr 1fr 1fr; }
+    .council-lanes.n4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    @media (max-width: 900px) { .council-lanes { grid-template-columns: 1fr !important; } }
+    .council-lane {
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-height: 100px;
+      transition: border-color 0.18s, transform 0.15s, box-shadow 0.15s;
+    }
+    .council-lane.picked {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px var(--green-dim);
+    }
+    .council-lane.error {
+      border-color: #e74c3c;
+      opacity: 0.75;
+    }
+    .council-lane-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .council-lane-model {
+      font-size: 11px;
+      font-family: 'SF Mono', Menlo, monospace;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .council-lane-spinner {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      animation: caretBlink 1s steps(2) infinite;
+    }
+    .council-lane-elapsed {
+      font-size: 10px;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+    }
+    .council-lane-tokens {
+      font-size: 10px;
+      color: var(--text-faint);
+      font-variant-numeric: tabular-nums;
+    }
+    .council-lane-body {
+      flex: 1;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text);
+      min-height: 24px;
+    }
+    .council-lane-body .stream-caret {
+      background: var(--space-tint, var(--green));
+      width: 6px;
+      height: 13px;
+    }
+    .council-lane-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .council-pick-btn {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      font-weight: 600;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid var(--green);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .council-pick-btn:hover { background: var(--green); color: #000; }
+    .council-lane.picked .council-pick-btn { background: var(--green); color: #000; }
+    .council-copy-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-family: inherit;
+      background: none;
+      color: var(--text-faint);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .council-copy-btn:hover { color: var(--green); border-color: var(--green); }
+    .council-synth-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: var(--bg-sidebar);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .council-synth-btn {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      font-weight: 600;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .council-synth-btn:hover { border-color: var(--green); color: var(--green); }
+
     /* ─── Context radar — shows what's in the model's context ─────────────── */
     .context-radar {
       display: flex !important;
@@ -2036,6 +2213,9 @@
     <div class="topbar">
       <span class="topbar-model" id="topbar-model">GPT-4o</span>
       <div class="topbar-actions">
+        <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
+          🎭 <span id="council-label">Council</span>
+        </button>
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
@@ -2058,6 +2238,8 @@
       </div>
       <button id="scroll-fab" class="scroll-fab" onclick="scrollMessagesToBottom()" aria-label="Scroll to latest">↓</button>
     </div>
+
+    <div class="council-slots" id="council-slots" style="display:none"></div>
 
     <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none">
       <span class="radar-item"><span class="radar-icon">💬</span><span id="radar-msgs">0</span></span>
@@ -2195,6 +2377,7 @@
         <dt>Send message</dt><dd><kbd>↵</kbd></dd>
         <dt>New line in message</dt><dd><kbd>⇧</kbd><kbd>↵</kbd></dd>
         <dt>Regenerate last response</dt><dd>↻ button</dd>
+        <dt>Toggle Council mode</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>C</kbd></dd>
 
         <div class="shortcuts-section">Appearance</div>
         <dt>Toggle theme (light/dark)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></dd>
@@ -2500,6 +2683,108 @@
       })
     }, 0)
 
+    // ── Council Mode (multi-model parallel) ──────────────────────────────
+    // When enabled, every message fires to all councilModels in parallel and
+    // streams each response in its own lane. User picks a winner or
+    // synthesises. This is the wild "watch AI disagree live" feature.
+    const LS_COUNCIL = 'alaude:council:v1'
+    let councilMode = false
+    let councilModels = []  // model IDs, 2-3 entries
+
+    function loadCouncilState() {
+      try {
+        const raw = localStorage.getItem(LS_COUNCIL)
+        if (!raw) return
+        const p = JSON.parse(raw)
+        councilMode = !!p.on
+        councilModels = Array.isArray(p.models) ? p.models.slice(0, 4) : []
+      } catch {}
+    }
+    function saveCouncilState() {
+      try { localStorage.setItem(LS_COUNCIL, JSON.stringify({ on: councilMode, models: councilModels })) } catch {}
+    }
+
+    function refreshCouncilUi() {
+      const btn = document.getElementById('council-toggle')
+      const label = document.getElementById('council-label')
+      const slots = document.getElementById('council-slots')
+      if (!btn) return
+      btn.classList.toggle('on', councilMode)
+      if (label) label.textContent = councilMode
+        ? `Council · ${councilModels.length || 'pick models'}`
+        : 'Council'
+      if (slots) slots.style.display = councilMode ? 'flex' : 'none'
+      renderCouncilSlots()
+    }
+
+    function toggleCouncilMode() {
+      councilMode = !councilMode
+      if (councilMode && councilModels.length === 0) {
+        // Seed with the currently selected model + two useful defaults
+        const current = document.getElementById('model-select').value || ''
+        const available = collectAvailableModels()
+        const seed = [current].filter(Boolean)
+        for (const m of available) {
+          if (seed.length >= 3) break
+          if (!seed.includes(m.value)) seed.push(m.value)
+        }
+        councilModels = seed.filter(Boolean).slice(0, 3)
+      }
+      saveCouncilState()
+      refreshCouncilUi()
+    }
+
+    function collectAvailableModels() {
+      const select = document.getElementById('model-select')
+      const out = []
+      for (const opt of Array.from(select.options)) {
+        if (!opt.textContent) continue
+        const group = opt.parentElement?.label || 'Other'
+        out.push({ value: opt.value || '', label: opt.textContent, group })
+      }
+      return out
+    }
+
+    function renderCouncilSlots() {
+      const slots = document.getElementById('council-slots')
+      if (!slots || !councilMode) return
+      const available = collectAvailableModels()
+      const html = []
+      for (let i = 0; i < Math.max(councilModels.length, 2); i++) {
+        const selected = councilModels[i] || ''
+        html.push(`<select class="council-slot" data-slot="${i}" onchange="updateCouncilSlot(${i}, this.value)">
+          <option value="">— pick model ${i + 1} —</option>
+          ${available.map(m => `<option value="${escapeHtml(m.value)}"${m.value === selected ? ' selected' : ''}>${escapeHtml(m.label)} · ${escapeHtml(m.group)}</option>`).join('')}
+        </select>`)
+      }
+      // Add / remove slot buttons
+      if (councilModels.length < 4) {
+        html.push(`<button class="council-slot-add" onclick="addCouncilSlot()" title="Add a model">+ model</button>`)
+      }
+      if (councilModels.length > 2) {
+        html.push(`<button class="council-slot-add" onclick="removeCouncilSlot()" title="Remove last">−</button>`)
+      }
+      slots.innerHTML = html.join('')
+    }
+
+    function updateCouncilSlot(idx, value) {
+      if (!value) { councilModels.splice(idx, 1) } else { councilModels[idx] = value }
+      saveCouncilState()
+      refreshCouncilUi()
+    }
+    function addCouncilSlot() {
+      const current = document.getElementById('model-select').value || ''
+      if (current && !councilModels.includes(current)) councilModels.push(current)
+      else councilModels.push('')
+      saveCouncilState()
+      refreshCouncilUi()
+    }
+    function removeCouncilSlot() {
+      councilModels.pop()
+      saveCouncilState()
+      refreshCouncilUi()
+    }
+
     // ── Context radar ────────────────────────────────────────────────────
     // Rough token estimate: ~4 chars per token. Crude but close enough for a
     // live gauge. Real accounting would require a tokenizer per model family.
@@ -2651,6 +2936,11 @@
         e.preventDefault()
         openCmdPalette()
       }
+      // Cmd/Ctrl+Shift+C → toggle Council mode
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault()
+        toggleCouncilMode()
+      }
       // ? (shift + / on US layout) → show keyboard shortcuts
       // only when NOT typing in an input/textarea
       if (e.key === '?' && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
@@ -2731,13 +3021,142 @@
         entry: ux.pendingEntry,
         action: ux.pendingAction,
         promptHash,
-        hasAttachments: false, // attachedFiles already consumed above; this is the post-compose state
+        hasAttachments: false,
       }
       // Reset for next send
       ux.pendingEntry = 'freeform'
       ux.pendingAction = null
 
-      callAI(text, uxMeta)
+      // Council mode: fire one request per model, each in its own lane.
+      if (councilMode && councilModels.filter(Boolean).length >= 2) {
+        callCouncil(text, uxMeta)
+      } else {
+        callAI(text, uxMeta)
+      }
+    }
+
+    // Fire N parallel chat requests, one per council model, each with a
+    // unique messageId so tokens route to the correct lane.
+    async function callCouncil(userText, uxMeta) {
+      const activeModels = councilModels.filter(Boolean)
+      const t0 = Date.now()
+      liveActivity = []
+
+      const lanes = activeModels.map((m, i) => ({
+        role: 'assistant',
+        streaming: true,
+        content: '',
+        model: m,
+        uxMessageId: `${uxMeta.messageId}_lane${i}`,
+        startedAt: t0,
+        elapsed: 0,
+      }))
+
+      const councilMessage = {
+        role: 'assistant',
+        council: true,
+        lanes,
+        streaming: true,  // overall "in progress" flag
+        model: 'council',
+        ts: t0,
+        pickedLaneIdx: null,
+      }
+      messages.push(councilMessage)
+      renderMessages()
+
+      // Kick off elapsed-time updater
+      const elapsedTimer = setInterval(() => {
+        for (const lane of councilMessage.lanes) {
+          if (lane.streaming) lane.elapsed = Date.now() - lane.startedAt
+        }
+        scheduleRender()
+      }, 200)
+
+      const cleanMsgs = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+
+      // Fire all in parallel
+      const results = await Promise.allSettled(activeModels.map(async (modelId, i) => {
+        const laneMeta = { ...uxMeta, messageId: lanes[i].uxMessageId }
+        try {
+          const response = await window.alaude.chat(cleanMsgs, modelId, workspacePath, currentSpaceId, laneMeta)
+          const textOut = (response && typeof response === 'string') ? response : (JSON.stringify(response) || '(no response)')
+          lanes[i].content = textOut  // final, overrides any streamed content
+          lanes[i].streaming = false
+          lanes[i].elapsed = Date.now() - lanes[i].startedAt
+          return { i, ok: true }
+        } catch (err) {
+          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].streaming = false
+          lanes[i].error = true
+          lanes[i].elapsed = Date.now() - lanes[i].startedAt
+          return { i, ok: false, error: err.message }
+        }
+      }))
+
+      clearInterval(elapsedTimer)
+      councilMessage.streaming = false
+      isStreaming = false
+      sendBtn.disabled = !input.value.trim()
+      renderMessages()
+      persistSessions()
+    }
+
+    // Pick a lane — freezes the council and commits that lane's content as the
+    // canonical assistant turn. Other lanes preserved for inspection.
+    function councilPick(msgIdx, laneIdx) {
+      const msg = messages[msgIdx]
+      if (!msg?.council) return
+      msg.pickedLaneIdx = laneIdx
+      renderMessages()
+      persistSessions()
+    }
+
+    // Synthesize: ask one model (first picked, or first lane) to merge all
+    // lane answers into a unified response.
+    async function councilSynthesize(msgIdx) {
+      const msg = messages[msgIdx]
+      if (!msg?.council || msg.synthesizing) return
+      msg.synthesizing = true
+      msg.synthLane = {
+        role: 'assistant',
+        streaming: true,
+        content: '',
+        model: msg.lanes[0].model,
+        uxMessageId: `synth_${Date.now()}`,
+        startedAt: Date.now(),
+      }
+      renderMessages()
+
+      const synthPrompt = [
+        'I asked multiple models the same question. Here are their answers:',
+        '',
+        ...msg.lanes.map((l, i) => `### Model ${i + 1} (${l.model}):\n${l.content || '(no response)'}`),
+        '',
+        'Synthesize a single best answer that incorporates the strongest points from each. Be concise.',
+      ].join('\n')
+
+      const synthMsgs = [{ role: 'user', content: synthPrompt }]
+      const synthMeta = {
+        messageId: msg.synthLane.uxMessageId,
+        sessionId: ux.sessionId,
+        entry: 'council_synth',
+        action: null,
+        promptHash: 'synth',
+        hasAttachments: false,
+      }
+
+      try {
+        const response = await window.alaude.chat(synthMsgs, msg.synthLane.model, workspacePath, currentSpaceId, synthMeta)
+        msg.synthLane.content = response || '(no response)'
+      } catch (err) {
+        msg.synthLane.content = `Error: ${err.message}`
+        msg.synthLane.error = true
+      }
+      msg.synthLane.streaming = false
+      msg.synthLane.elapsed = Date.now() - msg.synthLane.startedAt
+      msg.synthesizing = false
+      renderMessages()
+      persistSessions()
     }
 
     async function callAI(userText, uxMeta) {
@@ -2747,8 +3166,8 @@
       // Reset live activity for this new turn
       liveActivity = []
 
-      // Add typing indicator
-      messages.push({ role: 'assistant', content: '', streaming: true })
+      // Add typing indicator — tag it with uxMessageId so tokens route correctly
+      messages.push({ role: 'assistant', content: '', streaming: true, uxMessageId: uxMeta?.messageId })
       renderMessages()
 
       try {
@@ -2906,6 +3325,86 @@
       return map[name] || '⚙️'
     }
 
+    // Render a council message: N lanes side-by-side, each streaming independently.
+    function renderCouncilMessage(msg, msgIdx) {
+      const n = msg.lanes.length
+      const lanesClass = `council-lanes n${Math.min(n, 4)}`
+      const laneHtml = msg.lanes.map((lane, laneIdx) => {
+        const picked = msg.pickedLaneIdx === laneIdx ? ' picked' : ''
+        const errored = lane.error ? ' error' : ''
+        const spinner = lane.streaming ? '<span class="council-lane-spinner"></span>' : ''
+        const elapsed = `<span class="council-lane-elapsed">${(lane.elapsed / 1000).toFixed(1)}s</span>`
+        const tokens = lane.content ? `<span class="council-lane-tokens">${formatCompact(approxTokens(lane.content))}t</span>` : ''
+
+        const diffsHtml = (lane.fileEdits && lane.fileEdits.length)
+          ? lane.fileEdits.map(fe => renderFileDiff(fe)).join('')
+          : ''
+
+        let body
+        if (lane.streaming && (lane.content || '').length > 0) {
+          body = diffsHtml + renderMarkdown(lane.content) + '<span class="stream-caret"></span>'
+        } else if (lane.streaming) {
+          body = diffsHtml + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+        } else {
+          body = diffsHtml + renderMarkdown(lane.content || '')
+        }
+
+        const actions = !lane.streaming ? `
+          <div class="council-lane-actions">
+            <button class="council-pick-btn" onclick="councilPick(${msgIdx}, ${laneIdx})">${msg.pickedLaneIdx === laneIdx ? '✓ Picked' : 'Pick this'}</button>
+            <button class="council-copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(lane.content || '').replace(/"/g, '&quot;')}); this.textContent='✓'; setTimeout(()=>this.textContent='📋',1200)">📋</button>
+          </div>` : ''
+
+        return `<div class="council-lane${picked}${errored}">
+          <div class="council-lane-header">
+            ${spinner}
+            <span class="council-lane-model">${escapeHtml(lane.model)}</span>
+            ${tokens}
+            ${elapsed}
+          </div>
+          <div class="council-lane-body">${body}</div>
+          ${actions}
+        </div>`
+      }).join('')
+
+      const allDone = !msg.streaming
+      const synthHtml = allDone && !msg.pickedLaneIdx && !msg.synthesizing && !msg.synthLane ? `
+        <div class="council-synth-bar">
+          <span>🎭 Pick a favourite, or let a model merge the best of all.</span>
+          <button class="council-synth-btn" onclick="councilSynthesize(${msgIdx})">Synthesize</button>
+        </div>` : ''
+
+      // If the user synthesised, show a single unified lane underneath the council grid
+      let synthLaneHtml = ''
+      if (msg.synthLane) {
+        const lane = msg.synthLane
+        const body = lane.streaming
+          ? (lane.content
+              ? renderMarkdown(lane.content) + '<span class="stream-caret"></span>'
+              : '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>')
+          : renderMarkdown(lane.content || '')
+        synthLaneHtml = `<div class="council-lane picked" style="margin-top:10px">
+          <div class="council-lane-header">
+            <span class="council-lane-model">✨ Synthesis · ${escapeHtml(lane.model)}</span>
+          </div>
+          <div class="council-lane-body">${body}</div>
+        </div>`
+      }
+
+      return `<div class="msg msg-council">
+        <div class="msg-header">
+          <span class="msg-role assistant">🎭 Council</span>
+          <span class="msg-model-badge">${n} models</span>
+          <span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>
+        </div>
+        <div class="msg-content">
+          <div class="${lanesClass}">${laneHtml}</div>
+          ${synthLaneHtml}
+          ${synthHtml}
+        </div>
+      </div>`
+    }
+
     function renderMessages() {
       const container = document.getElementById('messages')
 
@@ -2914,11 +3413,18 @@
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i]
         const roleClass = msg.role
-        const roleLabel = msg.role === 'user' ? 'You' : 'Alaude'
-        const actions = (!msg.streaming && msg.role === 'assistant' && msg.content.length > 20)
+        const roleLabel = msg.role === 'user' ? 'You' : (msg.council ? 'Council' : 'Alaude')
+
+        // Council messages take a special render path with side-by-side lanes.
+        if (msg.council) {
+          html += renderCouncilMessage(msg, i)
+          continue
+        }
+
+        const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
-              ${msg.content.length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
+              ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
              </div>`
           : ''
         // Render inline file-diff cards (attached to assistant messages during tool calls)
@@ -3499,27 +4005,45 @@
       setTimeout(() => { _renderPending = false; renderMessages() }, 60)
     }
 
+    // Find the right streaming target for an incoming activity event.
+    // Council mode: each lane is a separate streaming message keyed by uxMessageId.
+    // Single-lane mode: just the last streaming message.
+    function findStreamingTargetFor(activity) {
+      if (activity?.messageId) {
+        // Search assistant messages + council lanes for a match
+        for (const m of messages) {
+          if (m.streaming && m.uxMessageId === activity.messageId) return m
+          if (m.council && Array.isArray(m.lanes)) {
+            for (const lane of m.lanes) {
+              if (lane.streaming && lane.uxMessageId === activity.messageId) return lane
+            }
+          }
+        }
+      }
+      // Fallback to "last streaming message" for legacy single-lane flow
+      return messages.findLast?.(m => m.streaming)
+        || [...messages].reverse().find(m => m.streaming)
+    }
+
     // Live tool activity — refresh the streaming bubble as the agent works.
     window.alaude.onToolActivity((activity) => {
       if (!activity) return
       // Token events go into the streaming message content, not the activity log.
       if (activity.phase === 'token') {
-        const streaming = messages.findLast?.(m => m.streaming)
-          || [...messages].reverse().find(m => m.streaming)
-        if (streaming) {
-          streaming.content = (streaming.content || '') + (activity.text || '')
+        const target = findStreamingTargetFor(activity)
+        if (target) {
+          target.content = (target.content || '') + (activity.text || '')
           scheduleRender()
         }
         return
       }
-      // File-edit events get attached to the current streaming message so they
-      // persist in the bubble after streaming ends. Rendered as inline diff cards.
+      // File-edit events get attached to the current streaming target so they
+      // persist in the bubble after streaming ends.
       if (activity.phase === 'file_edit') {
-        const streaming = messages.findLast?.(m => m.streaming)
-          || [...messages].reverse().find(m => m.streaming)
-        if (streaming) {
-          streaming.fileEdits = streaming.fileEdits || []
-          streaming.fileEdits.push({
+        const target = findStreamingTargetFor(activity)
+        if (target) {
+          target.fileEdits = target.fileEdits || []
+          target.fileEdits.push({
             path: activity.path,
             oldContent: activity.oldContent,
             newContent: activity.newContent,
@@ -3531,9 +4055,8 @@
         return
       }
       liveActivity.push({ ...activity, ts: Date.now() })
-      // Keep the array bounded so a long tool-call chain doesn't balloon
       if (liveActivity.length > 20) liveActivity = liveActivity.slice(-20)
-      renderMessages()  // tool events are rare; render immediately
+      renderMessages()
     })
 
     // ── Attached files ────────────────────────────────────────────────────
@@ -4246,6 +4769,9 @@
     renderMessages()
     initLocalModelsOptgroup()
     refreshWorkspaceHint()
+    loadCouncilState()
+    // Delay council UI setup until models have populated in the dropdown
+    setTimeout(() => refreshCouncilUi(), 200)
   </script>
 </body>
 </html>
