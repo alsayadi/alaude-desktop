@@ -1,0 +1,115 @@
+name: Release
+
+# Build and publish desktop binaries when a version tag is pushed.
+# Tag a release locally:
+#   git tag -a v0.2.0 -m "v0.2.0: <summary>"
+#   git push origin v0.2.0
+# This workflow then builds macOS (arm64 + x64), Windows, and Linux
+# artifacts and attaches them to a draft GitHub Release named after
+# the tag. Promote the draft to a published release when ready.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:  # manual trigger from the Actions tab, useful for testing
+
+permissions:
+  contents: write  # needed to create the release and upload assets
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14       # arm64 runner
+            platform: mac
+            artifacts: |
+              dist/*.dmg
+              dist/*.zip
+          - os: ubuntu-latest
+            platform: linux
+            artifacts: |
+              dist/*.AppImage
+              dist/*.deb
+          - os: windows-latest
+            platform: win
+            artifacts: |
+              dist/*.exe
+
+    runs-on: ${{ matrix.os }}
+    name: Build (${{ matrix.platform }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (${{ matrix.platform }})
+        run: npm run build:${{ matrix.platform }}
+        env:
+          # Disable code signing / notarization — open-source build, no Apple developer cert.
+          # Users see a Gatekeeper warning on first launch and right-click → Open.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Give the node-gyp-free electron-builder enough info to skip signing
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts (for manual inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: alaude-${{ matrix.platform }}
+          path: ${{ matrix.artifacts }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only create a release when a tag was pushed (not on manual workflow_dispatch runs)
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          name: Alaude ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.exe
+          body: |
+            ## Alaude ${{ github.ref_name }}
+
+            Desktop AI assistant — local models (Ollama) + cloud models (Anthropic / OpenAI / Gemini / GLM-5.1 / Qwen).
+
+            ### Download
+            - **macOS Apple Silicon (M1+)**: `*-arm64.dmg`
+            - **macOS Intel**: `*-x64.dmg`
+            - **Windows**: `*.exe`
+            - **Linux**: `*.AppImage` or `*.deb`
+
+            ### First run on macOS
+            The app is unsigned (no Apple developer cert). On first launch macOS will block it with *"cannot be opened because the developer cannot be verified"*. Two workarounds:
+
+            1. Right-click the app → **Open** → confirm in the dialog.
+            2. Or in Terminal: `xattr -cr /Applications/Alaude.app`
+
+            Only needed the first time.

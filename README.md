@@ -77,6 +77,32 @@ Proposals land in `~/.claude/alaude-ux-proposals.md` — **never auto-applied** 
 
 ---
 
+## Download
+
+Prebuilt binaries are attached to each [GitHub Release](https://github.com/alsayadi/alaude-desktop/releases/latest).
+
+| Platform | File |
+|---|---|
+| **macOS · Apple Silicon** (M1/M2/M3/M4) | `Alaude-<version>-arm64.dmg` |
+| **macOS · Intel** | `Alaude-<version>-x64.dmg` or `.dmg` without arch suffix |
+| **Windows** | `Alaude Setup <version>.exe` (planned) |
+| **Linux** | `Alaude-<version>.AppImage` or `.deb` (planned) |
+
+### First launch on macOS
+
+The app is unsigned (no Apple Developer certificate). On first launch, macOS Gatekeeper will say:
+
+> *"Alaude" cannot be opened because the developer cannot be verified.*
+
+Two workarounds — pick one, only needed the first time:
+
+1. **Right-click** the app in Applications → **Open** → click **Open** in the dialog.
+2. Or in Terminal: `xattr -cr /Applications/Alaude.app`
+
+After that the app launches normally.
+
+---
+
 ## Architecture
 
 Three processes, three concerns:
