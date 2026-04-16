@@ -3084,7 +3084,7 @@
         }
       }, 250)
 
-      const cleanMsgs = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+      const cleanMsgs = sanitizeHistoryForApi(messages.slice(0, -1))
 
       // Fire all in parallel
       const results = await Promise.allSettled(activeModels.map(async (modelId, i) => {
@@ -3171,6 +3171,35 @@
       persistSessions()
     }
 
+    // Strip UI-only fields and normalise content before sending to the API.
+    // OpenAI rejects messages with content: null (unless tool_calls is set).
+    // Older sessions or quirky flows could have accumulated null-content
+    // turns — coerce them to an empty string defensively, and drop any
+    // streaming placeholders that didn't finalize.
+    function sanitizeHistoryForApi(msgs) {
+      const out = []
+      for (const m of msgs || []) {
+        if (!m || m.streaming) continue
+        // Council messages: pick the user's chosen lane, or the first
+        // successful lane as the canonical turn. Other lanes aren't part
+        // of the API's concept of history.
+        if (m.council && Array.isArray(m.lanes)) {
+          const picked = (m.pickedLaneIdx != null) ? m.lanes[m.pickedLaneIdx]
+            : (m.synthLane && !m.synthLane.streaming) ? m.synthLane
+            : m.lanes.find(l => !l.error && l.content)
+          if (picked) {
+            out.push({ role: 'assistant', content: String(picked.content || '') })
+          }
+          continue
+        }
+        const role = m.role === 'assistant' ? 'assistant' : 'user'
+        const content = (m.content == null) ? '' : String(m.content)
+        if (!content && role === 'user') continue  // nothing to send
+        out.push({ role, content })
+      }
+      return out
+    }
+
     async function callAI(userText, uxMeta) {
       const model = document.getElementById('model-select').value
       const messagesDiv = document.getElementById('messages')
@@ -3184,7 +3213,7 @@
 
       try {
         // Send only role + content, strip UI fields like 'streaming'
-        const cleanMsgs = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+        const cleanMsgs = sanitizeHistoryForApi(messages.slice(0, -1))
         console.log('[callAI] model:', model, 'msgs:', cleanMsgs.length)
         const response = await window.alaude.chat(cleanMsgs, model, workspacePath, currentSpaceId, uxMeta)
         // Remember which messageId produced this assistant response so save/copy events

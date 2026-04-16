@@ -450,9 +450,12 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
           }
         }
       }
+      // OpenAI spec: content can only be null when tool_calls is set. If no
+      // tools AND no text came back, send an empty string so the next turn's
+      // history stays valid.
       msg = {
         role: 'assistant',
-        content: iterContent || null,
+        content: partialTools.length ? (iterContent || null) : (iterContent || ''),
         ...(partialTools.length ? { tool_calls: partialTools } : {}),
       }
     } catch (streamErr) {
