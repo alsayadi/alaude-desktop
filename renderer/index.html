@@ -1643,6 +1643,30 @@
       }
     })
 
+    // Global keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Esc → close any open modal
+      if (e.key === 'Escape') {
+        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"]')
+        if (open) {
+          open.classList.remove('show')
+          if (open.style.display === 'flex') open.style.display = 'none'
+          e.preventDefault()
+        }
+        return
+      }
+      // Cmd/Ctrl+K → focus message input
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        input.focus()
+      }
+      // Cmd/Ctrl+N → new session
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
+        e.preventDefault()
+        newSession()
+      }
+    })
+
     // ── Messages ─────────────────────────────────────────────────────────
     function sendMessage() {
       let text = input.value.trim()
@@ -1795,9 +1819,12 @@
         <div class="quick-actions" id="quick-actions"></div>
       </div>`
 
+      // Smart auto-scroll: only stick to bottom if the user was already near it
+      // before the re-render. This lets the user scroll up to re-read earlier
+      // turns without getting yanked back down on every activity-chip update.
+      const wasNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 80
       container.innerHTML = (messages.length === 0 ? welcomeHtml : '') + html
-
-      container.scrollTop = container.scrollHeight
+      if (wasNearBottom) container.scrollTop = container.scrollHeight
     }
 
     async function saveMessage(idx) {
