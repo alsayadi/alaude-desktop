@@ -444,6 +444,31 @@
 
     .workspace-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 
+    .workspace-btn.pulse {
+      animation: wsPulse 2s ease-in-out infinite;
+    }
+    @keyframes wsPulse {
+      0%, 100% { border-color: var(--border); box-shadow: 0 0 0 0 rgba(0,168,70,0); }
+      50%      { border-color: var(--green); box-shadow: 0 0 0 4px rgba(0,168,70,0.12); }
+    }
+
+    .workspace-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: 4px;
+      display: none;
+    }
+    .workspace-hint.show { display: inline; }
+    .workspace-hint kbd {
+      font-family: inherit;
+      font-size: 10px;
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--bg-sidebar);
+      color: var(--text-dim);
+    }
+
     .workspace-path {
       font-size: 11px;
       color: var(--text-faint);
@@ -1348,6 +1373,7 @@
           <span id="folder-label">Choose folder</span>
         </button>
         <span class="workspace-path" id="folder-path"></span>
+        <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
       </div>
     </div>
   </div>
@@ -1777,6 +1803,40 @@
         logUx({ kind: 'model_switched', sessionId: ux.sessionId, fromModel: _lastModelForUx, toModel: model })
       }
       _lastModelForUx = model
+      refreshWorkspaceHint()
+    }
+
+    // Show a subtle "pick a folder" hint when the selected model is tool-capable
+    // (Ollama mid-tier+, or any cloud model) AND no workspace is set. This
+    // directly addresses the common pain of local models saying "I can't render
+    // a window" because no tools were actually available to them.
+    function refreshWorkspaceHint() {
+      const model = (document.getElementById('model-select').value || '').toLowerCase()
+      const hint = document.getElementById('workspace-hint')
+      const btn = document.getElementById('folder-btn')
+      if (!hint || !btn) return
+
+      // Skip the hint if a workspace is already picked
+      if (workspacePath) {
+        hint.classList.remove('show')
+        btn.classList.remove('pulse')
+        return
+      }
+
+      // Is the current model tool-capable?
+      const isLocal = model.includes(':') || model.startsWith('ollama/') || model.startsWith('gemma') || model.startsWith('qwen3') || model.startsWith('llama3') || model.startsWith('deepseek-r1')
+      const isToolPoor = model.startsWith('gemma3:1b') || model.startsWith('llama3.2:1b') || model.startsWith('llama3.2:3b') || model.startsWith('deepseek-r1')
+      const toolCapable = (isLocal && !isToolPoor) ||
+                          model.startsWith('gpt-') || model.startsWith('claude') ||
+                          model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')
+
+      if (toolCapable) {
+        hint.classList.add('show')
+        btn.classList.add('pulse')
+      } else {
+        hint.classList.remove('show')
+        btn.classList.remove('pulse')
+      }
     }
 
     // ── Keys Modal ───────────────────────────────────────────────────────
@@ -2070,6 +2130,7 @@
         document.getElementById('folder-path').textContent = folder
         document.getElementById('folder-btn').classList.add('active')
         document.getElementById('open-btn').style.display = 'flex'
+        refreshWorkspaceHint()
       }
     }
 
@@ -2619,6 +2680,7 @@
     renderSessions()
     renderMessages()
     initLocalModelsOptgroup()
+    refreshWorkspaceHint()
   </script>
 </body>
 </html>
