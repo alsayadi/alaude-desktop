@@ -23,5 +23,5 @@ npm-debug.log*
 .env
 .env.local
 
-# Claude Code local settings (user-machine specific)
-.claude/settings.local.json
+# Claude Code local state (user-machine specific — settings, locks, plans, etc.)
+.claude/
