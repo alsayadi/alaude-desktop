@@ -410,8 +410,47 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
 
   for (let i = 0; i < 10; i++) {
     if (i > 0) onActivity({ phase: 'thinking', step: i })
-    const res = await client.chat.completions.create({ model, messages: chatMsgs, max_completion_tokens: 4096, ...(useTools ? { tools: useTools } : {}) })
-    const msg = res.choices?.[0]?.message
+
+    // Stream tokens live. Each content delta is emitted as a `token` activity;
+    // tool_calls arrive as deltas too and are accumulated by index so the final
+    // assembled message matches the non-streaming shape.
+    let msg = null
+    try {
+      const stream = await client.chat.completions.create({
+        model, messages: chatMsgs, max_completion_tokens: 4096, stream: true,
+        ...(useTools ? { tools: useTools } : {}),
+      })
+      let iterContent = ''
+      const partialTools = []
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta
+        if (!delta) continue
+        if (delta.content) {
+          iterContent += delta.content
+          onActivity({ phase: 'token', text: delta.content })
+        }
+        if (delta.tool_calls) {
+          for (const tcd of delta.tool_calls) {
+            const idx = tcd.index ?? 0
+            if (!partialTools[idx]) partialTools[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } }
+            if (tcd.id) partialTools[idx].id = tcd.id
+            if (tcd.function?.name) partialTools[idx].function.name += tcd.function.name
+            if (tcd.function?.arguments) partialTools[idx].function.arguments += tcd.function.arguments
+          }
+        }
+      }
+      msg = {
+        role: 'assistant',
+        content: iterContent || null,
+        ...(partialTools.length ? { tool_calls: partialTools } : {}),
+      }
+    } catch (streamErr) {
+      // Streaming not supported or failed — fall back to non-streaming on this iteration only
+      process.stderr.write(`[worker] streaming failed (${streamErr.message}) — falling back to non-streaming\n`)
+      const res = await client.chat.completions.create({ model, messages: chatMsgs, max_completion_tokens: 4096, ...(useTools ? { tools: useTools } : {}) })
+      msg = res.choices?.[0]?.message
+    }
+
     if (!msg) break
     chatMsgs.push(msg)
     if (msg.content) fullText += msg.content
