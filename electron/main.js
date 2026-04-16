@@ -56,6 +56,32 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
+  // Intercept every window.open (including target="_blank" link clicks inside
+  // AI responses). Electron's default is to create a new BrowserWindow and
+  // load the URL inside it — which means a dead localhost link produces
+  // "Failed to load URL" spam, and even good URLs open as a stripped-down
+  // embedded window instead of the user's real browser.
+  //
+  // Route all external navigations to the OS default browser instead.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('mailto:'))) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  // Same safety net for in-page navigation (e.g. user drags a URL into the
+  // window) — don't let the main renderer ever navigate away from our HTML.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const cur = mainWindow.webContents.getURL()
+    if (url !== cur) {
+      event.preventDefault()
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url)
+      }
+    }
+  })
+
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
