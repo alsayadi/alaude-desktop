@@ -110,6 +110,21 @@ function normalizeOllamaModel(model) {
   return (model || '').replace(/^ollama\//, '')
 }
 
+/**
+ * Only skip tools for genuinely tiny / unreliable local models. Every modern
+ * mid-to-large open-weight model supports OpenAI-style function calling fine.
+ */
+function shouldSkipToolsForLocal(model) {
+  const m = normalizeOllamaModel(model).toLowerCase()
+  // Known-poor tool callers at their smallest sizes
+  if (m.startsWith('gemma3:1b')) return true
+  if (m.startsWith('llama3.2:1b')) return true
+  if (m.startsWith('llama3.2:3b')) return true
+  // DeepSeek R1 distills wrap their output in <think> tags and often mis-format tool calls
+  if (m.startsWith('deepseek-r1')) return true
+  return false
+}
+
 const TOOLS = [
   { type: 'function', function: { name: 'read_file', description: 'Read file contents (relative to workspace)', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } },
   { type: 'function', function: { name: 'write_file', description: 'Write content to a file (creates dirs if needed)', parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] } } },
@@ -340,9 +355,11 @@ async function handleChat({ messages, model, workspacePath, spacePrompt }) {
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
-    // Local models: OpenAI-compatible, but skip tool injection — small local
-    // models tend to produce garbage tool calls.
-    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools: true })
+    // Local models: OpenAI-compatible. Tool calling is enabled for capable
+    // models (gemma3:4b+, gemma4:*, qwen3*, llama3*) and skipped for tiny
+    // variants that produce garbage tool calls.
+    const skipTools = shouldSkipToolsForLocal(model)
+    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools })
   } else {
     return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt)
   }
@@ -356,11 +373,14 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const client = new OpenAI({ apiKey: getApiKey(provider), ...(getBaseURL(provider) ? { baseURL: getBaseURL(provider) } : {}), timeout, fetch: globalThis.fetch })
 
   const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({ role: m.role, content: m.content }))]
-  // Always include health tools; include workspace tools only if workspace is set
+  // Tool budget: workspace tools only if a folder is picked; health tools
+  // only when the user is inside the health space (avoids token bloat
+  // everywhere else, and avoids models in unrelated spaces inventing
+  // "analyze_lab_result" calls on random input).
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...HEALTH_TOOLS,
+    ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
   const useTools = allTools.length > 0 ? allTools : undefined
   let fullText = '', toolLog = ''
@@ -405,7 +425,8 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt) {
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   const client = new Anthropic({ apiKey: getApiKey('anthropic'), timeout: 60000, fetch: globalThis.fetch })
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...HEALTH_TOOLS]
+  const isHealthSpace = (sysPrompt || '').includes('health information assistant')
+  const allAnthTools = [...(workspacePath ? TOOLS : []), ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   const chatMsgs = msgs.map(m => ({ role: m.role, content: m.content }))
   let fullText = '', toolLog = ''
