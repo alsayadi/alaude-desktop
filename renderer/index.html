@@ -3064,13 +3064,25 @@
       messages.push(councilMessage)
       renderMessages()
 
-      // Kick off elapsed-time updater
+      // Elapsed-time updater. Writes directly to the .council-lane-elapsed
+      // text nodes rather than calling scheduleRender — a full list re-render
+      // every 200ms would fight the surgical streaming updater and cause
+      // the flickering the user noticed.
       const elapsedTimer = setInterval(() => {
-        for (const lane of councilMessage.lanes) {
-          if (lane.streaming) lane.elapsed = Date.now() - lane.startedAt
+        for (let i = 0; i < councilMessage.lanes.length; i++) {
+          const lane = councilMessage.lanes[i]
+          if (!lane.streaming) continue
+          lane.elapsed = Date.now() - lane.startedAt
+          // Find the lane's elapsed span in the DOM and just update its text
+          const node = document.querySelector(`[data-stream-id="${lane.uxMessageId}"]`)
+          if (!node) continue
+          const laneEl = node.closest('.council-lane')
+          const elapsedEl = laneEl?.querySelector('.council-lane-elapsed')
+          if (elapsedEl) elapsedEl.textContent = `${(lane.elapsed / 1000).toFixed(1)}s`
+          const tokensEl = laneEl?.querySelector('.council-lane-tokens')
+          if (tokensEl && lane.content) tokensEl.textContent = `${formatCompact(approxTokens(lane.content))}t`
         }
-        scheduleRender()
-      }, 200)
+      }, 250)
 
       const cleanMsgs = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
 
@@ -3341,10 +3353,11 @@
           : ''
 
         let body
+        const laneStreamAttr = (lane.streaming && lane.uxMessageId) ? ` data-stream-id="${escapeHtml(lane.uxMessageId)}"` : ''
         if (lane.streaming && (lane.content || '').length > 0) {
-          body = diffsHtml + renderMarkdown(lane.content) + '<span class="stream-caret"></span>'
+          body = diffsHtml + `<span${laneStreamAttr}>${renderMarkdown(lane.content)}<span class="stream-caret"></span></span>`
         } else if (lane.streaming) {
-          body = diffsHtml + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+          body = diffsHtml + `<span${laneStreamAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`
         } else {
           body = diffsHtml + renderMarkdown(lane.content || '')
         }
@@ -3378,10 +3391,11 @@
       let synthLaneHtml = ''
       if (msg.synthLane) {
         const lane = msg.synthLane
+        const sAttr = (lane.streaming && lane.uxMessageId) ? ` data-stream-id="${escapeHtml(lane.uxMessageId)}"` : ''
         const body = lane.streaming
           ? (lane.content
-              ? renderMarkdown(lane.content) + '<span class="stream-caret"></span>'
-              : '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>')
+              ? `<span${sAttr}>${renderMarkdown(lane.content)}<span class="stream-caret"></span></span>`
+              : `<span${sAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`)
           : renderMarkdown(lane.content || '')
         synthLaneHtml = `<div class="council-lane picked" style="margin-top:10px">
           <div class="council-lane-header">
@@ -3433,12 +3447,16 @@
           : ''
 
         let body
+        // Data attribute for surgical streaming updates.
+        const streamAttr = (msg.streaming && msg.uxMessageId) ? ` data-stream-id="${escapeHtml(msg.uxMessageId)}"` : ''
         if (msg.streaming) {
           const chips = renderActivityChips()
           if (msg.content && msg.content.length > 0) {
-            body = chips + diffsHtml + renderMarkdown(msg.content) + '<span class="stream-caret"></span>'
+            body = chips + diffsHtml + `<span${streamAttr}>${renderMarkdown(msg.content)}<span class="stream-caret"></span></span>`
           } else {
-            body = chips + diffsHtml + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+            // Wrap the typing dots in the stream-id span so the first token surgical
+            // update can replace the dots with the first chunk of text seamlessly.
+            body = chips + diffsHtml + `<span${streamAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`
           }
         } else {
           body = diffsHtml + (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
@@ -3995,15 +4013,45 @@
       checkLoginStatus()
     })
 
-    // Throttle re-renders during streaming — tokens arrive 50-200/sec and
-    // full markdown re-renders on each one thrashes CPU + GPU. Coalesce into
-    // at most one render every 60ms while preserving final-frame freshness.
+    // Throttle re-renders. Only used for non-streaming updates (file edits,
+    // tool activity). Token updates DO NOT call this — they go through the
+    // surgical in-place updater below.
     let _renderPending = false
     function scheduleRender() {
       if (_renderPending) return
       _renderPending = true
-      setTimeout(() => { _renderPending = false; renderMessages() }, 60)
+      setTimeout(() => { _renderPending = false; renderMessages() }, 120)
     }
+
+    // Surgical in-place update of a streaming message's DOM node — no full
+    // re-render of the message list. Prevents the flashy text-jumping effect
+    // when tokens arrive faster than the eye can track. Each streaming
+    // message (or council lane) is tagged with data-stream-id matching its
+    // uxMessageId so we can find and update exactly one element.
+    let _streamUpdatePending = new Set()
+    function scheduleStreamUpdate(uxMessageId, content) {
+      if (!uxMessageId) return
+      // Keep the latest content for this lane
+      _latestStreamContent[uxMessageId] = content
+      if (_streamUpdatePending.has(uxMessageId)) return
+      _streamUpdatePending.add(uxMessageId)
+      requestAnimationFrame(() => {
+        _streamUpdatePending.delete(uxMessageId)
+        const node = document.querySelector(`[data-stream-id="${uxMessageId}"]`)
+        if (!node) return
+        const latest = _latestStreamContent[uxMessageId]
+        if (latest == null) return
+        // Render markdown + append live caret. Minimises DOM thrash — only
+        // this one node's innerHTML changes, not the whole list.
+        node.innerHTML = renderMarkdown(latest) + '<span class="stream-caret"></span>'
+        // Gentle auto-scroll only if user was at the bottom to begin with
+        const container = document.getElementById('messages')
+        if (container && (container.scrollHeight - container.scrollTop - container.clientHeight) < 120) {
+          container.scrollTop = container.scrollHeight
+        }
+      })
+    }
+    const _latestStreamContent = Object.create(null)
 
     // Find the right streaming target for an incoming activity event.
     // Council mode: each lane is a separate streaming message keyed by uxMessageId.
@@ -4028,12 +4076,14 @@
     // Live tool activity — refresh the streaming bubble as the agent works.
     window.alaude.onToolActivity((activity) => {
       if (!activity) return
-      // Token events go into the streaming message content, not the activity log.
+      // Token events go into the streaming message content. We do an in-place
+      // DOM update for smoothness — NOT a full renderMessages() call — since
+      // tokens can arrive at 100+/sec.
       if (activity.phase === 'token') {
         const target = findStreamingTargetFor(activity)
         if (target) {
           target.content = (target.content || '') + (activity.text || '')
-          scheduleRender()
+          scheduleStreamUpdate(target.uxMessageId, target.content)
         }
         return
       }
