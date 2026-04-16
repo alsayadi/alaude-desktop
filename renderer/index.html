@@ -68,6 +68,43 @@
       transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     }
 
+    /* ─── Space ambient tint ────────────────────────────────────────────────
+       A very subtle radial gradient of the active space's color in the upper
+       corner of the chat area. Strong enough to feel, soft enough to not
+       compete with content. Transitions smoothly on space switch. */
+    :root { --space-tint: #00a846; }
+    .main {
+      position: relative;
+      background:
+        radial-gradient(ellipse 60% 40% at 100% 0%, color-mix(in srgb, var(--space-tint) 9%, transparent) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 0% 100%, color-mix(in srgb, var(--space-tint) 5%, transparent) 0%, transparent 60%),
+        var(--bg);
+      transition: background 0.5s ease;
+    }
+    :root[data-theme="dark"] .main {
+      background:
+        radial-gradient(ellipse 60% 40% at 100% 0%, color-mix(in srgb, var(--space-tint) 14%, transparent) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 0% 100%, color-mix(in srgb, var(--space-tint) 10%, transparent) 0%, transparent 60%),
+        var(--bg);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .main {
+        background:
+          radial-gradient(ellipse 60% 40% at 100% 0%, color-mix(in srgb, var(--space-tint) 14%, transparent) 0%, transparent 60%),
+          radial-gradient(ellipse 40% 30% at 0% 100%, color-mix(in srgb, var(--space-tint) 10%, transparent) 0%, transparent 60%),
+          var(--bg);
+      }
+    }
+    .welcome-logo {
+      box-shadow: 0 0 40px color-mix(in srgb, var(--space-tint) 30%, transparent);
+    }
+    .space-btn {
+      border-color: color-mix(in srgb, var(--space-tint) 30%, var(--border));
+    }
+    .space-btn .space-icon {
+      color: var(--space-tint);
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body, #app { height: 100%; overflow: hidden; }
 
@@ -636,6 +673,192 @@
       :root:not([data-theme]) .msg-content [style*="color:#666"] { color: var(--text-dim) !important; }
       :root:not([data-theme]) .msg-content [style*="color:#999"] { color: var(--text-faint) !important; }
     }
+
+    /* ─── Context radar — shows what's in the model's context ─────────────── */
+    .context-radar {
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .context-radar:hover { border-color: var(--green); color: var(--text); }
+    .context-radar.open { border-color: var(--green); background: var(--green-dim); }
+    .radar-item { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+    .radar-icon { font-size: 12px; }
+    .radar-dot { color: var(--text-faint); }
+    .radar-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-left: 4px;
+      position: relative;
+      min-width: 60px;
+    }
+    .radar-bar #radar-bar-fill {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--green) 0%, var(--green) 70%, #e67e22 85%, #e74c3c 100%);
+      transition: width 0.3s ease;
+    }
+    .radar-chevron {
+      color: var(--text-faint);
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+    .context-radar.open .radar-chevron { transform: rotate(180deg); }
+
+    .context-detail {
+      max-width: 720px;
+      margin: 4px auto 0;
+      padding: 10px 14px;
+      font-size: 11px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .radar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      gap: 8px;
+    }
+    .radar-row + .radar-row { border-top: 1px solid var(--border); }
+    .radar-row-label {
+      font-family: 'SF Mono', Menlo, monospace;
+      color: var(--text);
+      font-size: 11px;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .radar-row-meta {
+      color: var(--text-faint);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ─── Live file-edit diff cards ──────────────────────────────────────── */
+    .file-diff {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin: 10px auto;
+      max-width: 720px;
+      overflow: hidden;
+      background: var(--bg-input);
+      font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+      font-size: 12px;
+      box-shadow: var(--shadow-sm);
+      animation: msgSlideIn 0.22s ease-out;
+    }
+    .file-diff-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--bg-sidebar);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .file-diff-icon { font-size: 14px; flex-shrink: 0; }
+    .file-diff-path {
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-diff-badge {
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .file-diff-badge.new { background: var(--green-dim); color: var(--green); }
+    .file-diff-badge.edit { background: rgba(255,170,0,0.14); color: #c38000; }
+    :root[data-theme="dark"] .file-diff-badge.edit { color: #ffc857; background: rgba(255,200,87,0.16); }
+    .file-diff-stats {
+      display: flex;
+      gap: 8px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+    .file-diff-stats .add { color: var(--green); }
+    .file-diff-stats .del { color: #e74c3c; }
+    .file-diff-body {
+      max-height: 380px;
+      overflow-y: auto;
+      background: var(--bg-input);
+    }
+    .file-diff-body.collapsed { max-height: 0; }
+    .file-diff-line {
+      display: flex;
+      line-height: 1.5;
+      padding: 0 12px;
+      white-space: pre;
+      min-height: 18px;
+    }
+    .file-diff-line .lineno {
+      display: inline-block;
+      width: 34px;
+      flex-shrink: 0;
+      color: var(--text-faint);
+      text-align: right;
+      padding-right: 10px;
+      user-select: none;
+      font-size: 10px;
+    }
+    .file-diff-line .marker { width: 14px; flex-shrink: 0; }
+    .file-diff-line .code {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    .file-diff-line.add { background: rgba(0,168,70,0.10); }
+    .file-diff-line.add .marker { color: var(--green); }
+    .file-diff-line.del { background: rgba(231,76,60,0.10); }
+    .file-diff-line.del .marker { color: #e74c3c; }
+    .file-diff-line.ctx { color: var(--text-dim); }
+    .file-diff-line.gap {
+      justify-content: center;
+      color: var(--text-faint);
+      font-size: 10px;
+      padding: 3px 12px;
+      background: transparent;
+      border-top: 1px dashed var(--border);
+      border-bottom: 1px dashed var(--border);
+    }
+    .file-diff-toggle {
+      background: none;
+      border: 0;
+      cursor: pointer;
+      color: var(--text-faint);
+      font-size: 11px;
+      padding: 2px 4px;
+    }
+    .file-diff-toggle:hover { color: var(--text); }
 
     /* ─── Live tool activity ─────────────────────────────────────────────── */
     .activity-log {
@@ -1836,6 +2059,17 @@
       <button id="scroll-fab" class="scroll-fab" onclick="scrollMessagesToBottom()" aria-label="Scroll to latest">↓</button>
     </div>
 
+    <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none">
+      <span class="radar-item"><span class="radar-icon">💬</span><span id="radar-msgs">0</span></span>
+      <span class="radar-dot">·</span>
+      <span class="radar-item"><span class="radar-icon">📎</span><span id="radar-files">0</span></span>
+      <span class="radar-dot">·</span>
+      <span class="radar-item"><span class="radar-icon">🧮</span><span id="radar-tokens">0</span> tokens</span>
+      <span class="radar-bar"><span id="radar-bar-fill"></span></span>
+      <span class="radar-chevron" id="radar-chevron">▾</span>
+    </div>
+    <div class="context-detail" id="context-detail" style="display:none"></div>
+
     <div class="file-chips" id="file-chips"></div>
 
     <div class="input-area">
@@ -2266,6 +2500,77 @@
       })
     }, 0)
 
+    // ── Context radar ────────────────────────────────────────────────────
+    // Rough token estimate: ~4 chars per token. Crude but close enough for a
+    // live gauge. Real accounting would require a tokenizer per model family.
+    function approxTokens(str) { return Math.ceil((str || '').length / 4) }
+    function modelContextSize(model) {
+      const m = (model || '').toLowerCase()
+      if (m.includes('128') || m.startsWith('gemma4') || m.startsWith('qwen3.6') || m.startsWith('llama3.3') || m.startsWith('llama3.2')) return 128_000
+      if (m.includes('256') || m.includes('262')) return 262_144
+      if (m.startsWith('gpt-4o') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 128_000
+      if (m.startsWith('claude')) return 200_000
+      if (m.startsWith('gemini')) return 1_000_000
+      if (m.startsWith('gemma3')) return 32_768
+      if (m.startsWith('qwen3:')) return 32_768
+      return 32_768
+    }
+    function updateContextRadar() {
+      const radar = document.getElementById('context-radar')
+      if (!radar) return
+      const msgCount = messages.length
+      const fileCount = (typeof attachedFiles !== 'undefined') ? attachedFiles.length : 0
+      if (msgCount === 0 && fileCount === 0) { radar.style.display = 'none'; return }
+      radar.style.display = 'flex'
+
+      const msgChars = messages.reduce((n, m) => n + (m.content?.length || 0), 0)
+      const fileChars = (typeof attachedFiles !== 'undefined') ? attachedFiles.reduce((n, f) => n + (f.content?.length || 0), 0) : 0
+      const tokens = approxTokens(msgChars + '') + approxTokens(fileChars + '')
+
+      const currentModel = document.getElementById('model-select')?.value || ''
+      const ctxSize = modelContextSize(currentModel)
+      const pct = Math.min(100, Math.round((tokens / ctxSize) * 100))
+
+      document.getElementById('radar-msgs').textContent = msgCount
+      document.getElementById('radar-files').textContent = fileCount
+      document.getElementById('radar-tokens').textContent = formatCompact(tokens)
+      const fill = document.getElementById('radar-bar-fill')
+      if (fill) fill.style.width = pct + '%'
+
+      // Keep detail view fresh if it's open
+      if (radar.classList.contains('open')) renderRadarDetail()
+    }
+    function formatCompact(n) {
+      if (n < 1000) return String(n)
+      if (n < 10000) return (n / 1000).toFixed(1) + 'K'
+      if (n < 1_000_000) return Math.round(n / 1000) + 'K'
+      return (n / 1_000_000).toFixed(1) + 'M'
+    }
+    function toggleRadarDetail() {
+      const radar = document.getElementById('context-radar')
+      const detail = document.getElementById('context-detail')
+      const open = !radar.classList.contains('open')
+      radar.classList.toggle('open', open)
+      detail.style.display = open ? 'block' : 'none'
+      if (open) renderRadarDetail()
+    }
+    function renderRadarDetail() {
+      const detail = document.getElementById('context-detail')
+      if (!detail) return
+      const rows = []
+      const msgChars = messages.reduce((n, m) => n + (m.content?.length || 0), 0)
+      rows.push(`<div class="radar-row"><span class="radar-row-label">💬 Session messages (${messages.length})</span><span class="radar-row-meta">${formatCompact(approxTokens(msgChars))} tokens</span></div>`)
+      if (typeof attachedFiles !== 'undefined') {
+        for (const f of attachedFiles) {
+          rows.push(`<div class="radar-row"><span class="radar-row-label">📎 ${escapeHtml(f.name)}</span><span class="radar-row-meta">${formatCompact(approxTokens(f.content || ''))} tokens</span></div>`)
+        }
+      }
+      const currentModel = document.getElementById('model-select')?.value || 'default'
+      const ctxSize = modelContextSize(currentModel)
+      rows.push(`<div class="radar-row"><span class="radar-row-label" style="color:var(--text-faint)">Model window</span><span class="radar-row-meta">${formatCompact(ctxSize)} tokens max</span></div>`)
+      detail.innerHTML = rows.join('')
+    }
+
     // ── Scroll-to-latest FAB ─────────────────────────────────────────────
     function scrollMessagesToBottom() {
       const c = document.getElementById('messages')
@@ -2455,19 +2760,23 @@
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
+        const prev = messages[messages.length - 1]
         messages[messages.length - 1] = {
           role: 'assistant',
           content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)',
           model,
           ts: Date.now(),
+          fileEdits: prev?.fileEdits,  // preserve file-diff cards from streaming
         }
       } catch (err) {
         console.error('[callAI] error:', err)
+        const prev = messages[messages.length - 1]
         messages[messages.length - 1] = {
           role: 'assistant',
           content: `Error: ${err.message || String(err)}`,
           model,
           ts: Date.now(),
+          fileEdits: prev?.fileEdits,
         }
       }
 
@@ -2475,6 +2784,103 @@
       sendBtn.disabled = !input.value.trim()
       renderMessages()
       persistSessions()
+    }
+
+    // ── File diff: compute + render ──────────────────────────────────────
+    // Minimal line-based LCS diff. Good enough for typical edits (< 5000 lines).
+    function diffLines(oldText, newText) {
+      const a = (oldText || '').split('\n')
+      const b = (newText || '').split('\n')
+      const m = a.length, n = b.length
+      // Edge case: all-new file (oldText null/empty), skip LCS and emit all adds
+      if (!oldText) return b.map((line, i) => ({ op: 'add', line, ai: -1, bi: i }))
+      if (!newText) return a.map((line, i) => ({ op: 'del', line, ai: i, bi: -1 }))
+
+      // LCS table
+      const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1))
+      for (let i = m - 1; i >= 0; i--) {
+        for (let j = n - 1; j >= 0; j--) {
+          if (a[i] === b[j]) dp[i][j] = dp[i + 1][j + 1] + 1
+          else dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1])
+        }
+      }
+      // Backtrack
+      const ops = []
+      let i = 0, j = 0
+      while (i < m && j < n) {
+        if (a[i] === b[j]) { ops.push({ op: 'ctx', line: a[i], ai: i, bi: j }); i++; j++ }
+        else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ op: 'del', line: a[i], ai: i, bi: -1 }); i++ }
+        else { ops.push({ op: 'add', line: b[j], ai: -1, bi: j }); j++ }
+      }
+      while (i < m) ops.push({ op: 'del', line: a[i], ai: i, bi: -1 }), i++
+      while (j < n) ops.push({ op: 'add', line: b[j], ai: -1, bi: j }), j++
+      return ops
+    }
+
+    // Collapse long stretches of context lines into a compact gap marker
+    // (shows up to 2 context lines around each change).
+    function collapseDiffContext(ops, contextLines = 2) {
+      const out = []
+      let i = 0
+      while (i < ops.length) {
+        const o = ops[i]
+        if (o.op !== 'ctx') { out.push(o); i++; continue }
+        // Walk forward to find the end of this context stretch
+        let j = i
+        while (j < ops.length && ops[j].op === 'ctx') j++
+        const stretch = ops.slice(i, j)
+        const hasChangeBefore = out.length > 0 && out[out.length - 1].op !== 'ctx'
+        const hasChangeAfter = j < ops.length
+        const head = hasChangeBefore ? stretch.slice(0, contextLines) : []
+        const tail = hasChangeAfter ? stretch.slice(-contextLines) : []
+        const middleCount = stretch.length - head.length - tail.length
+        out.push(...head)
+        if (middleCount > (hasChangeBefore && hasChangeAfter ? 0 : contextLines)) {
+          out.push({ op: 'gap', count: middleCount })
+          out.push(...tail)
+        } else {
+          // Short enough to show in full
+          out.push(...stretch.slice(head.length, stretch.length - tail.length))
+          out.push(...tail.filter(x => !head.includes(x)))
+        }
+        i = j
+      }
+      return out
+    }
+
+    function renderFileDiff(fileEdit) {
+      const { path: p, oldContent, newContent, isNewFile } = fileEdit
+      const rawOps = diffLines(oldContent, newContent)
+      const adds = rawOps.filter(o => o.op === 'add').length
+      const dels = rawOps.filter(o => o.op === 'del').length
+      const ops = isNewFile ? rawOps : collapseDiffContext(rawOps, 2)
+      const diffId = 'diff-' + Math.random().toString(36).slice(2, 8)
+      const lines = ops.map(o => {
+        if (o.op === 'gap') return `<div class="file-diff-line gap">… ${o.count} unchanged line${o.count === 1 ? '' : 's'} …</div>`
+        const marker = o.op === 'add' ? '+' : o.op === 'del' ? '-' : ' '
+        const lineno = o.op === 'add' ? (o.bi + 1) : o.op === 'del' ? (o.ai + 1) : (o.bi + 1)
+        return `<div class="file-diff-line ${o.op}">
+          <span class="lineno">${lineno}</span>
+          <span class="marker">${marker}</span>
+          <span class="code">${escapeHtml(o.line) || '&nbsp;'}</span>
+        </div>`
+      }).join('')
+      const badge = isNewFile
+        ? `<span class="file-diff-badge new">New file</span>`
+        : `<span class="file-diff-badge edit">Edit</span>`
+      return `<div class="file-diff" data-diff-id="${diffId}">
+        <div class="file-diff-header">
+          <span class="file-diff-icon">📝</span>
+          <span class="file-diff-path">${escapeHtml(p)}</span>
+          ${badge}
+          <span class="file-diff-stats">
+            ${adds ? `<span class="add">+${adds}</span>` : ''}
+            ${dels ? `<span class="del">−${dels}</span>` : ''}
+          </span>
+          <button class="file-diff-toggle" onclick="this.closest('.file-diff').querySelector('.file-diff-body').classList.toggle('collapsed')" title="Toggle">⌃</button>
+        </div>
+        <div class="file-diff-body">${lines}</div>
+      </div>`
     }
 
     // Live activity log — tool calls, thinking steps — visible while the model works.
@@ -2515,16 +2921,21 @@
               ${msg.content.length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
              </div>`
           : ''
+        // Render inline file-diff cards (attached to assistant messages during tool calls)
+        const diffsHtml = (msg.fileEdits && msg.fileEdits.length)
+          ? msg.fileEdits.map(fe => renderFileDiff(fe)).join('')
+          : ''
+
         let body
         if (msg.streaming) {
           const chips = renderActivityChips()
           if (msg.content && msg.content.length > 0) {
-            body = chips + renderMarkdown(msg.content) + '<span class="stream-caret"></span>'
+            body = chips + diffsHtml + renderMarkdown(msg.content) + '<span class="stream-caret"></span>'
           } else {
-            body = chips + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+            body = chips + diffsHtml + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
           }
         } else {
-          body = (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
+          body = diffsHtml + (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
         }
         // Model + timestamp metadata on assistant responses
         const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
@@ -2582,6 +2993,7 @@
       container.innerHTML = (messages.length === 0 ? welcomeHtml : '') + html
       if (wasNearBottom) container.scrollTop = container.scrollHeight
       updateScrollFab?.()
+      updateContextRadar?.()
     }
 
     async function saveMessage(idx) {
@@ -3100,6 +3512,24 @@
         }
         return
       }
+      // File-edit events get attached to the current streaming message so they
+      // persist in the bubble after streaming ends. Rendered as inline diff cards.
+      if (activity.phase === 'file_edit') {
+        const streaming = messages.findLast?.(m => m.streaming)
+          || [...messages].reverse().find(m => m.streaming)
+        if (streaming) {
+          streaming.fileEdits = streaming.fileEdits || []
+          streaming.fileEdits.push({
+            path: activity.path,
+            oldContent: activity.oldContent,
+            newContent: activity.newContent,
+            isNewFile: activity.isNewFile,
+            ts: Date.now(),
+          })
+          renderMessages()
+        }
+        return
+      }
       liveActivity.push({ ...activity, ts: Date.now() })
       // Keep the array bounded so a long tool-call chain doesn't balloon
       if (liveActivity.length > 20) liveActivity = liveActivity.slice(-20)
@@ -3114,6 +3544,7 @@
       container.innerHTML = attachedFiles.map((f, i) =>
         `<div class="file-chip">📎 ${f.name} <span class="file-chip-remove" onclick="removeFile(${i})">&times;</span></div>`
       ).join('')
+      updateContextRadar?.()
     }
 
     function removeFile(idx) {
@@ -3295,6 +3726,14 @@
       currentSpaceId = id
       const space = getCurrentSpace()
       if (!space) return
+
+      // Ambient theme: subtle bg tint matching the space's own color. No
+      // garish color swap — just a ~3% tinted gradient in the main chat bg
+      // and a breath of color around the logo. You *feel* a space change
+      // without visual chaos. The space color comes from spaces.js; for
+      // custom spaces, fall back to the app green.
+      document.documentElement.style.setProperty('--space-tint', space.color || '#00a846')
+      document.documentElement.setAttribute('data-space', space.id || 'general')
 
       // Update sidebar button
       document.getElementById('space-icon').textContent = space.icon

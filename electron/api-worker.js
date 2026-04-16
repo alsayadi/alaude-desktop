@@ -289,9 +289,18 @@ async function executeToolCall(name, args, workspacePath) {
     }
     if (name === 'write_file') {
       const fp = path.resolve(workspacePath, args.path)
+      // Capture old content BEFORE writing so we can render a real diff
+      let oldContent = null
+      try { if (fs.existsSync(fp)) oldContent = fs.readFileSync(fp, 'utf8') } catch {}
       fs.mkdirSync(path.dirname(fp), { recursive: true })
       fs.writeFileSync(fp, args.content, 'utf8')
-      return { success: true, path: args.path }
+      return {
+        success: true,
+        path: args.path,
+        oldContent: oldContent?.slice(0, 50000) ?? null,  // cap to keep IPC small
+        newContent: String(args.content || '').slice(0, 50000),
+        isNewFile: oldContent === null,
+      }
     }
     if (name === 'list_directory') {
       const dp = path.resolve(workspacePath, args.path || '.')
@@ -460,6 +469,17 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
         const result = await executeToolCall(tc.function.name, args, workspacePath)
         onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
+        // Emit a structured file_edit event with old/new content so the renderer
+        // can show a live colored diff inline in the chat bubble.
+        if (tc.function.name === 'write_file' && result?.success) {
+          onActivity({
+            phase: 'file_edit',
+            path: result.path,
+            oldContent: result.oldContent,
+            newContent: result.newContent,
+            isNewFile: result.isNewFile,
+          })
+        }
         // Rich health cards for visual results
         const healthCard = formatHealthCard(tc.function.name, args, result)
         if (healthCard) { toolLog += '\n' + healthCard }
@@ -529,6 +549,15 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
         onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
         const result = await executeToolCall(tu.name, tu.input, workspacePath)
         onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
+        if (tu.name === 'write_file' && result?.success) {
+          onActivity({
+            phase: 'file_edit',
+            path: result.path,
+            oldContent: result.oldContent,
+            newContent: result.newContent,
+            isNewFile: result.isNewFile,
+          })
+        }
         const healthCard = formatHealthCard(tu.name, tu.input, result)
         if (healthCard) { toolLog += '\n' + healthCard }
         else if (tu.name === 'write_file') toolLog += `\n📝 Wrote \`${tu.input.path}\``
