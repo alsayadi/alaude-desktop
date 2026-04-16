@@ -412,15 +412,23 @@ ipcMain.handle('chat', async (_, messagesRaw, model, workspacePath, spaceId, uxM
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
 
-    // Timeout after 2 minutes
+    // Per-provider timeouts. Local models (Ollama) need room to (a) load
+    // multi-GB weights into RAM on the first call and (b) generate long
+    // responses on slower hardware. Cloud models should fail fast so users
+    // aren't stuck waiting on a dead API call.
+    const isLocalModel = provider === 'ollama'
+    const TIMEOUT_MS = isLocalModel ? 10 * 60 * 1000 : 2 * 60 * 1000
     setTimeout(() => {
       if (pendingRequests.has(id)) {
         pendingRequests.delete(id)
-        const err = new Error('Request timed out (2 min)')
+        const mins = Math.round(TIMEOUT_MS / 60000)
+        const err = new Error(`Request timed out (${mins} min). ${isLocalModel
+          ? 'Local model may be loading weights or generating a long response — try a smaller model or a shorter prompt.'
+          : 'Provider may be slow or unreachable.'}`)
         finalize(false, err)
         reject(err)
       }
-    }, 120000)
+    }, TIMEOUT_MS)
   })
 })
 
