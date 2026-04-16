@@ -332,7 +332,31 @@ async function executeToolCall(name, args, workspacePath) {
   } catch (err) { return { error: err.message } }
 }
 
-async function handleChat({ messages, model, workspacePath, spacePrompt }) {
+/**
+ * Emit a live activity event back to the main process. These are in-flight
+ * progress pings during a chat — the final `{id, result}` still follows.
+ * Main.js forwards them to the renderer as `tool-activity`.
+ */
+function emitActivity(id, activity) {
+  try { process.stdout.write(JSON.stringify({ id, activity }) + '\n') } catch {}
+}
+
+/** Truncate tool args into a short, renderer-safe summary string. */
+function summarizeArgs(name, args) {
+  if (!args) return ''
+  if (name === 'run_command') return String(args.command || '').slice(0, 80)
+  if (name === 'read_file' || name === 'write_file') return String(args.path || '').slice(0, 80)
+  if (name === 'list_directory') return String(args.path || '.').slice(0, 80)
+  if (name === 'open_in_browser') return String(args.url || '').slice(0, 80)
+  if (name === 'start_dev_server') return String(args.command || '').slice(0, 80)
+  if (name === 'analyze_lab_result') return `${args.test_name} = ${args.value}`
+  if (name === 'health_calculator') return String(args.calculator || '')
+  if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
+  if (name === 'score_phq9' || name === 'score_gad7') return name.toUpperCase()
+  return ''
+}
+
+async function handleChat({ messages, model, workspacePath, spacePrompt, id }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -350,23 +374,22 @@ async function handleChat({ messages, model, workspacePath, spacePrompt }) {
     sysPrompt += '\n\n' + spacePrompt
   }
 
+  const onActivity = (activity) => emitActivity(id, activity)
+
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt)
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
-    // Local models: OpenAI-compatible. Tool calling is enabled for capable
-    // models (gemma3:4b+, gemma4:*, qwen3*, llama3*) and skipped for tiny
-    // variants that produce garbage tool calls.
     const skipTools = shouldSkipToolsForLocal(model)
-    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools })
+    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools, onActivity })
   } else {
-    return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt)
+    return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt, { onActivity })
   }
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false } = opts
+  const { skipTools = false, onActivity = () => {} } = opts
   const OpenAI = require('openai').default || require('openai')
   // Ollama runs locally; keep a shorter timeout for external providers, longer for local generation.
   const timeout = provider === 'ollama' ? 300000 : 60000
@@ -386,6 +409,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   let fullText = '', toolLog = ''
 
   for (let i = 0; i < 10; i++) {
+    if (i > 0) onActivity({ phase: 'thinking', step: i })
     const res = await client.chat.completions.create({ model, messages: chatMsgs, max_completion_tokens: 4096, ...(useTools ? { tools: useTools } : {}) })
     const msg = res.choices?.[0]?.message
     if (!msg) break
@@ -394,7 +418,9 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     if (msg.tool_calls?.length) {
       for (const tc of msg.tool_calls) {
         const args = JSON.parse(tc.function.arguments || '{}')
+        onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
         const result = await executeToolCall(tc.function.name, args, workspacePath)
+        onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
         // Rich health cards for visual results
         const healthCard = formatHealthCard(tc.function.name, args, result)
         if (healthCard) { toolLog += '\n' + healthCard }
@@ -422,7 +448,8 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   return responseText
 }
 
-async function chatAnthropic(msgs, model, workspacePath, sysPrompt) {
+async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
+  const { onActivity = () => {} } = opts
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   const client = new Anthropic({ apiKey: getApiKey('anthropic'), timeout: 60000, fetch: globalThis.fetch })
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
@@ -432,6 +459,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt) {
   let fullText = '', toolLog = ''
 
   for (let i = 0; i < 10; i++) {
+    if (i > 0) onActivity({ phase: 'thinking', step: i })
     const res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
     for (const b of res.content) { if (b.type === 'text') fullText += b.text }
     const tuBlocks = res.content.filter(b => b.type === 'tool_use')
@@ -439,7 +467,9 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt) {
       chatMsgs.push({ role: 'assistant', content: res.content })
       const results = []
       for (const tu of tuBlocks) {
+        onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
         const result = await executeToolCall(tu.name, tu.input, workspacePath)
+        onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
         const healthCard = formatHealthCard(tu.name, tu.input, result)
         if (healthCard) { toolLog += '\n' + healthCard }
         else if (tu.name === 'write_file') toolLog += `\n📝 Wrote \`${tu.input.path}\``

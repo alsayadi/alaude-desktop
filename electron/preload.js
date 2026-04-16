@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('alaude', {
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
-  onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, name, args) => callback(name, args)),
+  onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

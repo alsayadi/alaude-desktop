@@ -307,6 +307,13 @@ function getWorker() {
       if (!line.trim()) continue
       try {
         const resp = JSON.parse(line)
+        // Live in-flight events (tool calls, thinking steps). Forward to
+        // renderer but DON'T resolve the pending promise — the final
+        // {id, result} still follows.
+        if (resp.activity) {
+          try { mainWindow?.webContents?.send('tool-activity', resp.activity) } catch {}
+          continue
+        }
         const pending = pendingRequests.get(resp.id)
         if (pending) {
           pendingRequests.delete(resp.id)

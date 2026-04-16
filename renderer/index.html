@@ -353,6 +353,35 @@
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
+    /* ─── Live tool activity ─────────────────────────────────────────────── */
+    .activity-log {
+      max-width: 720px;
+      margin: 0 auto 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .activity-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: 6px;
+      background: var(--bg-sidebar);
+      color: var(--text-dim);
+      border-left: 2px solid transparent;
+    }
+    .activity-row.running {
+      border-left-color: var(--green);
+      animation: activityPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes activityPulse { 0%, 100% { background: var(--bg-sidebar); } 50% { background: var(--green-dim); } }
+    .activity-row.done { border-left-color: var(--green); color: var(--text); opacity: 0.75; }
+    .activity-row.failed { border-left-color: #c0392b; color: #c0392b; }
+    .activity-name { font-weight: 600; font-family: 'SF Mono', Menlo, monospace; }
+    .activity-args { background: rgba(0,0,0,0.06); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+
     /* ─── Input ─────────────────────────────────────────────────────────── */
     .input-area {
       padding: 12px 24px 20px;
@@ -1572,6 +1601,9 @@
       const model = document.getElementById('model-select').value
       const messagesDiv = document.getElementById('messages')
 
+      // Reset live activity for this new turn
+      liveActivity = []
+
       // Add typing indicator
       messages.push({ role: 'assistant', content: '', streaming: true })
       renderMessages()
@@ -1596,6 +1628,29 @@
       renderMessages()
     }
 
+    // Live activity log — tool calls, thinking steps — visible while the model works.
+    let liveActivity = []  // { phase, name, args, ts }
+    function renderActivityChips() {
+      if (!liveActivity.length) return ''
+      // Show the last 4 activity lines, most recent at the bottom
+      const recent = liveActivity.slice(-4)
+      return `<div class="activity-log">${recent.map(a => {
+        if (a.phase === 'tool_start') return `<div class="activity-row running">${iconForTool(a.name)} <span class="activity-name">${escapeHtml(a.name)}</span>${a.args ? ` <code class="activity-args">${escapeHtml(a.args)}</code>` : ''}</div>`
+        if (a.phase === 'tool_end') return `<div class="activity-row ${a.ok ? 'done' : 'failed'}">${a.ok ? '✓' : '✗'} <span class="activity-name">${escapeHtml(a.name)}</span></div>`
+        if (a.phase === 'thinking') return `<div class="activity-row running">🧠 <span class="activity-name">thinking…</span></div>`
+        return ''
+      }).join('')}</div>`
+    }
+    function iconForTool(name) {
+      const map = {
+        read_file: '📖', write_file: '📝', list_directory: '📁', run_command: '⚡',
+        open_in_browser: '🌐', start_dev_server: '🚀',
+        analyze_lab_result: '🧪', check_drug_interactions: '💊', health_calculator: '🔢',
+        score_phq9: '🩺', score_gad7: '🩺',
+      }
+      return map[name] || '⚙️'
+    }
+
     function renderMessages() {
       const container = document.getElementById('messages')
 
@@ -1611,7 +1666,7 @@
         html += `<div class="msg">
           <div class="msg-role ${roleClass}">${roleLabel}</div>
           <div class="msg-content">${msg.streaming
-            ? '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+            ? renderActivityChips() + '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
             : escapeHtml(msg.content)
           }</div>
           ${saveBtn}
@@ -1854,6 +1909,15 @@
 
     window.alaude.onLoginSuccess((provider) => {
       checkLoginStatus()
+    })
+
+    // Live tool activity — refresh the streaming bubble as the agent works.
+    window.alaude.onToolActivity((activity) => {
+      if (!activity) return
+      liveActivity.push({ ...activity, ts: Date.now() })
+      // Keep the array bounded so a long tool-call chain doesn't balloon
+      if (liveActivity.length > 20) liveActivity = liveActivity.slice(-20)
+      renderMessages()
     })
 
     // ── Attached files ────────────────────────────────────────────────────
