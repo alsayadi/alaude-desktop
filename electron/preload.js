@@ -1,0 +1,50 @@
+const { contextBridge, ipcRenderer } = require('electron')
+
+contextBridge.exposeInMainWorld('alaude', {
+  // Chat
+  chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
+  onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, name, args) => callback(name, args)),
+
+  // UX OODA loop (local-only dev instrumentation)
+  logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),
+  getUxInsights: () => ipcRenderer.invoke('ux-insights'),
+  runUxBatch: () => ipcRenderer.invoke('ux-run-batch'),
+
+  // Key management
+  getKeyStatuses: () => ipcRenderer.invoke('get-key-statuses'),
+  setKey: (provider, key) => ipcRenderer.invoke('set-key', provider, key),
+
+  // OAuth login
+  oauthLogin: (provider) => ipcRenderer.invoke('oauth-login', provider),
+  onLoginSuccess: (callback) => ipcRenderer.on('login-success', (_, provider) => callback(provider)),
+
+  // Folder picker
+  pickFolder: () => ipcRenderer.invoke('pick-folder'),
+  listFiles: (path) => ipcRenderer.invoke('list-files', path),
+
+  // File handling
+  readFileForChat: (filePath) => ipcRenderer.invoke('read-file-for-chat', filePath),
+  pickFile: () => ipcRenderer.invoke('pick-file'),
+  saveFile: (content, defaultName) => ipcRenderer.invoke('save-file', content, defaultName),
+
+  // Open URL in system browser
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // Spaces
+  getSpaces: () => ipcRenderer.invoke('get-spaces'),
+  setActiveSpace: (id) => ipcRenderer.invoke('set-active-space', id),
+  saveCustomSpace: (space) => ipcRenderer.invoke('save-custom-space', space),
+  deleteCustomSpace: (id) => ipcRenderer.invoke('delete-custom-space', id),
+
+  // Session events from menu
+  onNewSession: (callback) => ipcRenderer.on('new-session', () => callback()),
+
+  // Ollama local runtime
+  ollamaAvailable: () => ipcRenderer.invoke('ollama-available'),
+  ollamaList: () => ipcRenderer.invoke('ollama-list'),
+  ollamaCatalog: () => ipcRenderer.invoke('ollama-catalog'),
+  ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
+  ollamaCancel: (model) => ipcRenderer.invoke('ollama-cancel', model),
+  ollamaRemove: (model) => ipcRenderer.invoke('ollama-remove', model),
+  onModelDownloadProgress: (callback) => ipcRenderer.on('model-download-progress', (_e, data) => callback(data)),
+})

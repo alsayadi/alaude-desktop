@@ -1,0 +1,2560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alaude</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;
+      --bg-sidebar: #ebebeb;
+      --bg-input: #fff;
+      --bg-msg-user: #e8e8e8;
+      --bg-msg-ai: transparent;
+      --bg-hover: #e0e0e0;
+      --border: #d8d8d8;
+      --green: #00a846;
+      --green-dim: rgba(0,168,70,0.1);
+      --green-glow: rgba(0,168,70,0.15);
+      --text: #1a1a1a;
+      --text-dim: #666;
+      --text-faint: #999;
+      --radius: 12px;
+      --sidebar-w: 260px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #app { height: 100%; overflow: hidden; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+    }
+
+    /* ─── Sidebar ───────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      -webkit-app-region: drag;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      padding-top: 42px; /* space for macOS traffic lights */
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-sidebar);
+    }
+
+    .sidebar-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+    }
+
+    .sidebar-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    /* Space selector */
+    .space-selector {
+      margin: 0 12px 10px;
+      position: relative;
+    }
+
+    .space-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .space-btn:hover { border-color: var(--green); }
+    .space-btn .space-icon { font-size: 16px; }
+    .space-btn .space-chevron { margin-left: auto; color: var(--text-faint); font-size: 10px; }
+
+    .space-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      z-index: 200;
+      margin-top: 4px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .space-dropdown.show { display: block; -webkit-app-region: no-drag; }
+
+    .space-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      -webkit-app-region: no-drag;
+    }
+    .space-option:hover { background: var(--bg-hover); }
+    .space-option.active { background: var(--green-dim); color: var(--green); }
+    .space-option .opt-icon { font-size: 16px; width: 24px; text-align: center; }
+    .space-option .opt-name { font-weight: 500; }
+    .space-option .opt-desc { font-size: 11px; color: var(--text-faint); margin-left: auto; max-width: 140px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .space-divider { height: 1px; background: var(--border); margin: 4px 8px; }
+
+    .space-create-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--green);
+      font-weight: 500;
+      -webkit-app-region: no-drag;
+    }
+    .space-create-btn:hover { background: var(--green-dim); }
+
+    /* Create space modal */
+    .create-space-field { margin-bottom: 12px; }
+    .create-space-field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+    .create-space-field input, .create-space-field textarea, .create-space-field select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .create-space-field input:focus, .create-space-field textarea:focus { border-color: var(--green); }
+    .create-space-field textarea { min-height: 80px; resize: vertical; }
+
+    .sidebar-new-btn {
+      margin: 0 12px 12px;
+      padding: 8px 14px;
+      background: var(--green-dim);
+      border: 1px solid rgba(0,200,83,0.25);
+      color: var(--green);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: background 0.15s;
+    }
+    .sidebar-new-btn:hover { background: rgba(0,200,83,0.2); }
+
+    .sidebar-label {
+      padding: 8px 16px 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-faint);
+    }
+
+    .sidebar-sessions {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .session-item {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-dim);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background 0.1s;
+    }
+    .session-item:hover { background: var(--bg-hover); color: var(--text); }
+    .session-item.active { background: var(--bg-hover); color: var(--green); }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      -webkit-app-region: no-drag;
+    }
+
+    .model-selector {
+      width: 100%;
+      padding: 6px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+    }
+    .model-selector:focus { border-color: var(--green); }
+
+    /* ─── Main content ──────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      -webkit-app-region: drag;
+      position: relative;
+    }
+
+    .topbar-model {
+      font-size: 12px;
+      color: var(--text-dim);
+      padding: 3px 10px;
+      border-radius: 4px;
+      background: var(--bg-sidebar);
+    }
+
+    .topbar-actions {
+      position: absolute;
+      right: 16px;
+      display: flex;
+      gap: 6px;
+    }
+
+    .topbar-keys-btn {
+      font-size: 12px;
+      color: var(--text-faint);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 3px 10px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .topbar-keys-btn:hover { border-color: var(--green); color: var(--green); }
+
+    /* ─── Messages ──────────────────────────────────────────────────────── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-faint);
+    }
+
+    .welcome-logo {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
+      box-shadow: 0 0 30px var(--green-glow);
+    }
+
+    .welcome-title { font-size: 20px; font-weight: 600; color: var(--text); }
+    .welcome-sub { font-size: 14px; max-width: 360px; text-align: center; line-height: 1.5; }
+
+    .msg {
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 12px 0;
+    }
+
+    .msg-role {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .msg-role.user { color: var(--text-dim); }
+    .msg-role.assistant { color: var(--green); }
+
+    .msg-content {
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg-content code {
+      background: var(--bg-sidebar);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+    }
+
+    .msg-content pre {
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 0;
+      overflow-x: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .typing-indicator {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 8px 0;
+      color: var(--green);
+      font-size: 13px;
+    }
+
+    .typing-dot {
+      display: inline-block;
+      animation: blink 1.2s infinite;
+    }
+    @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    /* ─── Input ─────────────────────────────────────────────────────────── */
+    .input-area {
+      padding: 12px 24px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .input-wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      transition: border-color 0.15s;
+    }
+    .input-wrap:focus-within { border-color: var(--green); }
+
+    .input-field {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      max-height: 200px;
+      line-height: 1.5;
+      padding: 4px 0;
+    }
+    .input-field::placeholder { color: var(--text-faint); }
+
+    /* Workspace bar */
+    .workspace-bar {
+      max-width: 720px;
+      margin: 6px auto 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .workspace-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .workspace-btn:hover { border-color: var(--green); color: var(--green); }
+    .workspace-btn.active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+    .workspace-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+    .workspace-path {
+      font-size: 11px;
+      color: var(--text-faint);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Quick actions */
+    .quick-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .quick-btn, .qa-btn {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .quick-btn:hover, .qa-btn:hover { border-color: var(--green); background: var(--green-dim); }
+
+    /* Drop overlay */
+    .drop-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,168,70,0.08);
+      border: 2px dashed var(--green);
+      border-radius: 12px;
+      z-index: 50;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .drop-overlay.show { display: flex; }
+    .drop-icon { font-size: 36px; }
+    .drop-text { font-size: 14px; color: var(--green); font-weight: 500; }
+    .messages { position: relative; }
+
+    /* File chips */
+    .file-chips {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 0 24px;
+    }
+    .file-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--green-dim);
+      border: 1px solid rgba(0,168,70,0.25);
+      color: var(--green);
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .file-chip-remove {
+      cursor: pointer;
+      opacity: 0.6;
+      font-size: 14px;
+    }
+    .file-chip-remove:hover { opacity: 1; }
+
+    /* Icon button (attach, mic) */
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    .icon-btn:hover { color: var(--green); }
+    .icon-btn.recording { color: #ff5252; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Save button on messages */
+    .msg-save {
+      display: inline-block;
+      margin-top: 6px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .msg-save:hover { border-color: var(--green); color: var(--green); }
+
+    .send-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--green);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .send-btn:disabled { opacity: 0.3; cursor: default; }
+    .send-btn:not(:disabled):hover { opacity: 0.85; }
+    .send-btn svg { width: 16px; height: 16px; }
+    .send-btn { color: #fff; }
+
+    /* ─── Keys Modal ────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: 480px;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+
+    .modal h2 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+
+    .key-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .key-label {
+      width: 110px;
+      font-size: 13px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    .key-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'SF Mono', monospace;
+      outline: none;
+    }
+    .key-input:focus { border-color: var(--green); }
+    .key-input::placeholder { color: var(--text-faint); font-family: inherit; }
+
+    .key-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .key-status.set { background: var(--green); }
+    .key-status.unset { background: #ccc; }
+
+    .key-save-btn {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--green);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .key-save-btn:hover { opacity: 0.9; }
+
+    /* ─── Local Models Modal ─────────────────────────────────────────────── */
+    .lm-modal { max-width: 680px; max-height: 82vh; display: flex; flex-direction: column; }
+    .lm-modal h2 { flex-shrink: 0; }
+    .lm-scroll { overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+
+    /* Not-installed state */
+    .lm-empty {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .lm-empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .lm-empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .lm-empty-sub { color: var(--text-dim); font-size: 13px; line-height: 1.55; margin-bottom: 20px; max-width: 360px; margin-left: auto; margin-right: auto; }
+    .lm-empty .key-save-btn { max-width: 240px; margin-left: auto; margin-right: auto; display: block; }
+    .lm-empty-recheck {
+      background: none !important;
+      color: var(--text-dim) !important;
+      font-weight: 500 !important;
+      margin-top: 10px !important;
+      text-decoration: underline;
+    }
+
+    /* Section titles */
+    .lm-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-faint);
+      letter-spacing: 0.08em;
+      margin: 18px 0 10px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .lm-section-title .lm-count {
+      font-size: 11px;
+      color: var(--text-faint);
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+    .lm-section-title:first-child { margin-top: 4px; }
+
+    /* Progress box */
+    .lm-progress {
+      display: none;
+      padding: 14px 16px;
+      background: var(--green-dim);
+      border: 1px solid var(--green);
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+    .lm-progress.show { display: block; }
+    .lm-progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .lm-progress-name {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .lm-progress-pct {
+      font-variant-numeric: tabular-nums;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--green);
+    }
+    .lm-progress-bar {
+      height: 6px;
+      background: rgba(0,0,0,0.08);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .lm-progress-bar-fill {
+      height: 100%;
+      background: var(--green);
+      width: 0%;
+      transition: width 0.25s ease;
+    }
+    .lm-progress-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .lm-cancel-btn {
+      background: none;
+      border: 0;
+      color: #c0392b;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 0;
+    }
+    .lm-cancel-btn:hover { text-decoration: underline; }
+
+    /* Custom pull input */
+    .lm-custom-row { display: flex; gap: 8px; margin-bottom: 4px; }
+    .lm-custom-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: 'SF Mono', Menlo, monospace;
+      background: var(--bg-input);
+      color: var(--text);
+      outline: none;
+    }
+    .lm-custom-input:focus { border-color: var(--green); }
+    .lm-custom-btn {
+      padding: 10px 16px !important;
+      margin: 0 !important;
+      font-size: 13px !important;
+      width: auto !important;
+      white-space: nowrap;
+    }
+    .lm-custom-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 6px;
+    }
+
+    /* Installed card */
+    .lm-installed-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: var(--bg-input);
+      transition: border-color 0.15s;
+    }
+    .lm-installed-card:hover { border-color: var(--green); }
+    .lm-installed-name {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .lm-installed-meta {
+      color: var(--text-dim);
+      font-size: 11px;
+      margin-top: 3px;
+    }
+    .lm-ready-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--green);
+      background: var(--green-dim);
+      border-radius: 4px;
+      margin-right: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .lm-remove-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 11px;
+      font-size: 12px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .lm-remove-btn:hover { color: #c0392b; border-color: #c0392b; }
+
+    /* Family group in catalog */
+    .lm-family {
+      margin-bottom: 18px;
+    }
+    .lm-family-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .lm-family-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .lm-family-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .lm-family-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Catalog card */
+    .lm-card {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      background: var(--bg-input);
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .lm-card:hover { border-color: var(--green); }
+    .lm-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .lm-card-main { flex: 1; min-width: 0; }
+    .lm-card-title {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .lm-card-name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .lm-card-size {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+    .lm-card-id {
+      font-family: 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 2px;
+      margin-bottom: 6px;
+      word-break: break-all;
+    }
+    .lm-card-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    .lm-card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .lm-tag {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: var(--bg-sidebar);
+      border-radius: 4px;
+      text-transform: lowercase;
+    }
+    .lm-tag-hero { color: var(--green); background: var(--green-dim); font-weight: 600; }
+    .lm-card-action {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+      min-width: 100px;
+    }
+    .lm-download-btn {
+      padding: 8px 14px !important;
+      margin: 0 !important;
+      font-size: 12px !important;
+      width: auto !important;
+      white-space: nowrap;
+    }
+    .lm-download-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .lm-card-context {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-align: right;
+    }
+
+    /* Empty lists */
+    .lm-list-empty {
+      padding: 14px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 12px;
+      background: var(--bg-sidebar);
+      border-radius: 8px;
+    }
+
+    /* ─── UX Insights Modal ──────────────────────────────────────────────── */
+    .ux-modal { max-width: 720px; max-height: 82vh; display: flex; flex-direction: column; }
+    .ux-scroll { overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+    .ux-empty { text-align: center; padding: 40px 20px; color: var(--text-dim); }
+    .ux-empty-icon { font-size: 44px; margin-bottom: 10px; }
+    .ux-status-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .ux-stat {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-input);
+    }
+    .ux-stat-label {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .ux-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .ux-stat-sub { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+    .ux-diagnosis {
+      border: 1px solid var(--green);
+      background: var(--green-dim);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+    .ux-diagnosis-priority {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--green);
+      color: #fff;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
+    }
+    .ux-diagnosis-problem { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; line-height: 1.45; }
+    .ux-diagnosis-suggest { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+    .ux-diagnosis-param { font-family: 'SF Mono', Menlo, monospace; font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+    .ux-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 16px;
+    }
+    .ux-breakdown-table th, .ux-breakdown-table td {
+      text-align: left;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ux-breakdown-table th {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-faint);
+      font-weight: 600;
+    }
+    .ux-breakdown-table td.ux-num { text-align: right; font-variant-numeric: tabular-nums; }
+    .ux-breakdown-table .ux-bad { color: #c0392b; font-weight: 600; }
+    .ux-breakdown-table .ux-ok { color: var(--green); }
+    .ux-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .ux-footer-info { font-size: 11px; color: var(--text-faint); }
+    .ux-footer button {
+      padding: 7px 14px !important;
+      margin: 0 !important;
+      width: auto !important;
+      font-size: 12px !important;
+    }
+
+    /* ─── Login Screen ──────────────────────────────────────────────────── */
+    .login-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      -webkit-app-region: drag;
+    }
+    .login-screen.hidden { display: none; }
+
+    .login-card {
+      width: 400px;
+      text-align: center;
+      -webkit-app-region: no-drag;
+    }
+
+    .login-logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px var(--green-glow);
+    }
+
+    .login-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .login-sub {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 28px;
+    }
+
+    .login-providers { display: flex; flex-direction: column; gap: 10px; }
+
+    .login-btn {
+      width: 100%;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .login-btn:hover { border-color: var(--green); background: var(--green-dim); }
+
+    .login-btn-icon {
+      font-size: 10px;
+    }
+    .login-btn-anthropic .login-btn-icon { color: #d97757; }
+    .login-btn-openai .login-btn-icon { color: #10a37f; }
+    .login-btn-google .login-btn-icon { color: #4285f4; }
+
+    .login-divider {
+      margin: 24px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-faint);
+      font-size: 12px;
+    }
+    .login-divider::before, .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .login-toggle-key {
+      background: none;
+      border: none;
+      color: var(--green);
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .login-toggle-key:hover { text-decoration: underline; }
+
+    .login-key-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .login-provider-select {
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .login-key-input {
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+      font-family: 'SF Mono', monospace;
+      outline: none;
+    }
+    .login-key-input:focus { border-color: var(--green); }
+
+    .login-key-submit {
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .login-key-submit:hover { opacity: 0.9; }
+
+    .login-status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-dim);
+      min-height: 20px;
+    }
+    .login-status.error { color: #d32f2f; }
+    .login-status.success { color: var(--green); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #bbb; }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <img class="login-logo" src="logo.jpg" />
+      <h1 class="login-title">Welcome to Alaude</h1>
+      <p class="login-sub">Sign in to start chatting with any AI model</p>
+
+      <div class="login-providers">
+        <button class="login-btn login-btn-anthropic" onclick="loginOAuth('anthropic')">
+          <span class="login-btn-icon">&#9679;</span>
+          Sign in with Anthropic
+        </button>
+        <button class="login-btn login-btn-openai" onclick="loginWithKey('openai')">
+          <span class="login-btn-icon">&#9679;</span>
+          Sign in with OpenAI
+        </button>
+        <button class="login-btn login-btn-google" onclick="loginWithKey('google')">
+          <span class="login-btn-icon">&#9679;</span>
+          Sign in with Google
+        </button>
+      </div>
+
+      <div class="login-divider"><span>or enter an API key</span></div>
+
+      <div class="login-key-form" id="login-key-form" style="display:none">
+        <select class="login-provider-select" id="login-provider-select">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+          <option value="google">Google (Gemini)</option>
+          <option value="xai">xAI (Grok)</option>
+          <option value="moonshot">Kimi (Moonshot)</option>
+          <option value="dashscope">Qwen (Alibaba)</option>
+          <option value="zhipu">GLM (Zhipu)</option>
+        </select>
+        <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here..." />
+        <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
+      </div>
+
+      <button class="login-toggle-key" onclick="toggleKeyForm()">Enter API key manually</button>
+
+      <div class="login-status" id="login-status"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <img class="sidebar-logo" id="logo" />
+      <span class="sidebar-title">Alaude</span>
+    </div>
+    <div class="space-selector">
+      <button class="space-btn" onclick="toggleSpaceDropdown()">
+        <span class="space-icon" id="space-icon">⚙️</span>
+        <span id="space-name">General</span>
+        <span class="space-chevron">▾</span>
+      </button>
+      <div class="space-dropdown" id="space-dropdown"></div>
+    </div>
+    <button class="sidebar-new-btn" onclick="newSession()">+ New session</button>
+    <div class="sidebar-label">Recent</div>
+    <div class="sidebar-sessions" id="sessions"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-new-btn" style="background:#fff;color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
+      <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
+        <optgroup label="Anthropic">
+          <option value="">Claude Sonnet</option>
+          <option value="claude-opus-4-5">Claude Opus 4.5</option>
+        </optgroup>
+        <optgroup label="OpenAI">
+          <option value="gpt-4o" selected>GPT-4o (default)</option>
+          <option value="gpt-5">GPT-5</option>
+          <option value="gpt-5.4">GPT-5.4</option>
+          <option value="o3">o3</option>
+          <option value="o4-mini">o4-mini</option>
+        </optgroup>
+        <optgroup label="Other">
+          <option value="grok-3">Grok-3</option>
+          <option value="moonshot-v1-128k">Kimi</option>
+          <option value="qwen-max">Qwen Max</option>
+          <option value="glm-5.1">GLM-5.1 (Z.ai · #1 SWE-Bench Pro)</option>
+          <option value="glm-4">GLM-4</option>
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+        </optgroup>
+        <optgroup label="Local (Ollama)" id="model-select-local"></optgroup>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-model" id="topbar-model">GPT-4o</span>
+      <div class="topbar-actions">
+        <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
+        <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
+        <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+      <div class="welcome" id="welcome">
+        <img class="welcome-logo" id="welcome-logo" />
+        <div class="welcome-title">What can I help you with?</div>
+        <div class="welcome-sub">Drop files here, or try one of these:</div>
+        <div class="quick-actions" id="quick-actions"></div>
+      </div>
+      <div class="drop-overlay" id="drop-overlay">
+        <div class="drop-icon">📎</div>
+        <div class="drop-text">Drop file here</div>
+      </div>
+    </div>
+
+    <div class="file-chips" id="file-chips"></div>
+
+    <div class="input-area">
+      <div class="input-wrap">
+        <button class="icon-btn" onclick="attachFile()" title="Attach file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        <textarea class="input-field" id="input" rows="1" placeholder="Message Alaude..." autofocus></textarea>
+        <button class="icon-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="workspace-bar">
+        <button class="workspace-btn" id="folder-btn" onclick="pickWorkspace()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span id="folder-label">Choose folder</span>
+        </button>
+        <span class="workspace-path" id="folder-path"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Keys Modal -->
+  <div class="modal-overlay" id="keys-modal">
+    <div class="modal">
+      <h2>
+        API Keys
+        <button class="modal-close" onclick="toggleKeysModal()">&times;</button>
+      </h2>
+      <div id="key-fields"></div>
+      <button class="key-save-btn" onclick="saveKeys()">Save Keys</button>
+    </div>
+  </div>
+
+  <!-- Local Models Modal (Ollama) -->
+  <div class="modal-overlay" id="local-models-modal">
+    <div class="modal lm-modal">
+      <h2>
+        Local Models
+        <button class="modal-close" onclick="toggleLocalModelsModal()">&times;</button>
+      </h2>
+
+      <!-- Not-installed state -->
+      <div id="lm-not-installed" class="lm-empty" style="display:none">
+        <div class="lm-empty-icon">🦙</div>
+        <div class="lm-empty-title">Ollama isn't running</div>
+        <div class="lm-empty-sub">
+          Alaude runs local models through Ollama — free, open-source, and private.
+          Install it, then come back.
+        </div>
+        <button class="key-save-btn" onclick="window.alaude.openExternal('https://ollama.com/download')">Download Ollama</button>
+        <button class="key-save-btn lm-empty-recheck" onclick="refreshLocalModels()">I've installed it — recheck</button>
+      </div>
+
+      <!-- Connected state -->
+      <div id="lm-connected" class="lm-scroll" style="display:none">
+        <!-- Active download -->
+        <div id="lm-download-progress" class="lm-progress">
+          <div class="lm-progress-head">
+            <span id="lm-progress-model" class="lm-progress-name">...</span>
+            <span id="lm-progress-pct" class="lm-progress-pct">0%</span>
+          </div>
+          <div class="lm-progress-bar"><div id="lm-progress-bar" class="lm-progress-bar-fill"></div></div>
+          <div class="lm-progress-foot">
+            <span id="lm-progress-status">Starting…</span>
+            <button id="lm-cancel-btn" class="lm-cancel-btn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Installed -->
+        <div class="lm-section-title">
+          Installed
+          <span class="lm-count" id="lm-installed-count"></span>
+        </div>
+        <div id="lm-installed-list">
+          <div class="lm-list-empty">No models installed yet — pick one below to get started.</div>
+        </div>
+
+        <!-- Catalog (grouped by family) -->
+        <div class="lm-section-title">
+          Available to download
+          <span class="lm-count" id="lm-catalog-count"></span>
+        </div>
+        <div id="lm-catalog-list"></div>
+
+        <!-- Custom pull -->
+        <div class="lm-section-title">Pull custom tag</div>
+        <div class="lm-custom-row">
+          <input id="lm-custom-input" class="lm-custom-input" placeholder="e.g. qwen3.6:latest, gemma4:e4b, llama3.2" />
+          <button class="key-save-btn lm-custom-btn" onclick="pullCustomModel()">Download</button>
+        </div>
+        <div class="lm-custom-hint">Any tag from <a href="#" onclick="window.alaude.openExternal('https://ollama.com/library'); return false" style="color:var(--green);text-decoration:none">ollama.com/library</a> works.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- UX Insights Modal -->
+  <div class="modal-overlay" id="ux-modal">
+    <div class="modal ux-modal">
+      <h2>
+        UX Insights
+        <button class="modal-close" onclick="toggleUxInsightsModal()">&times;</button>
+      </h2>
+      <div id="ux-body" class="ux-scroll"></div>
+    </div>
+  </div>
+
+  <!-- Create Space Modal -->
+  <div class="modal-overlay" id="create-space-modal">
+    <div class="modal">
+      <h2>Create Custom Space <button class="modal-close" onclick="toggleCreateSpaceModal()">&times;</button></h2>
+      <div class="create-space-field">
+        <label>Icon (emoji)</label>
+        <input id="cs-icon" placeholder="🔬" maxlength="4" style="width:60px" />
+      </div>
+      <div class="create-space-field">
+        <label>Name</label>
+        <input id="cs-name" placeholder="e.g. Research Assistant" />
+      </div>
+      <div class="create-space-field">
+        <label>Description</label>
+        <input id="cs-desc" placeholder="One-line description" />
+      </div>
+      <div class="create-space-field">
+        <label>AI Persona / Instructions</label>
+        <textarea id="cs-prompt" placeholder="Describe how the AI should behave in this space. E.g. 'You are a research assistant specializing in...'"></textarea>
+      </div>
+      <div class="create-space-field">
+        <label>Input placeholder</label>
+        <input id="cs-placeholder" placeholder="e.g. Ask about research..." />
+      </div>
+      <button class="key-save-btn" onclick="saveNewSpace()">Create Space</button>
+    </div>
+  </div>
+
+  <script>
+    // ── State ─────────────────────────────────────────────────────────────
+    let messages = []
+    let isStreaming = false
+    let allSpaces = []
+    let customSpaces = []
+    let currentSpaceId = 'general'
+    let currentSessionId = Date.now()
+    let sessions = [{ id: currentSessionId, title: 'New session', messages: [] }]
+
+    // ── OODA UX tracking state ───────────────────────────────────────────
+    const ux = {
+      sessionId: 'sess_' + currentSessionId,
+      pendingEntry: 'freeform',   // 'freeform' | 'quickaction' | 'voice' | 'attach'
+      pendingAction: null,         // quick-action id when entry=quickaction
+      lastPromptHash: null,
+      lastPromptTs: 0,
+      lastMessageId: null,         // so response_copied can reference the preceding AI msg
+      currentMessageId: null,
+      lastAIResponseMessageId: null,
+    }
+    function hashString(s) {
+      let h = 0x811c9dc5
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 0x01000193) >>> 0 }
+      return h.toString(16)
+    }
+    function newMessageId() {
+      return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
+    }
+    async function logUx(event) {
+      try { await window.alaude.logUxEvent({ ...event }) } catch {}
+    }
+
+    const PROVIDERS = [
+      { key: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-...' },
+      { key: 'openai',    label: 'OpenAI',    placeholder: 'sk-proj-...' },
+      { key: 'google',    label: 'Gemini',    placeholder: 'AIza...' },
+      { key: 'xai',       label: 'Grok',      placeholder: 'xai-...' },
+      { key: 'moonshot',  label: 'Kimi',      placeholder: 'sk-...' },
+      { key: 'dashscope', label: 'Qwen',      placeholder: 'sk-...' },
+      { key: 'zhipu',     label: 'GLM',       placeholder: '...' },
+    ]
+
+    // ── Logo ─────────────────────────────────────────────────────────────
+    // Load logo from the alaude-site directory
+    const logoSrc = 'logo.jpg'
+    document.getElementById('logo').src = logoSrc
+    document.getElementById('welcome-logo').src = logoSrc
+
+    // ── Input ────────────────────────────────────────────────────────────
+    const input = document.getElementById('input')
+    const sendBtn = document.getElementById('send-btn')
+
+    input.addEventListener('input', () => {
+      sendBtn.disabled = !input.value.trim() || isStreaming
+      // Auto-resize
+      input.style.height = 'auto'
+      input.style.height = Math.min(input.scrollHeight, 200) + 'px'
+    })
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        if (input.value.trim() && !isStreaming) sendMessage()
+      }
+    })
+
+    // ── Messages ─────────────────────────────────────────────────────────
+    function sendMessage() {
+      let text = input.value.trim()
+      if (!text && attachedFiles.length === 0) return
+      if (isStreaming) return
+
+      // Prepend attached file contents to the message
+      if (attachedFiles.length > 0) {
+        let fileContext = ''
+        for (const f of attachedFiles) {
+          if (f.type === 'image') {
+            fileContext += `[Attached image: ${f.name}]\n`
+          } else {
+            const label = f.pages ? `(${f.pages} pages)` : f.rows ? `(${f.rows} rows)` : ''
+            fileContext += `--- File: ${f.name} ${label} ---\n${f.content.slice(0, 50000)}\n--- End of file ---\n\n`
+          }
+        }
+        text = fileContext + (text || 'Please analyze the attached file(s).')
+        attachedFiles = []
+        renderFileChips()
+      }
+
+      messages.push({ role: 'user', content: text })
+      renderMessages()
+
+      input.value = ''
+      input.style.height = 'auto'
+      sendBtn.disabled = true
+      isStreaming = true
+
+      // Update session title from first message
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (session && session.title === 'New session') {
+        session.title = text.slice(0, 40) + (text.length > 40 ? '...' : '')
+        renderSessions()
+      }
+
+      // ── UX: build meta, detect retry ──
+      const messageId = newMessageId()
+      const promptHash = hashString(text)
+      const now = Date.now()
+      const isRetry = ux.lastPromptHash === promptHash && (now - ux.lastPromptTs) < 60_000 && ux.lastMessageId
+      if (isRetry) {
+        logUx({ kind: 'retry_detected', sessionId: ux.sessionId, prevMessageId: ux.lastMessageId, newMessageId: messageId, promptHash })
+      }
+      ux.lastPromptHash = promptHash
+      ux.lastPromptTs = now
+      ux.lastMessageId = messageId
+      ux.currentMessageId = messageId
+
+      const uxMeta = {
+        messageId,
+        sessionId: ux.sessionId,
+        entry: ux.pendingEntry,
+        action: ux.pendingAction,
+        promptHash,
+        hasAttachments: false, // attachedFiles already consumed above; this is the post-compose state
+      }
+      // Reset for next send
+      ux.pendingEntry = 'freeform'
+      ux.pendingAction = null
+
+      callAI(text, uxMeta)
+    }
+
+    async function callAI(userText, uxMeta) {
+      const model = document.getElementById('model-select').value
+      const messagesDiv = document.getElementById('messages')
+
+      // Add typing indicator
+      messages.push({ role: 'assistant', content: '', streaming: true })
+      renderMessages()
+
+      try {
+        // Send only role + content, strip UI fields like 'streaming'
+        const cleanMsgs = messages.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
+        console.log('[callAI] model:', model, 'msgs:', cleanMsgs.length)
+        const response = await window.alaude.chat(cleanMsgs, model, workspacePath, currentSpaceId, uxMeta)
+        // Remember which messageId produced this assistant response so save/copy events
+        // can cite it as a positive signal.
+        if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
+        console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
+        messages[messages.length - 1] = { role: 'assistant', content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)' }
+      } catch (err) {
+        console.error('[callAI] error:', err)
+        messages[messages.length - 1] = { role: 'assistant', content: `Error: ${err.message || String(err)}` }
+      }
+
+      isStreaming = false
+      sendBtn.disabled = !input.value.trim()
+      renderMessages()
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('messages')
+
+      let html = ''
+
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i]
+        const roleClass = msg.role
+        const roleLabel = msg.role === 'user' ? 'You' : 'Alaude'
+        const saveBtn = (!msg.streaming && msg.role === 'assistant' && msg.content.length > 50)
+          ? `<button class="msg-save" onclick="saveMessage(${i})">Save</button>`
+          : ''
+        html += `<div class="msg">
+          <div class="msg-role ${roleClass}">${roleLabel}</div>
+          <div class="msg-content">${msg.streaming
+            ? '<div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div>'
+            : escapeHtml(msg.content)
+          }</div>
+          ${saveBtn}
+        </div>`
+      }
+
+      // Show welcome if no messages, otherwise show chat
+      const welcomeHtml = `<div class="welcome">
+        <img class="welcome-logo" src="${logoSrc}" />
+        <div class="welcome-title">What can I help you with?</div>
+        <div class="welcome-sub">Drop files here, or try one of these:</div>
+        <div class="quick-actions" id="quick-actions"></div>
+      </div>`
+
+      container.innerHTML = (messages.length === 0 ? welcomeHtml : '') + html
+
+      container.scrollTop = container.scrollHeight
+    }
+
+    async function saveMessage(idx) {
+      const msg = messages[idx]
+      if (!msg) return
+      const saved = await window.alaude.saveFile(msg.content, 'alaude-output.txt')
+      if (saved) {
+        // UX: saving an AI response is a strong positive signal
+        if (ux.lastAIResponseMessageId) {
+          logUx({ kind: 'response_copied', sessionId: ux.sessionId, messageId: ux.lastAIResponseMessageId })
+        }
+      }
+    }
+
+    function escapeHtml(str) {
+      // Extract health cards before escaping, then re-insert them as raw HTML
+      const cards = []
+      const placeholder = '___HEALTH_CARD___'
+      let processed = str.replace(/<!--HEALTH_CARD-->[\s\S]*?<!--\/HEALTH_CARD-->/g, (match) => {
+        cards.push(match.replace('<!--HEALTH_CARD-->', '').replace('<!--/HEALTH_CARD-->', ''))
+        return placeholder
+      })
+
+      // Escape the rest
+      processed = processed
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+
+      // Re-insert health cards as raw HTML
+      let cardIdx = 0
+      processed = processed.replace(new RegExp(placeholder, 'g'), () => cards[cardIdx++] || '')
+
+      return processed
+    }
+
+    // ── Sessions ─────────────────────────────────────────────────────────
+    function renderSessions() {
+      const container = document.getElementById('sessions')
+      container.innerHTML = sessions.map(s =>
+        `<div class="session-item ${s.id === currentSessionId ? 'active' : ''}" onclick="switchSession(${s.id})">${s.title}</div>`
+      ).join('')
+    }
+
+    function newSession() {
+      // UX: session_end for previous
+      logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
+
+      // Save current messages
+      const current = sessions.find(s => s.id === currentSessionId)
+      if (current) current.messages = [...messages]
+
+      currentSessionId = Date.now()
+      sessions.unshift({ id: currentSessionId, title: 'New session', messages: [] })
+      messages = []
+      ux.sessionId = 'sess_' + currentSessionId
+      ux.lastPromptHash = null
+      ux.lastMessageId = null
+      renderSessions()
+      renderMessages()
+      input.focus()
+    }
+
+    function switchSession(id) {
+      // UX: mark previous session as ended
+      logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
+
+      // Save current
+      const current = sessions.find(s => s.id === currentSessionId)
+      if (current) current.messages = [...messages]
+
+      currentSessionId = id
+      const session = sessions.find(s => s.id === id)
+      messages = session ? [...session.messages] : []
+      ux.sessionId = 'sess_' + id
+      ux.lastPromptHash = null
+      ux.lastMessageId = null
+      renderSessions()
+      renderMessages()
+    }
+
+    // ── Model ────────────────────────────────────────────────────────────
+    let _lastModelForUx = null
+    function changeModel(model) {
+      const select = document.getElementById('model-select')
+      const label = select.options[select.selectedIndex].text
+      document.getElementById('topbar-model').textContent = label
+      // UX: model_switched event (only if actually changed)
+      if (_lastModelForUx !== null && _lastModelForUx !== model) {
+        logUx({ kind: 'model_switched', sessionId: ux.sessionId, fromModel: _lastModelForUx, toModel: model })
+      }
+      _lastModelForUx = model
+    }
+
+    // ── Keys Modal ───────────────────────────────────────────────────────
+    function toggleKeysModal() {
+      const modal = document.getElementById('keys-modal')
+      const isShowing = modal.classList.contains('show')
+
+      if (!isShowing) {
+        // Populate fields
+        const container = document.getElementById('key-fields')
+        window.alaude.getKeyStatuses().then(statuses => {
+          container.innerHTML = PROVIDERS.map(p => {
+            const status = statuses[p.key]
+            const hasKey = status && status !== 'none'
+            return `<div class="key-row">
+              <div class="key-status ${hasKey ? 'set' : 'unset'}"></div>
+              <div class="key-label">${p.label}</div>
+              <input class="key-input" id="key-${p.key}" type="password" placeholder="${hasKey ? '••••••••' : p.placeholder}" data-provider="${p.key}" />
+            </div>`
+          }).join('')
+        })
+      }
+
+      modal.classList.toggle('show')
+    }
+
+    async function saveKeys() {
+      const inputs = document.querySelectorAll('.key-input')
+      let saved = 0
+      let lastProvider = null
+      for (const inp of inputs) {
+        const val = inp.value.trim()
+        if (val) {
+          await window.alaude.setKey(inp.dataset.provider, val)
+          lastProvider = inp.dataset.provider
+          saved++
+        }
+      }
+      if (saved > 0) {
+        // Auto-select a model matching the provider that was just saved
+        const modelMap = {
+          anthropic: '',
+          openai: 'gpt-4o',
+          google: 'gemini-2.0-flash',
+          xai: 'grok-3',
+          moonshot: 'moonshot-v1-128k',
+          dashscope: 'qwen-max',
+          zhipu: 'glm-5.1',
+        }
+        if (lastProvider && modelMap[lastProvider] !== undefined) {
+          const select = document.getElementById('model-select')
+          select.value = modelMap[lastProvider]
+          changeModel(select.value)
+        }
+        toggleKeysModal()
+      }
+    }
+
+    // close modal on overlay click
+    document.getElementById('keys-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) toggleKeysModal()
+    })
+
+    // ── Login ────────────────────────────────────────────────────────────
+
+    async function checkLoginStatus() {
+      const statuses = await window.alaude.getKeyStatuses()
+      const hasAny = Object.values(statuses).some(s => s === 'set')
+      const loginScreen = document.getElementById('login-screen')
+      if (hasAny) {
+        loginScreen.classList.add('hidden')
+      } else {
+        loginScreen.classList.remove('hidden')
+      }
+    }
+
+    async function loginOAuth(provider) {
+      const status = document.getElementById('login-status')
+      status.textContent = 'Opening browser for login...'
+      status.className = 'login-status'
+      try {
+        await window.alaude.oauthLogin(provider)
+        status.textContent = 'Logged in!'
+        status.className = 'login-status success'
+        setTimeout(() => checkLoginStatus(), 500)
+      } catch (err) {
+        status.textContent = err.message || 'Login failed'
+        status.className = 'login-status error'
+      }
+    }
+
+    function loginWithKey(provider) {
+      const form = document.getElementById('login-key-form')
+      const select = document.getElementById('login-provider-select')
+      form.style.display = 'flex'
+      select.value = provider
+      document.getElementById('login-key-input').focus()
+    }
+
+    function toggleKeyForm() {
+      const form = document.getElementById('login-key-form')
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none'
+    }
+
+    async function submitLoginKey() {
+      const provider = document.getElementById('login-provider-select').value
+      const key = document.getElementById('login-key-input').value.trim()
+      const status = document.getElementById('login-status')
+
+      if (!key) {
+        status.textContent = 'Please enter an API key'
+        status.className = 'login-status error'
+        return
+      }
+
+      const ok = await window.alaude.setKey(provider, key)
+      if (ok) {
+        status.textContent = 'Key saved!'
+        status.className = 'login-status success'
+        setTimeout(() => checkLoginStatus(), 500)
+      } else {
+        status.textContent = 'Failed to save key'
+        status.className = 'login-status error'
+      }
+    }
+
+    function showLogin() {
+      document.getElementById('login-screen').classList.remove('hidden')
+    }
+
+    window.alaude.onLoginSuccess((provider) => {
+      checkLoginStatus()
+    })
+
+    // ── Attached files ────────────────────────────────────────────────────
+    let attachedFiles = [] // { name, type, content (text or base64) }
+
+    function renderFileChips() {
+      const container = document.getElementById('file-chips')
+      container.innerHTML = attachedFiles.map((f, i) =>
+        `<div class="file-chip">📎 ${f.name} <span class="file-chip-remove" onclick="removeFile(${i})">&times;</span></div>`
+      ).join('')
+    }
+
+    function removeFile(idx) {
+      attachedFiles.splice(idx, 1)
+      renderFileChips()
+    }
+
+    async function processFile(filePath) {
+      const result = await window.alaude.readFileForChat(filePath)
+      if (result.type === 'error') {
+        alert('Could not read file: ' + result.error)
+        return
+      }
+      if (result.type === 'image') {
+        attachedFiles.push({ name: result.name, type: 'image', content: `[Image: ${result.name}]`, base64: result.base64, mime: result.mime })
+      } else {
+        const preview = (result.text || '').slice(0, 200)
+        attachedFiles.push({ name: result.name, type: result.type, content: result.text || '', pages: result.pages, rows: result.rows })
+      }
+      renderFileChips()
+    }
+
+    async function attachFile() {
+      const filePath = await window.alaude.pickFile()
+      if (filePath) await processFile(filePath)
+    }
+
+    // ── Drag & Drop ──────────────────────────────────────────────────────
+    function handleDragOver(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      document.getElementById('drop-overlay').classList.add('show')
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      document.getElementById('drop-overlay').classList.remove('show')
+    }
+
+    async function handleDrop(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      document.getElementById('drop-overlay').classList.remove('show')
+      const files = e.dataTransfer?.files
+      if (files) {
+        for (const file of files) {
+          await processFile(file.path)
+        }
+      }
+    }
+
+    // ── Quick Actions ────────────────────────────────────────────────────
+    async function quickAction(action) {
+      const prompts = {
+        write: 'Write a professional ',
+        summarize: null, // triggers file picker
+        translate: 'Translate the following to ',
+        analyze: null, // triggers file picker
+        proofread: 'Proofread and improve the following text:\n\n',
+        image: null, // triggers file picker
+      }
+
+      if (action === 'summarize' || action === 'analyze' || action === 'image') {
+        const filePath = await window.alaude.pickFile()
+        if (!filePath) return
+        await processFile(filePath)
+        const prefills = {
+          summarize: 'Please summarize this document concisely.',
+          analyze: 'Analyze this data and provide key insights, trends, and a summary.',
+          image: 'Describe this image in detail.',
+        }
+        input.value = prefills[action]
+        input.dispatchEvent(new Event('input'))
+        input.focus()
+        return
+      }
+
+      input.value = prompts[action] || ''
+      input.dispatchEvent(new Event('input'))
+      input.focus()
+    }
+
+    // ── Voice Input ──────────────────────────────────────────────────────
+    let recognition = null
+    let isRecording = false
+
+    function toggleVoice() {
+      if (isRecording) {
+        recognition?.stop()
+        return
+      }
+
+      if (!('webkitSpeechRecognition' in window)) {
+        alert('Voice input not supported in this browser.')
+        return
+      }
+
+      recognition = new webkitSpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = 'en-US'
+
+      recognition.onstart = () => {
+        isRecording = true
+        document.getElementById('mic-btn').classList.add('recording')
+      }
+
+      recognition.onresult = (event) => {
+        let transcript = ''
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript
+        }
+        input.value = transcript
+        input.dispatchEvent(new Event('input'))
+      }
+
+      recognition.onend = () => {
+        isRecording = false
+        document.getElementById('mic-btn').classList.remove('recording')
+      }
+
+      recognition.onerror = () => {
+        isRecording = false
+        document.getElementById('mic-btn').classList.remove('recording')
+      }
+
+      recognition.start()
+    }
+
+    // ── Workspace ─────────────────────────────────────────────────────────
+    let workspacePath = null
+
+    async function pickWorkspace() {
+      const folder = await window.alaude.pickFolder()
+      if (folder) {
+        workspacePath = folder
+        const shortName = folder.split('/').pop()
+        document.getElementById('folder-label').textContent = shortName
+        document.getElementById('folder-path').textContent = folder
+        document.getElementById('folder-btn').classList.add('active')
+        document.getElementById('open-btn').style.display = 'flex'
+      }
+    }
+
+    function openInBrowser() {
+      if (!workspacePath) return
+      // Try common entry points
+      const fs = ['index.html', 'dist/index.html', 'build/index.html', 'public/index.html']
+      // Just open the folder — the AI can open specific files via tool
+      window.alaude.chat(
+        [{ role: 'user', content: 'Open the project in the browser. Look for index.html or a dev server command in package.json.' }],
+        document.getElementById('model-select').value,
+        workspacePath
+      ).then(r => {
+        messages.push({ role: 'assistant', content: r })
+        renderMessages()
+      })
+    }
+
+    // ── Spaces ─────────────────────────────────────────────────────────────
+
+    async function loadSpaces() {
+      const data = await window.alaude.getSpaces()
+      allSpaces = [...data.builtIn]
+      customSpaces = data.custom || []
+      currentSpaceId = data.activeSpaceId || 'general'
+      applySpace(currentSpaceId)
+    }
+
+    function getCurrentSpace() {
+      return allSpaces.find(s => s.id === currentSpaceId)
+        || customSpaces.find(s => s.id === currentSpaceId)
+        || allSpaces[0]
+    }
+
+    function applySpace(id) {
+      currentSpaceId = id
+      const space = getCurrentSpace()
+      if (!space) return
+
+      // Update sidebar button
+      document.getElementById('space-icon').textContent = space.icon
+      document.getElementById('space-name').textContent = space.name
+
+      // Update welcome screen
+      const welcomeTitle = document.querySelector('.welcome-title')
+      const welcomeSub = document.querySelector('.welcome-sub')
+      if (welcomeTitle) welcomeTitle.textContent = space.id === 'general' ? 'What can I help you with?' : `${space.icon} ${space.name} Assistant`
+      if (welcomeSub) welcomeSub.textContent = space.description
+
+      // Update input placeholder
+      document.getElementById('input').placeholder = space.placeholder || 'Message Alaude...'
+
+      // Update quick actions
+      renderQuickActions(space)
+
+      // Persist
+      window.alaude.setActiveSpace(id)
+    }
+
+    function renderQuickActions(space) {
+      const container = document.getElementById('quick-actions')
+      if (!container) return
+      if (!space.quickActions || space.quickActions.length === 0) {
+        container.innerHTML = ''
+        return
+      }
+      container.innerHTML = space.quickActions.map(a =>
+        `<button class="quick-btn" onclick="spaceQuickAction('${a.id}')">${a.icon} ${a.label}</button>`
+      ).join('')
+    }
+
+    async function spaceQuickAction(actionId) {
+      const space = getCurrentSpace()
+      const action = space.quickActions.find(a => a.id === actionId)
+      if (!action) return
+      // UX: mark this send as originating from a quick-action
+      ux.pendingEntry = 'quickaction'
+      ux.pendingAction = actionId
+
+      if (action.filePicker) {
+        const file = await window.alaude.pickFile()
+        if (file) {
+          const content = await window.alaude.readFileForChat(file)
+          const fileName = file.split('/').pop()
+          input.value = action.prompt + '\n\n[Attached: ' + fileName + ']\n' + (content?.text || content?.content || '').slice(0, 2000)
+        }
+      } else {
+        input.value = action.prompt
+      }
+
+      input.focus()
+      input.dispatchEvent(new Event('input'))
+    }
+
+    function toggleSpaceDropdown() {
+      const dd = document.getElementById('space-dropdown')
+      if (dd.classList.contains('show')) {
+        dd.classList.remove('show')
+        return
+      }
+
+      let html = ''
+      for (const s of allSpaces) {
+        const active = s.id === currentSpaceId ? 'active' : ''
+        html += `<div class="space-option ${active}" onclick="switchSpace('${s.id}')">
+          <span class="opt-icon">${s.icon}</span>
+          <span class="opt-name">${s.name}</span>
+          <span class="opt-desc">${s.description}</span>
+        </div>`
+      }
+
+      if (customSpaces.length > 0) {
+        html += '<div class="space-divider"></div>'
+        for (const s of customSpaces) {
+          const active = s.id === currentSpaceId ? 'active' : ''
+          html += `<div class="space-option ${active}" onclick="switchSpace('${s.id}')">
+            <span class="opt-icon">${s.icon}</span>
+            <span class="opt-name">${s.name}</span>
+            <span class="opt-desc">${s.description}</span>
+          </div>`
+        }
+      }
+
+      html += '<div class="space-divider"></div>'
+      html += '<div class="space-create-btn" onclick="toggleCreateSpaceModal()">+ Create Custom Space</div>'
+
+      dd.innerHTML = html
+      dd.classList.add('show')
+    }
+
+    function switchSpace(id) {
+      document.getElementById('space-dropdown').classList.remove('show')
+      applySpace(id)
+      // Start a new session for the new space
+      newSession()
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const dd = document.getElementById('space-dropdown')
+      const btn = document.querySelector('.space-btn')
+      if (dd.classList.contains('show') && !dd.contains(e.target) && !btn.contains(e.target)) {
+        dd.classList.remove('show')
+      }
+    })
+
+    function toggleCreateSpaceModal() {
+      document.getElementById('space-dropdown').classList.remove('show')
+      const modal = document.getElementById('create-space-modal')
+      modal.classList.toggle('show')
+    }
+
+    document.getElementById('create-space-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) toggleCreateSpaceModal()
+    })
+
+    async function saveNewSpace() {
+      const icon = document.getElementById('cs-icon').value.trim() || '🔧'
+      const name = document.getElementById('cs-name').value.trim()
+      const desc = document.getElementById('cs-desc').value.trim()
+      const prompt = document.getElementById('cs-prompt').value.trim()
+      const placeholder = document.getElementById('cs-placeholder').value.trim()
+
+      if (!name) { alert('Name is required'); return }
+
+      const id = 'custom-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30) + '-' + Date.now()
+
+      const space = {
+        id, name, icon,
+        color: '#00a846',
+        description: desc || name,
+        systemPromptAddition: prompt,
+        quickActions: [],
+        placeholder: placeholder || `Ask about ${name.toLowerCase()}...`,
+      }
+
+      await window.alaude.saveCustomSpace(space)
+      customSpaces.push(space)
+      toggleCreateSpaceModal()
+
+      // Clear form
+      document.getElementById('cs-icon').value = ''
+      document.getElementById('cs-name').value = ''
+      document.getElementById('cs-desc').value = ''
+      document.getElementById('cs-prompt').value = ''
+      document.getElementById('cs-placeholder').value = ''
+
+      // Switch to the new space
+      switchSpace(id)
+    }
+
+    // ── Local Models (Ollama) ────────────────────────────────────────────
+    let lmCatalog = []
+    let lmInstalled = []
+    let lmDownloading = null // model name currently downloading
+
+    function toggleLocalModelsModal() {
+      const modal = document.getElementById('local-models-modal')
+      const opening = modal.style.display !== 'flex'
+      modal.style.display = opening ? 'flex' : 'none'
+      if (opening) refreshLocalModels()
+    }
+
+    async function refreshLocalModels() {
+      const notInst = document.getElementById('lm-not-installed')
+      const connected = document.getElementById('lm-connected')
+      const available = await window.alaude.ollamaAvailable()
+      notInst.style.display = available ? 'none' : 'block'
+      connected.style.display = available ? 'block' : 'none'
+      if (!available) return
+      lmCatalog = await window.alaude.ollamaCatalog()
+      lmInstalled = await window.alaude.ollamaList()
+      renderInstalled()
+      renderCatalog()
+      refreshLocalOptgroup()
+    }
+
+    function formatBytes(b) {
+      if (!b) return ''
+      if (b < 1024) return b + ' B'
+      if (b < 1024 ** 2) return (b / 1024).toFixed(1) + ' KB'
+      if (b < 1024 ** 3) return (b / 1024 ** 2).toFixed(1) + ' MB'
+      return (b / 1024 ** 3).toFixed(1) + ' GB'
+    }
+
+    // Visual identity per model family — colored icon tiles
+    const LM_FAMILY_META = {
+      qwen:     { label: 'Qwen',     sub: 'Alibaba',          icon: 'Q', color: '#6b4bff' },
+      gemma:    { label: 'Gemma',    sub: 'Google DeepMind',  icon: 'G', color: '#4285f4' },
+      llama:    { label: 'Llama',    sub: 'Meta',             icon: 'L', color: '#0867ec' },
+      deepseek: { label: 'DeepSeek', sub: 'DeepSeek AI',      icon: 'D', color: '#4d6bfe' },
+      other:    { label: 'Other',    sub: '',                 icon: '•', color: '#888' },
+    }
+
+    // Flagship IDs get a highlighted "new" tag
+    const LM_HERO_IDS = new Set(['qwen3.6:latest', 'gemma4:31b', 'gemma4:e4b'])
+
+    function renderInstalled() {
+      const el = document.getElementById('lm-installed-list')
+      const count = document.getElementById('lm-installed-count')
+      count.textContent = lmInstalled.length ? `${lmInstalled.length} model${lmInstalled.length === 1 ? '' : 's'}` : ''
+      if (!lmInstalled.length) {
+        el.innerHTML = '<div class="lm-list-empty">No models installed yet — pick one below to get started.</div>'
+        return
+      }
+      el.innerHTML = lmInstalled.map(m => {
+        const fam = (m.family || 'other').toLowerCase()
+        return `
+          <div class="lm-installed-card">
+            <div style="min-width:0">
+              <div class="lm-installed-name"><span class="lm-ready-pill">Ready</span>${escapeHtml(m.name)}</div>
+              <div class="lm-installed-meta">${formatBytes(m.size)}${m.family ? ' · ' + escapeHtml(m.family) : ''}</div>
+            </div>
+            <button class="lm-remove-btn" onclick="removeLocalModel('${escapeHtml(m.name).replace(/'/g, "\\'")}')">Remove</button>
+          </div>
+        `
+      }).join('')
+    }
+
+    function renderCatalog() {
+      const el = document.getElementById('lm-catalog-list')
+      const count = document.getElementById('lm-catalog-count')
+      const installedNames = new Set(lmInstalled.map(m => m.name))
+      const available = lmCatalog.filter(c => !installedNames.has(c.id))
+      count.textContent = available.length ? `${available.length} model${available.length === 1 ? '' : 's'}` : ''
+      if (!available.length) {
+        el.innerHTML = '<div class="lm-list-empty">All catalog models are installed. 🎉</div>'
+        return
+      }
+
+      // Group by family, preserve catalog order within a family
+      const byFamily = new Map()
+      for (const c of available) {
+        const fam = (c.family || 'other').toLowerCase()
+        if (!byFamily.has(fam)) byFamily.set(fam, [])
+        byFamily.get(fam).push(c)
+      }
+
+      const familyOrder = ['qwen', 'gemma', 'llama', 'deepseek', 'other']
+      const families = [
+        ...familyOrder.filter(f => byFamily.has(f)),
+        ...[...byFamily.keys()].filter(f => !familyOrder.includes(f)),
+      ]
+
+      el.innerHTML = families.map(fam => {
+        const meta = LM_FAMILY_META[fam] || LM_FAMILY_META.other
+        const cards = byFamily.get(fam).map(c => {
+          const hero = LM_HERO_IDS.has(c.id)
+          const tagsHtml = (c.tags || []).map(t => {
+            const cls = hero && (t === 'flagship' || t === 'balanced') ? 'lm-tag lm-tag-hero' : 'lm-tag'
+            return `<span class="${cls}">${escapeHtml(t)}</span>`
+          }).join('')
+          const ctxK = c.context ? (c.context >= 1024 ? Math.round(c.context / 1024) + 'K' : c.context) + ' ctx' : ''
+          return `
+            <div class="lm-card">
+              <div class="lm-card-top">
+                <div class="lm-card-main">
+                  <div class="lm-card-title">
+                    <span class="lm-card-name">${escapeHtml(c.name)}</span>
+                    <span class="lm-card-size">${c.sizeGb} GB</span>
+                  </div>
+                  <div class="lm-card-id">${escapeHtml(c.id)}</div>
+                  <div class="lm-card-desc">${escapeHtml(c.description)}</div>
+                  <div class="lm-card-tags">${tagsHtml}</div>
+                </div>
+                <div class="lm-card-action">
+                  <button class="key-save-btn lm-download-btn" onclick="downloadLocalModel('${escapeHtml(c.id).replace(/'/g, "\\'")}')">Download</button>
+                  ${ctxK ? `<div class="lm-card-context">${ctxK}</div>` : ''}
+                </div>
+              </div>
+            </div>
+          `
+        }).join('')
+        return `
+          <div class="lm-family">
+            <div class="lm-family-head">
+              <div class="lm-family-icon" style="background:${meta.color}">${meta.icon}</div>
+              <div>
+                <div class="lm-family-name">${meta.label}</div>
+                ${meta.sub ? `<div class="lm-family-sub">${meta.sub}</div>` : ''}
+              </div>
+            </div>
+            ${cards}
+          </div>
+        `
+      }).join('')
+    }
+
+    function refreshLocalOptgroup() {
+      const og = document.getElementById('model-select-local')
+      if (!og) return
+      og.innerHTML = lmInstalled.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')
+      og.style.display = lmInstalled.length ? '' : 'none'
+    }
+
+    async function downloadLocalModel(model) {
+      if (lmDownloading) {
+        alert('Another download is in progress. Please wait or cancel it first.')
+        return
+      }
+      lmDownloading = model
+      const box = document.getElementById('lm-download-progress')
+      const nameEl = document.getElementById('lm-progress-model')
+      const pctEl = document.getElementById('lm-progress-pct')
+      const barEl = document.getElementById('lm-progress-bar')
+      const statusEl = document.getElementById('lm-progress-status')
+      const cancelBtn = document.getElementById('lm-cancel-btn')
+      box.classList.add('show')
+      cancelBtn.disabled = false
+      nameEl.textContent = model
+      pctEl.textContent = '0%'
+      barEl.style.width = '0%'
+      statusEl.textContent = 'Starting…'
+      cancelBtn.onclick = async () => {
+        cancelBtn.disabled = true
+        await window.alaude.ollamaCancel(model)
+      }
+      try {
+        const res = await window.alaude.ollamaPull(model)
+        if (res?.cancelled) statusEl.textContent = 'Cancelled'
+      } catch (err) {
+        alert('Download failed: ' + err.message)
+      } finally {
+        lmDownloading = null
+        setTimeout(() => { box.classList.remove('show') }, 900)
+        await refreshLocalModels()
+      }
+    }
+
+    function pullCustomModel() {
+      const input = document.getElementById('lm-custom-input')
+      const v = (input.value || '').trim()
+      if (!v) return
+      input.value = ''
+      downloadLocalModel(v)
+    }
+
+    async function removeLocalModel(model) {
+      if (!confirm(`Remove ${model}? This frees disk space.`)) return
+      try {
+        await window.alaude.ollamaRemove(model)
+        await refreshLocalModels()
+      } catch (err) {
+        alert('Remove failed: ' + err.message)
+      }
+    }
+
+    // Progress listener
+    window.alaude.onModelDownloadProgress((data) => {
+      if (!data || data.model !== lmDownloading) return
+      const pctEl = document.getElementById('lm-progress-pct')
+      const barEl = document.getElementById('lm-progress-bar')
+      const statusEl = document.getElementById('lm-progress-status')
+      if (typeof data.percent === 'number') {
+        pctEl.textContent = data.percent + '%'
+        barEl.style.width = data.percent + '%'
+      }
+      const bytesInfo = (data.completed && data.total)
+        ? ` · ${formatBytes(data.completed)} / ${formatBytes(data.total)}`
+        : ''
+      statusEl.textContent = (data.status || 'working') + bytesInfo
+    })
+
+    // Quietly populate the <optgroup> at startup so installed local models appear in the dropdown
+    async function initLocalModelsOptgroup() {
+      try {
+        if (await window.alaude.ollamaAvailable()) {
+          lmInstalled = await window.alaude.ollamaList()
+          refreshLocalOptgroup()
+        }
+      } catch {}
+    }
+
+    // ── UX Insights dashboard ────────────────────────────────────────────
+    async function toggleUxInsightsModal() {
+      const modal = document.getElementById('ux-modal')
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        await renderUxInsights()
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+
+    function pctFmt(v) { return v == null ? '—' : (v * 100).toFixed(0) + '%' }
+    function numFmt(v) { return v == null ? '—' : v.toFixed(2) }
+
+    async function renderUxInsights() {
+      const body = document.getElementById('ux-body')
+      body.innerHTML = '<div class="ux-empty">Loading…</div>'
+      const summary = await window.alaude.getUxInsights()
+      if (!summary || summary.error) {
+        body.innerHTML = `<div class="ux-empty"><div class="ux-empty-icon">⚠️</div><div>Couldn't load insights: ${escapeHtml(summary?.error || 'unknown error')}</div></div>`
+        return
+      }
+      if ((summary.totalOutcomes || 0) === 0) {
+        body.innerHTML = `
+          <div class="ux-empty">
+            <div class="ux-empty-icon">📊</div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:6px">No interactions yet</div>
+            <div style="font-size:13px;line-height:1.5">Send a few messages to start building a UX dataset.<br/>First diagnosis fires after ${summary.minBatchSize} completed interactions.</div>
+          </div>
+        `
+        return
+      }
+
+      const r = summary.recentStats || {}
+      const scoreClass = (r.meanValue ?? 0) >= 0 ? 'ux-ok' : 'ux-bad'
+      const needed = Math.max(0, summary.minBatchSize - summary.newSinceLastBatch)
+      const canRun = summary.newSinceLastBatch >= 1
+
+      const statsHtml = `
+        <div class="ux-status-bar">
+          <div class="ux-stat">
+            <div class="ux-stat-label">Health</div>
+            <div class="ux-stat-value ${scoreClass}">${numFmt(r.meanValue)}</div>
+            <div class="ux-stat-sub">mean score / interaction</div>
+          </div>
+          <div class="ux-stat">
+            <div class="ux-stat-label">Interactions</div>
+            <div class="ux-stat-value">${summary.totalOutcomes}</div>
+            <div class="ux-stat-sub">total recorded</div>
+          </div>
+          <div class="ux-stat">
+            <div class="ux-stat-label">Batches</div>
+            <div class="ux-stat-value">${summary.batchCount}</div>
+            <div class="ux-stat-sub">diagnoses produced</div>
+          </div>
+          <div class="ux-stat">
+            <div class="ux-stat-label">Next batch in</div>
+            <div class="ux-stat-value">${needed}</div>
+            <div class="ux-stat-sub">${summary.newSinceLastBatch} new since last</div>
+          </div>
+        </div>
+      `
+
+      const d = summary.lastDiagnosis?.diagnosis
+      const diagHtml = d ? `
+        <div class="ux-diagnosis">
+          <div class="ux-diagnosis-priority">Priority ${d.priority || '?'} · batch #${summary.lastDiagnosis.batchId}</div>
+          <div class="ux-diagnosis-problem">${escapeHtml(d.problem || '')}</div>
+          <div class="ux-diagnosis-suggest">${escapeHtml(d.suggestion || '')}</div>
+          ${d.param ? `<div class="ux-diagnosis-param">param: ${escapeHtml(d.param)}</div>` : ''}
+        </div>
+      ` : `
+        <div class="ux-diagnosis" style="border-color:var(--border);background:var(--bg-sidebar)">
+          <div style="font-size:12px;color:var(--text-dim)">No diagnosis yet — batch needs ${summary.minBatchSize} interactions.</div>
+        </div>
+      `
+
+      const tableHtml = renderBreakdownHtml(summary.recentOrientation)
+
+      body.innerHTML = statsHtml + diagHtml + tableHtml + `
+        <div class="ux-footer">
+          <div class="ux-footer-info">
+            Log: <code style="font-size:11px">~/.claude/alaude-events.ndjson</code>
+            · Proposals: <a href="#" onclick="window.alaude.openExternal('file://${escapeHtml(summary.proposalsFile)}'); return false" style="color:var(--green)">view file</a>
+          </div>
+          <button class="key-save-btn" onclick="forceUxBatch()" ${!canRun ? 'disabled style="opacity:.5"' : ''}>Run batch now</button>
+        </div>
+      `
+    }
+
+    function renderBreakdownHtml(o) {
+      if (!o) return ''
+      const rows = []
+      const push = (dim, label, bucketObj) => {
+        for (const [key, s] of Object.entries(bucketObj || {})) {
+          if (!s || !s.n) continue
+          const err = s.errorRate, retry = s.retryRate, abandon = s.abandonRate
+          const errCls = err > 0.2 ? 'ux-bad' : err === 0 ? 'ux-ok' : ''
+          const retryCls = retry > 0.15 ? 'ux-bad' : ''
+          const abandonCls = abandon > 0.3 ? 'ux-bad' : ''
+          rows.push(`<tr>
+            <td>${escapeHtml(dim)}</td>
+            <td>${escapeHtml(key)}</td>
+            <td class="ux-num">${s.n}</td>
+            <td class="ux-num ${errCls}">${pctFmt(err)}</td>
+            <td class="ux-num ${retryCls}">${pctFmt(retry)}</td>
+            <td class="ux-num ${abandonCls}">${pctFmt(abandon)}</td>
+            <td class="ux-num">${s.latencyP95 != null ? (s.latencyP95 / 1000).toFixed(1) + 's' : '—'}</td>
+          </tr>`)
+        }
+      }
+      push('provider', '', o.byProvider)
+      push('space', '', o.bySpace)
+      push('entry', '', o.byEntry)
+      if (!rows.length) return ''
+      return `
+        <table class="ux-breakdown-table">
+          <thead><tr><th>Dim</th><th>Bucket</th><th>n</th><th>Err</th><th>Retry</th><th>Aband.</th><th>p95</th></tr></thead>
+          <tbody>${rows.join('')}</tbody>
+        </table>
+      `
+    }
+
+    async function forceUxBatch() {
+      const r = await window.alaude.runUxBatch()
+      if (r?.ran) await renderUxInsights()
+      else alert(`Not enough new data yet — need ${r?.needed || '?'}, have ${r?.newCount || 0}.`)
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    checkLoginStatus()
+    loadSpaces()
+    renderSessions()
+    renderMessages()
+    initLocalModelsOptgroup()
+  </script>
+</body>
+</html>

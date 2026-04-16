@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+out/
+*.dmg
+*.zip
+*.exe
+*.deb
+*.AppImage
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local-only state (never commit user credentials or telemetry)
+.env
+.env.local
+
+# Claude Code local settings (user-machine specific)
+.claude/settings.local.json
