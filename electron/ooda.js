@@ -120,8 +120,8 @@ function buildOutcomes(events) {
   const byMsg = new Map() // messageId → { send, complete }
   const copies = new Map() // messageId → ts
   const retries = new Map() // prevMessageId → retry event
-  const endedAt = new Map() // sessionId → last event ts
-  const latestEvent = new Map() // sessionId → max ts of any event
+  const endedAt = new Map() // sessionId → session_end event ts
+  const bySession = new Map() // sessionId → [events sorted by ts]
 
   for (const e of events) {
     if (e.kind === 'chat_send') {
@@ -139,9 +139,12 @@ function buildOutcomes(events) {
     } else if (e.kind === 'session_end') {
       endedAt.set(e.sessionId, e.ts)
     }
-    const lt = latestEvent.get(e.sessionId) || '0'
-    if (e.ts > lt) latestEvent.set(e.sessionId, e.ts)
+    if (!bySession.has(e.sessionId)) bySession.set(e.sessionId, [])
+    bySession.get(e.sessionId).push(e)
   }
+
+  // Pre-sort events in each session so we can find "next event after X" cheaply.
+  for (const arr of bySession.values()) arr.sort((a, b) => a.ts.localeCompare(b.ts))
 
   const outcomes = []
   for (const [messageId, { send, complete }] of byMsg) {
@@ -152,14 +155,30 @@ function buildOutcomes(events) {
     const retriedSame = retries.has(messageId)
     const copied = copies.has(messageId)
 
-    // Abandonment: no further activity in this session within 30s of completion
+    // Abandonment: no further meaningful activity in this session within
+    // ABANDON_WINDOW_MS after the completion timestamp. A session_end event
+    // inside the window does NOT count as abandonment — user ended cleanly.
     let abandoned = false
     if (complete) {
-      const sessionLast = latestEvent.get(send.sessionId) || complete.ts
-      const gap = new Date(sessionLast).getTime() - new Date(complete.ts).getTime()
-      // If no activity in the 30s window AFTER completion, count as abandoned.
-      // Note: session_end within 30s is NOT abandonment (user finished cleanly).
-      abandoned = gap > ABANDON_WINDOW_MS && !endedAt.has(send.sessionId)
+      const sessionEvents = bySession.get(send.sessionId) || []
+      const completeMs = new Date(complete.ts).getTime()
+      // Find the first event in this session whose ts is strictly after the
+      // completion. Any kind of event (new send, copy, model switch) counts
+      // as "user still active" — only session_end is excluded so a user
+      // who ends cleanly doesn't get double-flagged.
+      const nextActivity = sessionEvents.find(e =>
+        e.ts > complete.ts && e.kind !== 'session_end' && e.messageId !== messageId
+      )
+      if (!nextActivity) {
+        // No later activity at all → abandoned unless session was ended cleanly
+        // within the window.
+        const endTs = endedAt.get(send.sessionId)
+        const endedCleanlyInWindow = endTs && (new Date(endTs).getTime() - completeMs) <= ABANDON_WINDOW_MS
+        abandoned = !endedCleanlyInWindow
+      } else {
+        const gap = new Date(nextActivity.ts).getTime() - completeMs
+        abandoned = gap > ABANDON_WINDOW_MS
+      }
     }
 
     let value = 0
