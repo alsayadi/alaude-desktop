@@ -19,8 +19,53 @@
       --text: #1a1a1a;
       --text-dim: #666;
       --text-faint: #999;
+      --shadow: 0 4px 24px rgba(0,0,0,0.08);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
       --radius: 12px;
       --sidebar-w: 260px;
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #1a1a1a;
+      --bg-sidebar: #141414;
+      --bg-input: #242424;
+      --bg-msg-user: #2a2a2a;
+      --bg-msg-ai: transparent;
+      --bg-hover: #2f2f2f;
+      --border: #333;
+      --green: #00d655;
+      --green-dim: rgba(0,214,85,0.12);
+      --green-glow: rgba(0,214,85,0.22);
+      --text: #f0f0f0;
+      --text-dim: #a8a8a8;
+      --text-faint: #6c6c6c;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) {
+        --bg: #1a1a1a;
+        --bg-sidebar: #141414;
+        --bg-input: #242424;
+        --bg-msg-user: #2a2a2a;
+        --bg-msg-ai: transparent;
+        --bg-hover: #2f2f2f;
+        --border: #333;
+        --green: #00d655;
+        --green-dim: rgba(0,214,85,0.12);
+        --green-glow: rgba(0,214,85,0.22);
+        --text: #f0f0f0;
+        --text-dim: #a8a8a8;
+        --text-faint: #6c6c6c;
+        --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+      }
+    }
+
+    /* Smooth theme transition */
+    body, .sidebar, .modal, .topbar, .input-area, .msg, .lm-card, .lm-installed-card, .activity-row, .ux-stat, .ux-diagnosis, button, input, textarea, select {
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1409,6 +1454,9 @@
     <div class="topbar">
       <span class="topbar-model" id="topbar-model">GPT-4o</span>
       <div class="topbar-actions">
+        <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
+          <span id="theme-icon">🌙</span>
+        </button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
         <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
         <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
@@ -1583,8 +1631,49 @@
     let allSpaces = []
     let customSpaces = []
     let currentSpaceId = 'general'
-    let currentSessionId = Date.now()
-    let sessions = [{ id: currentSessionId, title: 'New session', messages: [] }]
+
+    // Sessions persist to localStorage. On fresh launch, restore the last
+    // session's messages + id so the user lands exactly where they left off.
+    const LS_SESSIONS = 'alaude:sessions:v1'
+    const LS_ACTIVE_SESSION = 'alaude:activeSessionId:v1'
+    const MAX_SESSIONS = 50  // soft cap — oldest dropped when exceeded
+
+    function persistSessions() {
+      try {
+        // Snapshot current session's messages before saving
+        const current = sessions.find(s => s.id === currentSessionId)
+        if (current) current.messages = messages
+        localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions.slice(0, MAX_SESSIONS)))
+        localStorage.setItem(LS_ACTIVE_SESSION, String(currentSessionId))
+      } catch (err) {
+        console.warn('[persist] sessions failed:', err.message)
+      }
+    }
+
+    function restoreSessions() {
+      try {
+        const raw = localStorage.getItem(LS_SESSIONS)
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        if (!Array.isArray(parsed) || parsed.length === 0) return null
+        return parsed
+      } catch {
+        return null
+      }
+    }
+
+    let currentSessionId, sessions
+    const _restored = restoreSessions()
+    if (_restored) {
+      sessions = _restored
+      const savedActive = parseInt(localStorage.getItem(LS_ACTIVE_SESSION), 10)
+      const active = sessions.find(s => s.id === savedActive) || sessions[0]
+      currentSessionId = active.id
+      messages = Array.isArray(active.messages) ? active.messages : []
+    } else {
+      currentSessionId = Date.now()
+      sessions = [{ id: currentSessionId, title: 'New session', messages: [] }]
+    }
 
     // ── OODA UX tracking state ───────────────────────────────────────────
     const ux = {
@@ -1643,6 +1732,34 @@
       }
     })
 
+    // ── Theme (light / dark) ─────────────────────────────────────────────
+    const LS_THEME = 'alaude:theme:v1'
+    function applyTheme(theme) {
+      // theme = 'light' | 'dark' | null (system)
+      if (theme === 'light' || theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', theme)
+      } else {
+        document.documentElement.removeAttribute('data-theme')
+      }
+      // Update icon based on effective theme
+      const effective = theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      const icon = document.getElementById('theme-icon')
+      if (icon) icon.textContent = effective === 'dark' ? '☀️' : '🌙'
+    }
+    function toggleTheme() {
+      const current = localStorage.getItem(LS_THEME)
+      const effective = current || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      const next = effective === 'dark' ? 'light' : 'dark'
+      localStorage.setItem(LS_THEME, next)
+      applyTheme(next)
+    }
+    // Apply saved theme immediately (runs before most of the UI renders)
+    applyTheme(localStorage.getItem(LS_THEME))
+    // Track system changes when no explicit preference is set
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      if (!localStorage.getItem(LS_THEME)) applyTheme(null)
+    })
+
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
       // Esc → close any open modal
@@ -1664,6 +1781,11 @@
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
         e.preventDefault()
         newSession()
+      }
+      // Cmd/Ctrl+Shift+L → toggle theme
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        toggleTheme()
       }
     })
 
@@ -1691,6 +1813,7 @@
 
       messages.push({ role: 'user', content: text })
       renderMessages()
+      persistSessions()
 
       input.value = ''
       input.style.height = 'auto'
@@ -1761,6 +1884,7 @@
       isStreaming = false
       sendBtn.disabled = !input.value.trim()
       renderMessages()
+      persistSessions()
     }
 
     // Live activity log — tool calls, thinking steps — visible while the model works.
@@ -2003,12 +2127,15 @@
 
       currentSessionId = Date.now()
       sessions.unshift({ id: currentSessionId, title: 'New session', messages: [] })
+      // Hard cap total sessions to avoid unbounded growth
+      if (sessions.length > MAX_SESSIONS) sessions = sessions.slice(0, MAX_SESSIONS)
       messages = []
       ux.sessionId = 'sess_' + currentSessionId
       ux.lastPromptHash = null
       ux.lastMessageId = null
       renderSessions()
       renderMessages()
+      persistSessions()
       input.focus()
     }
 
@@ -2028,6 +2155,28 @@
       ux.lastMessageId = null
       renderSessions()
       renderMessages()
+      persistSessions()
+    }
+
+    // Delete a session (used by command palette + sidebar hover)
+    function deleteSession(id) {
+      const idx = sessions.findIndex(s => s.id === id)
+      if (idx < 0) return
+      sessions.splice(idx, 1)
+      if (id === currentSessionId) {
+        // Jump to first remaining, or create a new one
+        if (sessions.length === 0) {
+          currentSessionId = Date.now()
+          sessions.push({ id: currentSessionId, title: 'New session', messages: [] })
+          messages = []
+        } else {
+          currentSessionId = sessions[0].id
+          messages = [...sessions[0].messages]
+        }
+      }
+      renderSessions()
+      renderMessages()
+      persistSessions()
     }
 
     // ── Model ────────────────────────────────────────────────────────────
