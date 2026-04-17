@@ -2677,18 +2677,44 @@
     .file-chip {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       background: var(--green-dim);
       border: 1px solid rgba(0,168,70,0.25);
       color: var(--green);
-      padding: 3px 10px;
+      padding: 3px 8px 3px 4px;
       border-radius: 6px;
       font-size: 12px;
+      max-width: 260px;
+    }
+    .file-chip-thumb {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .file-chip-icon {
+      font-size: 15px;
+      line-height: 1;
+      padding: 0 3px;
+      flex-shrink: 0;
+    }
+    .file-chip-name {
+      max-width: 160px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-chip-meta {
+      color: var(--text-faint);
+      font-size: 10px;
+      flex-shrink: 0;
     }
     .file-chip-remove {
       cursor: pointer;
       opacity: 0.6;
       font-size: 14px;
+      flex-shrink: 0;
     }
     .file-chip-remove:hover { opacity: 1; }
 
@@ -10632,9 +10658,32 @@ Title:`
 
     function renderFileChips() {
       const container = document.getElementById('file-chips')
-      container.innerHTML = attachedFiles.map((f, i) =>
-        `<div class="file-chip">📎 ${f.name} <span class="file-chip-remove" onclick="removeFile(${i})">&times;</span></div>`
-      ).join('')
+      container.innerHTML = attachedFiles.map((f, i) => {
+        // Type-specific preview glyph + meta (size, page/row count, content preview).
+        let icon = '📎'
+        let meta = ''
+        const ext = (f.name || '').split('.').pop()?.toLowerCase() || ''
+        if (f.type === 'image' && f.base64 && f.mime) {
+          // Actual thumbnail
+          icon = `<img class="file-chip-thumb" src="data:${escapeHtml(f.mime)};base64,${f.base64}" alt="${escapeHtml(f.name)}" />`
+        } else {
+          if (ext === 'pdf') icon = '📕'
+          else if (['doc','docx'].includes(ext)) icon = '📄'
+          else if (['xls','xlsx','csv','tsv'].includes(ext)) icon = '📊'
+          else if (['md','txt','rst'].includes(ext)) icon = '📝'
+          else if (['json','yaml','yml','toml','xml','html','css'].includes(ext)) icon = '🔧'
+          else if (['js','jsx','ts','tsx','py','go','rs','rb','java','c','cpp','h','sh'].includes(ext)) icon = '⚙️'
+          else if (['zip','tar','gz'].includes(ext)) icon = '📦'
+          if (f.pages) meta = ` · ${f.pages}p`
+          else if (f.rows) meta = ` · ${f.rows} rows`
+          else if (f.content?.length) {
+            const kb = Math.max(1, Math.round(f.content.length / 1024))
+            meta = ` · ${kb}KB`
+          }
+        }
+        const iconHtml = (f.type === 'image' && f.base64) ? icon : `<span class="file-chip-icon">${icon}</span>`
+        return `<div class="file-chip" title="${escapeHtml(f.name)}${meta ? ' ' + meta : ''}">${iconHtml}<span class="file-chip-name">${escapeHtml(f.name)}</span><span class="file-chip-meta">${escapeHtml(meta)}</span><span class="file-chip-remove" onclick="removeFile(${i})">&times;</span></div>`
+      }).join('')
       updateContextRadar?.()
     }
 
