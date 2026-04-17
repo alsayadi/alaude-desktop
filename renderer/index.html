@@ -452,6 +452,53 @@
     }
     @keyframes sgt-blink { 0%,60% { opacity: 1 } 70%,100% { opacity: 0.3 } }
 
+    /* ─── Tag autosuggest strip ─────────────────────────────────── */
+    .tag-suggest {
+      display: none;
+      max-width: 720px;
+      margin: 6px auto 0;
+      padding: 6px 12px;
+      font-size: 12px;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      color: var(--text-dim);
+    }
+    .tag-suggest.show { display: flex; }
+    .tag-sg-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-right: 4px;
+    }
+    .tag-sg-chip {
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .tag-sg-chip:hover {
+      border-color: var(--green);
+      border-style: solid;
+      color: var(--green);
+    }
+    .tag-sg-dismiss {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      font-size: 14px;
+      cursor: pointer;
+      margin-left: auto;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .tag-sg-dismiss:hover { color: var(--text); }
+
     /* ─── Session TODO Checklist ─────────────────────────────────── */
     .session-todos {
       margin: 6px auto 0;
@@ -3894,6 +3941,7 @@
     <div class="session-goal" id="session-goal"></div>
     <div class="session-summary" id="session-summary"></div>
     <div class="session-todos" id="session-todos"></div>
+    <div class="tag-suggest" id="tag-suggest"></div>
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
@@ -4811,6 +4859,101 @@
       session.tags = [...new Set(tags)]
       persistSessions()
       renderSessions()
+    }
+
+    // Smart tag autosuggest: scan session content, score candidate tags by
+    // frequency (with stopwords stripped + minimum length), surface up to 3
+    // above the first message once the session has a few turns and doesn't
+    // already have its own tags. Click = add.
+    const TAG_STOPWORDS = new Set([
+      'the','and','for','with','that','this','what','when','where','which','while',
+      'would','could','should','have','has','had','been','being','not','but','you',
+      'your','they','them','their','were','are','was','will','from','about','into',
+      'some','here','there','like','just','also','more','most','only','than','then',
+      'them','these','those','over','very','much','such','each','many','does','did',
+      'can','its','his','her','our','any','all','out','how','why','who','use',
+      'get','got','one','two','three','now','say','said','tell','make','made','see',
+      'know','yes','sorry','please','hello','thanks','want','need','because','really',
+      'sure','okay','actually','though','quite','maybe','something','nothing',
+      'anyone','someone','everyone','everything','another','without','through','still',
+      'between','again','write','writing','answer','question','help','helping',
+    ])
+    function suggestTagsForSession(session, topN = 3) {
+      if (!session || !Array.isArray(session.messages)) return []
+      const strOf = (m) => Array.isArray(m.content)
+        ? m.content.filter(p => p?.type === 'text').map(p => p.text).join(' ')
+        : String(m.content || '')
+      // Weight user turns slightly higher than assistant (user intent matters more for tagging)
+      const texts = []
+      for (const m of session.messages) {
+        if (m.streaming) continue
+        if (m.role === 'user') { texts.push(strOf(m)); texts.push(strOf(m)) }
+        else if (m.role === 'assistant') texts.push(strOf(m))
+      }
+      const joined = texts.join(' ').toLowerCase()
+      if (!joined.trim()) return []
+      // Tokenize to word-like chunks.
+      const tokens = joined.match(/[a-z][a-z0-9_-]{2,24}/g) || []
+      const freq = new Map()
+      for (const tok of tokens) {
+        if (TAG_STOPWORDS.has(tok)) continue
+        if (/^\d+$/.test(tok)) continue
+        freq.set(tok, (freq.get(tok) || 0) + 1)
+      }
+      // Boost tokens that look like project names / codey terms (has -, _, or
+      // length 5+). Filter to those appearing at least twice.
+      const candidates = []
+      const existing = new Set((session.tags || []).map(t => t.toLowerCase()))
+      for (const [tok, count] of freq) {
+        if (count < 2) continue
+        if (existing.has(tok)) continue
+        let score = count
+        if (tok.includes('-') || tok.includes('_')) score += 3
+        if (tok.length >= 6) score += 1
+        if (tok.length >= 9) score += 1
+        candidates.push({ tag: tok, score })
+      }
+      candidates.sort((a, b) => b.score - a.score)
+      return candidates.slice(0, topN).map(c => c.tag)
+    }
+    function renderTagAutosuggest() {
+      const host = document.getElementById('tag-suggest')
+      if (!host) return
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) { host.innerHTML = ''; host.classList.remove('show'); return }
+      const nonStream = (s.messages || []).filter(m => !m.streaming)
+      // Kick in after 3 user+assistant messages, don't nag if user dismissed or already tagged heavily.
+      if (nonStream.length < 3) { host.innerHTML = ''; host.classList.remove('show'); return }
+      if (s.tagsDismissed) { host.innerHTML = ''; host.classList.remove('show'); return }
+      if ((s.tags || []).length >= 2) { host.innerHTML = ''; host.classList.remove('show'); return }
+      const suggestions = suggestTagsForSession(s, 3)
+      if (!suggestions.length) { host.innerHTML = ''; host.classList.remove('show'); return }
+      const chips = suggestions.map(t =>
+        `<button class="tag-sg-chip" onclick="acceptTagSuggestion('${escapeHtml(t)}')" title="Add #${escapeHtml(t)} to this session">+ #${escapeHtml(t)}</button>`
+      ).join('')
+      host.innerHTML = `
+        <span class="tag-sg-label">🏷️ Tag this session?</span>
+        ${chips}
+        <button class="tag-sg-dismiss" onclick="dismissTagSuggest()" title="Dismiss">×</button>`
+      host.classList.add('show')
+    }
+    function acceptTagSuggestion(tag) {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      const existing = new Set(s.tags || [])
+      existing.add(tag)
+      s.tags = [...existing]
+      persistSessions()
+      renderSessions?.()
+      renderTagAutosuggest()
+      showRewindToast?.(`🏷️ Added #${tag}`, false)
+    }
+    function dismissTagSuggest() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      s.tagsDismissed = true
+      persistSessions()
+      renderTagAutosuggest()
     }
 
     // ── Shared Memory Lens ──────────────────────────────────────────
@@ -7918,6 +8061,7 @@ Title:`
       renderSummaryCard?.()
       renderTodosCard?.()
       renderGoalCard?.()
+      renderTagAutosuggest?.()
       updateSessionCostDisplay?.()
     }
 
