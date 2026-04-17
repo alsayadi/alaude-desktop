@@ -2954,6 +2954,26 @@
 
     /* Code-block copy button (floats in top-right of each <pre>) */
     .msg-content .md-pre { position: relative; padding-top: 28px; }
+    .msg-content .md-mermaid {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .msg-content .md-mermaid svg { max-width: 100%; height: auto; }
+    .msg-content .md-mermaid.loading { color: var(--text-faint); font-size: 12px; font-style: italic; }
+    .msg-content .md-mermaid.error {
+      color: #e74c3c;
+      font-size: 11px;
+      border-color: #e74c3c;
+      font-family: monospace;
+      white-space: pre-wrap;
+      text-align: left;
+    }
     .msg-content .md-pre-lang {
       position: absolute;
       top: 6px;
@@ -8774,6 +8794,7 @@ Title:`
       renderTodosCard?.()
       renderGoalCard?.()
       renderTagAutosuggest?.()
+      renderPendingMermaids?.()
       updateSessionCostDisplay?.()
     }
 
@@ -9394,6 +9415,61 @@ Title:`
      * inline code, links. Pre-extracts health cards and fenced code so
      * neither gets mangled by the escape pass.
      */
+    // Mermaid loader: lazily fetch the library from a CDN the first time a
+    // diagram is detected. If the fetch fails (offline, firewalled), the
+    // placeholder falls back to a normal code block.
+    let _mermaidPromise = null
+    function loadMermaid() {
+      if (_mermaidPromise) return _mermaidPromise
+      _mermaidPromise = new Promise((resolve, reject) => {
+        if (window.mermaid) return resolve(window.mermaid)
+        const script = document.createElement('script')
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js'
+        script.onload = () => {
+          try {
+            const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'default' : 'dark'
+            window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme, fontFamily: 'ui-sans-serif, system-ui, sans-serif' })
+            resolve(window.mermaid)
+          } catch (e) { reject(e) }
+        }
+        script.onerror = () => reject(new Error('Failed to load Mermaid (offline?)'))
+        document.head.appendChild(script)
+      })
+      return _mermaidPromise
+    }
+    let _mermaidCounter = 0
+    async function renderPendingMermaids() {
+      const nodes = document.querySelectorAll('.md-mermaid.loading[data-mermaid-src]')
+      if (!nodes.length) return
+      try {
+        const mermaid = await loadMermaid()
+        for (const node of nodes) {
+          try {
+            const src = decodeURIComponent(escape(atob(node.dataset.mermaidSrc)))
+            const id = 'mmd_' + (++_mermaidCounter) + '_' + Date.now().toString(36)
+            const { svg } = await mermaid.render(id, src)
+            node.innerHTML = svg
+            node.classList.remove('loading')
+            node.removeAttribute('data-mermaid-src')
+          } catch (err) {
+            node.classList.remove('loading')
+            node.classList.add('error')
+            node.textContent = 'Mermaid parse error: ' + (err?.message || 'unknown')
+          }
+        }
+      } catch (err) {
+        // Library load failed — show the original source as a code block
+        for (const node of nodes) {
+          try {
+            const src = decodeURIComponent(escape(atob(node.dataset.mermaidSrc)))
+            node.classList.remove('loading')
+            node.classList.add('error')
+            node.textContent = 'Couldn\'t load Mermaid (' + (err?.message || 'offline?') + ')\n\n' + src
+          } catch {}
+        }
+      }
+    }
+
     function renderMarkdown(str) {
       if (str == null) return ''
       const cards = []
@@ -9517,6 +9593,12 @@ Title:`
       //    so the <pre> is recognised as a block element and not wrapped in <p>.
       s = s.replace(new RegExp(`${CODE_TOKEN}(\\d+)${CODE_TOKEN}`, 'g'), (_m, i) => {
         const { lang, code } = codeBlocks[+i]
+        // Mermaid diagrams: lazy-rendered below after the HTML is inserted.
+        // We emit a placeholder with the raw source encoded as a data attr.
+        if (lang.toLowerCase() === 'mermaid') {
+          const encoded = btoa(unescape(encodeURIComponent(code)))
+          return `<div class="md-mermaid loading" data-mermaid-src="${encoded}">Rendering diagram…</div>`
+        }
         const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const langCls = lang ? ` data-lang="${lang}"` : ''
         return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<span class="md-pre-actions"><button class="md-pre-btn md-pre-ask" title="Ask a follow-up about this code">💬 Ask</button><button class="md-pre-btn md-pre-insert" title="Insert this code into the input">↘ Insert</button><button class="md-pre-btn md-pre-copy-v2" title="Copy code">📋 Copy</button></span><code>${escCode}</code></pre>`
@@ -9527,7 +9609,7 @@ Title:`
       s = blocks.map(b => {
         const trimmed = b.trim()
         if (!trimmed) return ''
-        if (/^<(h\d|ul|ol|pre|blockquote|table)/i.test(trimmed)) return trimmed
+        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-mermaid)/i.test(trimmed)) return trimmed
         return `<p class="md-p">${trimmed.replace(/\n/g, '<br>')}</p>`
       }).join('\n')
 
