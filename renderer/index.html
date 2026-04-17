@@ -967,6 +967,44 @@
       overflow: hidden;
     }
 
+    /* ─── Model Hotkey Slots ────────────────────────────────────── */
+    .model-slots {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: 6px;
+      flex-wrap: nowrap;
+      -webkit-app-region: no-drag;
+    }
+    .model-slot {
+      font-size: 10px;
+      line-height: 1.2;
+      padding: 2px 6px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+      max-width: 120px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .model-slot:hover { border-color: var(--green); color: var(--green); }
+    .model-slot.active { border-color: var(--green); background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); }
+    .model-slot .ms-key {
+      font-family: monospace;
+      font-size: 9px;
+      color: var(--text-faint);
+      border: 1px solid var(--border);
+      padding: 0 3px;
+      border-radius: 2px;
+      background: var(--bg);
+    }
+
     .topbar-model {
       font-size: 12px;
       color: var(--text-dim);
@@ -3599,6 +3637,7 @@
         <span class="topbar-model" id="topbar-model" title="Current model">GPT-4o</span>
         <span class="version-badge" id="version-badge" title="Alaude version — click to view release notes">v–</span>
         <span class="cost-session-total" id="topbar-cost" title="Estimated API cost for this session"></span>
+        <span class="model-slots" id="model-slots"></span>
       </div>
       <div class="topbar-actions">
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
@@ -3847,6 +3886,7 @@
         <dt>📝 Summarize this session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></dd>
         <dt>✓ Extract action items (TODOs)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></dd>
         <dt>🎯 Set / edit session goal</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>G</kbd></dd>
+        <dt>Switch to pinned model slot</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>1</kbd>…<kbd>6</kbd> (outside inputs)</dd>
         <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
         <dt>Rewind / Branch</dt><dd>buttons on any assistant reply</dd>
         <dt>Pin a message</dt><dd>📌 button on any reply</dd>
@@ -6056,6 +6096,17 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
         { kind: 'action', icon: '📅', label: 'Daily Digest (today + last week)', search: 'digest daily recap summary standup today week activity rollup', action: () => { closeCmdPalette(); toggleDigestModal() } },
       )
+      // Pin current model to slot N (1..6)
+      const _curModel = document.getElementById('model-select')?.value
+      for (let n = 1; n <= 6; n++) {
+        items.push({
+          kind: 'action',
+          icon: `⌘${n}`,
+          label: `Pin current model to slot ${n}`,
+          search: `pin slot ${n} hotkey shortcut favorite`,
+          action: () => { closeCmdPalette(); if (_curModel) pinModelToSlot(n, _curModel) },
+        })
+      }
       return items
     }
 
@@ -6517,6 +6568,13 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault()
         promptSetGoal()
+      }
+      // Cmd/Ctrl+1..6 → switch to pinned model slot (only when not in an input)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey
+          && /^[1-6]$/.test(e.key)
+          && !e.target.matches?.('input, textarea, [contenteditable]')) {
+        e.preventDefault()
+        switchToSlot(parseInt(e.key, 10))
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
@@ -8329,6 +8387,78 @@ Title:`
       }
       _lastModelForUx = model
       refreshWorkspaceHint()
+      renderModelSlots?.()
+    }
+
+    // ── Model Hotkey Slots (⌘1..⌘6) ────────────────────────────────
+    // User pins favorite models to 6 numbered slots. ⌘1..⌘6 switches
+    // instantly; topbar shows a compact chip row for visual cueing.
+    // Stored in localStorage so the mapping persists across launches.
+    const LS_MODEL_SLOTS = 'alaude:model-slots:v1'
+    function loadModelSlots() {
+      try {
+        const raw = localStorage.getItem(LS_MODEL_SLOTS)
+        if (!raw) return {}
+        const parsed = JSON.parse(raw)
+        return (typeof parsed === 'object' && parsed) ? parsed : {}
+      } catch { return {} }
+    }
+    function saveModelSlots(slots) {
+      try { localStorage.setItem(LS_MODEL_SLOTS, JSON.stringify(slots)) } catch {}
+    }
+    function pinModelToSlot(slot, modelId) {
+      if (slot < 1 || slot > 6) return
+      const slots = loadModelSlots()
+      slots[slot] = modelId
+      saveModelSlots(slots)
+      renderModelSlots()
+      showRewindToast?.(`Pinned ${modelId} to ⌘${slot}`, false)
+    }
+    function unpinModelSlot(slot) {
+      const slots = loadModelSlots()
+      delete slots[slot]
+      saveModelSlots(slots)
+      renderModelSlots()
+      showRewindToast?.(`Unpinned ⌘${slot}`, false)
+    }
+    function switchToSlot(slot) {
+      const slots = loadModelSlots()
+      const modelId = slots[slot]
+      if (!modelId) {
+        showRewindToast?.(`No model pinned to ⌘${slot} yet — use the command palette`, true)
+        return
+      }
+      const select = document.getElementById('model-select')
+      // Check that the model still exists in the dropdown
+      const exists = Array.from(select.options).some(o => o.value === modelId)
+      if (!exists) {
+        showRewindToast?.(`Pinned model "${modelId}" no longer available`, true)
+        return
+      }
+      select.value = modelId
+      changeModel(modelId)
+    }
+    function renderModelSlots() {
+      const row = document.getElementById('model-slots')
+      if (!row) return
+      const slots = loadModelSlots()
+      const current = document.getElementById('model-select')?.value
+      const entries = Object.entries(slots)
+      if (!entries.length) { row.innerHTML = ''; return }
+      const chips = []
+      for (let n = 1; n <= 6; n++) {
+        const modelId = slots[n]
+        if (!modelId) continue
+        // Show a short human label — use the dropdown's displayed text if we can find it.
+        const opt = document.getElementById('model-select')?.querySelector(`option[value="${CSS.escape(modelId)}"]`)
+        const label = opt?.textContent || modelId
+        const isActive = current === modelId ? ' active' : ''
+        chips.push(`<span class="model-slot${isActive}" onclick="switchToSlot(${n})" oncontextmenu="event.preventDefault(); unpinModelSlot(${n})" title="⌘${n} · ${escapeHtml(modelId)} · right-click to unpin">
+          <span class="ms-key">⌘${n}</span>
+          <span>${escapeHtml(label)}</span>
+        </span>`)
+      }
+      row.innerHTML = chips.join('')
     }
 
     // Show a subtle "pick a folder" hint when the selected model is tool-capable
@@ -10105,6 +10235,7 @@ Title:`
     renderMessages()
     initLocalModelsOptgroup()
     refreshWorkspaceHint()
+    renderModelSlots()
     loadCouncilState()
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
