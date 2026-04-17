@@ -1246,6 +1246,41 @@
     .welcome-space-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .welcome-space-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 
+    /* ─── Activity Heatmap ────────────────────────────────────── */
+    .hm-grid {
+      display: inline-grid;
+      grid-auto-flow: column;
+      grid-template-rows: repeat(7, 11px);
+      gap: 2px;
+      margin: 8px 0;
+    }
+    .hm-cell {
+      width: 11px; height: 11px; border-radius: 2px;
+      background: color-mix(in srgb, var(--border) 60%, transparent);
+    }
+    .hm-cell.l1 { background: color-mix(in srgb, var(--green) 25%, transparent); }
+    .hm-cell.l2 { background: color-mix(in srgb, var(--green) 50%, transparent); }
+    .hm-cell.l3 { background: color-mix(in srgb, var(--green) 75%, transparent); }
+    .hm-cell.l4 { background: var(--green); }
+    .hm-row {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 11px; color: var(--text-faint);
+      margin-bottom: 10px;
+    }
+    .hm-row strong { color: var(--text); font-size: 13px; }
+    .hm-scroll { overflow-x: auto; padding-bottom: 4px; }
+    .hm-legend { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-faint); margin-left: auto; }
+    .hm-month-labels {
+      display: inline-grid;
+      grid-auto-flow: column;
+      grid-template-rows: 11px;
+      gap: 2px;
+      font-size: 9px;
+      color: var(--text-faint);
+      margin-bottom: 2px;
+      user-select: none;
+    }
+
     /* ─── Session Templates on welcome ────────────────────────── */
     .template-section { margin-top: 18px; }
     .template-section-label {
@@ -3986,6 +4021,20 @@
     </div>
   </div>
 
+  <!-- Activity Heatmap Modal -->
+  <div class="modal-overlay" id="heatmap-modal">
+    <div class="modal ux-modal" style="max-width:820px;width:92vw">
+      <h2>
+        📊 Activity Heatmap
+        <button class="modal-close" onclick="toggleHeatmapModal()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
+        One cell per day for the last year. Darker = more assistant replies.
+      </div>
+      <div id="heatmap-body"></div>
+    </div>
+  </div>
+
   <!-- Daily Digest Modal -->
   <div class="modal-overlay" id="digest-modal">
     <div class="modal ux-modal">
@@ -6209,6 +6258,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '✅', label: 'Mark goal achieved', search: 'goal done achieved complete mark finish', action: () => { closeCmdPalette(); setGoalStatus('achieved') } },
         { kind: 'action', icon: '🍅', label: 'Start 25-minute focus block (Pomodoro)', search: 'pomodoro focus timer 25 minutes tomato block deep work', action: () => { closeCmdPalette(); togglePomodoro() } },
         { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
+        { kind: 'action', icon: '📊', label: 'Activity Heatmap (streaks + last year)', search: 'heatmap activity streak contribution calendar grid history', action: () => { closeCmdPalette(); toggleHeatmapModal() } },
         { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
         { kind: 'action', icon: '📅', label: 'Daily Digest (today + last week)', search: 'digest daily recap summary standup today week activity rollup', action: () => { closeCmdPalette(); toggleDigestModal() } },
       )
@@ -10023,6 +10073,124 @@ Title:`
           refreshLocalOptgroup()
         }
       } catch {}
+    }
+
+    // ── Activity Heatmap ────────────────────────────────────────────
+    // GitHub-style contribution grid for the last 365 days. Each cell's
+    // shade is bucketed from the day's assistant-reply count. Plus top-
+    // line stats: current streak, longest streak, total active days.
+    function collectHeatmapBuckets() {
+      const byDay = new Map() // YYYY-MM-DD → count
+      for (const s of (sessions || [])) {
+        for (const m of (s.messages || [])) {
+          if (m.role !== 'assistant') continue
+          if (!m.ts) continue
+          const d = new Date(m.ts)
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+          byDay.set(key, (byDay.get(key) || 0) + 1)
+        }
+      }
+      return byDay
+    }
+    function heatmapStats(byDay) {
+      // Walk backwards from today; a streak breaks on the first zero day.
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      let current = 0
+      for (let i = 0; i < 365; i++) {
+        const d = new Date(today)
+        d.setDate(today.getDate() - i)
+        if ((byDay.get(keyOf(d)) || 0) > 0) current++
+        else break
+      }
+      // Longest streak: scan all days in byDay, sort, count consecutive.
+      const days = Array.from(byDay.keys()).sort()
+      let longest = 0, run = 0, prev = null
+      for (const k of days) {
+        const d = new Date(k + 'T00:00:00')
+        if (prev) {
+          const diff = Math.round((d - prev) / 86400000)
+          run = diff === 1 ? run + 1 : 1
+        } else run = 1
+        longest = Math.max(longest, run)
+        prev = d
+      }
+      return { current, longest, totalDays: byDay.size }
+    }
+    function toggleHeatmapModal() {
+      const modal = document.getElementById('heatmap-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        renderHeatmapBody()
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+    function renderHeatmapBody() {
+      const body = document.getElementById('heatmap-body')
+      if (!body) return
+      const byDay = collectHeatmapBuckets()
+      const stats = heatmapStats(byDay)
+      // Grid: 53 weeks × 7 days (Sun..Sat). Walk from 52 weeks ago up to today.
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const endCol = today // last column is the current week
+      const startCol = new Date(today)
+      startCol.setDate(today.getDate() - 52 * 7 - today.getDay()) // align start to Sunday
+      const cells = []
+      const monthLabels = []
+      let lastMonth = -1
+      let weekIdx = 0
+      const d = new Date(startCol)
+      while (d <= today || weekIdx < 53) {
+        // Build one week column (Sun..Sat)
+        for (let dow = 0; dow < 7; dow++) {
+          const cur = new Date(d)
+          cur.setDate(d.getDate() + dow)
+          if (cur > today) {
+            cells.push('<span></span>')
+          } else {
+            const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
+            const n = byDay.get(key) || 0
+            const lvl = n === 0 ? 0 : n <= 2 ? 1 : n <= 5 ? 2 : n <= 10 ? 3 : 4
+            const title = `${cur.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} — ${n} repl${n === 1 ? 'y' : 'ies'}`
+            cells.push(`<span class="hm-cell ${lvl ? 'l' + lvl : ''}" title="${escapeHtml(title)}"></span>`)
+          }
+        }
+        // Month label for this column
+        const monthNow = d.getMonth()
+        if (monthNow !== lastMonth) {
+          monthLabels.push(`<span>${d.toLocaleDateString(undefined, { month: 'short' })}</span>`)
+          lastMonth = monthNow
+        } else {
+          monthLabels.push('<span></span>')
+        }
+        d.setDate(d.getDate() + 7)
+        weekIdx++
+        if (weekIdx > 53) break
+      }
+      body.innerHTML = `
+        <div class="hm-row">
+          <span><strong>${stats.current}</strong> day streak</span>
+          <span><strong>${stats.longest}</strong> longest</span>
+          <span><strong>${stats.totalDays}</strong> active day${stats.totalDays === 1 ? '' : 's'}</span>
+          <span class="hm-legend">
+            <span>less</span>
+            <span class="hm-cell"></span>
+            <span class="hm-cell l1"></span>
+            <span class="hm-cell l2"></span>
+            <span class="hm-cell l3"></span>
+            <span class="hm-cell l4"></span>
+            <span>more</span>
+          </span>
+        </div>
+        <div class="hm-scroll">
+          <div class="hm-month-labels" style="grid-template-columns:repeat(${monthLabels.length}, 11px)">${monthLabels.join('')}</div>
+          <div class="hm-grid">${cells.join('')}</div>
+        </div>`
     }
 
     // ── Model Performance Dashboard ─────────────────────────────────────
