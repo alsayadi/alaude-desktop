@@ -2099,6 +2099,46 @@
       max-width: 720px;
       margin: 0 auto;
     }
+
+    /* ─── Smart Paste chip ─────────────────────────────────────── */
+    .smart-paste-chip {
+      display: none;
+      max-width: 720px;
+      margin: 4px auto 0;
+      padding: 6px 10px;
+      background: color-mix(in srgb, #3498db 10%, var(--bg-input));
+      border: 1px solid color-mix(in srgb, #3498db 40%, var(--border));
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+      align-items: center;
+      gap: 8px;
+    }
+    .smart-paste-chip.show { display: flex; }
+    .smart-paste-chip .spc-icon { font-size: 14px; }
+    .smart-paste-chip .spc-msg { flex: 1; color: var(--text-dim); }
+    .smart-paste-chip .spc-btn {
+      background: #3498db;
+      color: #fff;
+      border: 0;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .smart-paste-chip .spc-btn:hover { background: #2980b9; }
+    .smart-paste-chip .spc-dismiss {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .smart-paste-chip .spc-dismiss:hover { color: var(--text); }
     .msg-content img.msg-img {
       max-width: 100%;
       max-height: 300px;
@@ -3524,6 +3564,7 @@
     <div class="file-chips" id="file-chips"></div>
     <div class="img-chips" id="img-chips"></div>
     <div class="img-chip-warn" id="img-chip-warn" style="display:none"></div>
+    <div class="smart-paste-chip" id="smart-paste-chip"></div>
 
     <div class="input-area">
       <div class="input-wrap">
@@ -5768,6 +5809,7 @@ JSON:`
       if (isStreaming) return
       resetPromptHistory?.()
       if (window._ttsIdx != null) stopReadAloud?.()
+      hideSmartPasteChip?.()
 
       // Prepend attached file contents to the message
       if (attachedFiles.length > 0) {
@@ -8055,18 +8097,109 @@ Title:`
       renderImgChips()
     }
 
-    // Paste handler on the input — intercepts Cmd-V when clipboard has image
+    // Paste handler on the input — intercepts Cmd-V when clipboard has image,
+    // and also inspects the pasted text for JSON / stack traces so we can
+    // suggest a targeted wrapper prompt (Smart Paste).
     input.addEventListener('paste', async (e) => {
       const items = e.clipboardData?.items
-      if (!items) return
-      for (const item of items) {
-        if (item.kind === 'file' && item.type.startsWith('image/')) {
-          e.preventDefault()
-          const file = item.getAsFile()
-          if (file) await attachImageFromFile(file)
+      if (items) {
+        for (const item of items) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            e.preventDefault()
+            const file = item.getAsFile()
+            if (file) await attachImageFromFile(file)
+            return
+          }
         }
       }
+      const text = e.clipboardData?.getData('text') || ''
+      if (text.length < 80) return // too short to be meaningfully JSON/stacktrace
+      const kind = detectPasteKind(text)
+      if (kind) showSmartPasteChip(kind)
     })
+    // Clear the chip if the user manually empties the input
+    input.addEventListener('input', () => {
+      if (!input.value.trim()) hideSmartPasteChip()
+    })
+
+    // Classify a pasted string. Cheap heuristics — false positives are fine
+    // (the chip is just a suggestion the user can dismiss).
+    function detectPasteKind(text) {
+      const trimmed = text.trim()
+      // Stack trace: multiple lines with typical frame signatures.
+      const stackHints = [
+        /^\s*at\s+\S+/m,                                    // JS/Java: "at func (…)"
+        /File "[^"]+", line \d+/,                           // Python
+        /Traceback \(most recent call last\):/,             // Python header
+        /Error:\s+[A-Z]/m,                                  // Generic Error: ...
+        /^\s*Caused by:/m,                                  // Java chained
+        /\s+at\s+[\w.$]+\([^)]+\.java:\d+\)/,               // Java frame
+        /Exception in thread/,                              // Java
+        /^\s*Thread \d+\s+"[^"]+"\s+#\d+/m,                 // JVM dump
+      ]
+      const stackMatches = stackHints.filter(r => r.test(trimmed)).length
+      if (stackMatches >= 1 && trimmed.split('\n').length >= 3) return 'stacktrace'
+      // JSON: starts with { or [ and parses cleanly.
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try { JSON.parse(trimmed); return 'json' } catch {}
+      }
+      return null
+    }
+
+    function showSmartPasteChip(kind) {
+      const chip = document.getElementById('smart-paste-chip')
+      if (!chip) return
+      const configs = {
+        json: {
+          icon: '{ }',
+          msg: 'Looks like JSON — want me to format & explain it?',
+          btn: 'Format JSON',
+          wrap: (t) => 'Format this JSON with proper indentation and briefly describe its structure:\n\n```json\n' + t + '\n```',
+        },
+        stacktrace: {
+          icon: '🐛',
+          msg: 'Looks like a stack trace — want me to root-cause it?',
+          btn: 'Debug this',
+          wrap: (t) => 'Help me root-cause this stack trace. List the top 3 most likely causes in order of probability, with a one-line fix for each:\n\n```\n' + t + '\n```',
+        },
+      }
+      const cfg = configs[kind]
+      if (!cfg) return
+      chip.dataset.kind = kind
+      chip.innerHTML = `
+        <span class="spc-icon">${cfg.icon}</span>
+        <span class="spc-msg">${cfg.msg}</span>
+        <button class="spc-btn" onclick="applySmartPaste()">${cfg.btn}</button>
+        <button class="spc-dismiss" onclick="hideSmartPasteChip()" title="Dismiss">×</button>`
+      chip.classList.add('show')
+      // Auto-dismiss after 30s so it doesn't linger forever.
+      clearTimeout(window._spcDismissTimer)
+      window._spcDismissTimer = setTimeout(hideSmartPasteChip, 30000)
+    }
+    function hideSmartPasteChip() {
+      const chip = document.getElementById('smart-paste-chip')
+      if (!chip) return
+      chip.classList.remove('show')
+      chip.innerHTML = ''
+      delete chip.dataset.kind
+      clearTimeout(window._spcDismissTimer)
+    }
+    function applySmartPaste() {
+      const chip = document.getElementById('smart-paste-chip')
+      const kind = chip?.dataset.kind
+      if (!kind) return
+      const wrappers = {
+        json: (t) => 'Format this JSON with proper indentation and briefly describe its structure:\n\n```json\n' + t + '\n```',
+        stacktrace: (t) => 'Help me root-cause this stack trace. List the top 3 most likely causes in order of probability, with a one-line fix for each:\n\n```\n' + t + '\n```',
+      }
+      const raw = input.value
+      input.value = wrappers[kind](raw)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.focus()
+      input.setSelectionRange(input.value.length, input.value.length)
+      hideSmartPasteChip()
+    }
     // Also catch drops that happen on the input itself
     input.addEventListener('drop', async (e) => {
       const files = e.dataTransfer?.files
