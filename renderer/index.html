@@ -10754,10 +10754,20 @@ Title:`
         // can now ship small games, interactive demos, canvas animations,
         // etc. Iframe has allow-scripts but NOT allow-same-origin, so the
         // artifact can't touch your chat data.
-        if ((lc === 'html' || lc === 'artifact') && /<(html|body|script|canvas|svg|div|style)\b/i.test(code)) {
-          const srcdoc = code
-            // Escape the double quotes + ampersands so it survives the HTML attr
-            .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        // Detection: html/artifact lang + any recognisable HTML-ish tag.
+        if ((lc === 'html' || lc === 'artifact') && /<[a-z!][a-z0-9]*\b/i.test(code)) {
+          // Auto-wrap: if the block doesn't include <html> or <body>, wrap it
+          // in a minimal scaffold so bare fragments (a script or a handful of
+          // divs) still work as a runnable artifact.
+          const looksFull = /<(!doctype|html|body)\b/i.test(code)
+          const wrapped = looksFull ? code : `<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;padding:0;background:#fff;color:#111;font-family:-apple-system,system-ui,sans-serif}
+  body{padding:12px}
+</style></head><body>${code}</body></html>`
+          const srcdoc = wrapped
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
           const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           return `
             <div class="md-artifact">

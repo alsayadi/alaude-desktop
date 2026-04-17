@@ -58,6 +58,23 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
+  // Allow DevTools in packaged + dev builds so renderer-side bugs (chart
+  // errors, artifact script issues) are debuggable. ⌘⌥I on macOS, Ctrl+Shift+I
+  // elsewhere. Also relay any uncaught renderer errors to main's stderr so
+  // the log captures them.
+  mainWindow.webContents.on('before-input-event', (_e, input) => {
+    const mac = process.platform === 'darwin'
+    const opensTools = input.type === 'keyDown' && input.key === 'i' &&
+      ((mac && input.meta && input.alt) || (!mac && input.control && input.shift))
+    if (opensTools) mainWindow.webContents.toggleDevTools()
+  })
+  mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
+    const lvl = ['log','warn','error'][level] || 'log'
+    if (lvl === 'error' || lvl === 'warn') {
+      process.stderr.write(`[renderer ${lvl}] ${message} (${source}:${line})\n`)
+    }
+  })
+
   // Intercept every window.open (including target="_blank" link clicks inside
   // AI responses). Electron's default is to create a new BrowserWindow and
   // load the URL inside it — which means a dead localhost link produces
