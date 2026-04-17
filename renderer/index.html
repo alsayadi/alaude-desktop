@@ -213,6 +213,13 @@
     .msg.reacted-down { border-left: 3px solid #e67e22; padding-left: 10px; }
     .reaction-btn.active[data-kind="up"] { background: color-mix(in srgb, var(--green) 18%, transparent); border-color: var(--green); color: var(--green); }
     .reaction-btn.active[data-kind="down"] { background: color-mix(in srgb, #e67e22 18%, transparent); border-color: #e67e22; color: #e67e22; }
+    .tts-btn.active {
+      background: color-mix(in srgb, #9b59b6 18%, transparent);
+      border-color: #9b59b6;
+      color: #9b59b6;
+      animation: tts-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes tts-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
     .reaction-note {
       color: var(--text-faint);
       font-size: 10px;
@@ -4726,6 +4733,69 @@ SUMMARY:`
       }
     }
 
+    // ── Read-aloud (TTS) ────────────────────────────────────────────
+    // Uses browser speechSynthesis (zero network, OS voices). One voice at
+    // a time: clicking a different message cancels the current utterance
+    // and starts the new one. Clicking the same message while speaking
+    // cancels. Esc also cancels globally. Markdown noise (code fences,
+    // backticks, bold/italics) is stripped for a more natural read.
+    window._ttsIdx = null
+    function stripMarkdownForSpeech(text) {
+      return String(text || '')
+        .replace(/```[\s\S]*?```/g, ' code block omitted. ')  // code fences
+        .replace(/`([^`]+)`/g, '$1')                           // inline code
+        .replace(/\*\*([^*]+)\*\*/g, '$1')                     // bold
+        .replace(/\*([^*]+)\*/g, '$1')                         // italic
+        .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')                 // underscore emphasis
+        .replace(/~~([^~]+)~~/g, '$1')                         // strikethrough
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')               // markdown links
+        .replace(/^#+\s*/gm, '')                               // headings
+        .replace(/^>\s*/gm, '')                                // blockquotes
+        .replace(/^[-*+]\s+/gm, '')                            // list bullets
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    }
+    function stopReadAloud() {
+      try { window.speechSynthesis?.cancel() } catch {}
+      window._ttsIdx = null
+      renderMessages()
+    }
+    function toggleReadAloud(idx) {
+      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+        showRewindToast?.('TTS not available in this environment', true)
+        return
+      }
+      // Toggle off if same message
+      if (window._ttsIdx === idx) { stopReadAloud(); return }
+      const msg = messages[idx]
+      if (!msg || msg.role !== 'assistant') return
+      const raw = Array.isArray(msg.content)
+        ? msg.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+        : String(msg.content || '')
+      const text = stripMarkdownForSpeech(raw)
+      if (!text) { showRewindToast?.('Nothing to read', true); return }
+      try { window.speechSynthesis.cancel() } catch {}
+      const u = new SpeechSynthesisUtterance(text.slice(0, 32000))
+      u.rate = 1.05
+      u.pitch = 1.0
+      u.onend = () => { if (window._ttsIdx === idx) { window._ttsIdx = null; renderMessages() } }
+      u.onerror = () => { if (window._ttsIdx === idx) { window._ttsIdx = null; renderMessages() } }
+      window._ttsIdx = idx
+      try { window.speechSynthesis.speak(u) } catch (e) {
+        window._ttsIdx = null
+        showRewindToast?.('TTS failed: ' + (e?.message || 'unknown'), true)
+      }
+      renderMessages()
+    }
+    // Cancel any active speech when the user starts typing or sends a new
+    // message — prevents awkward overlapping audio.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && window._ttsIdx != null) {
+        stopReadAloud()
+        // Don't preventDefault — let other Esc handlers run too
+      }
+    })
+
     // ── Message reactions + Feedback Journal ────────────────────────
     // 👍/👎 on any assistant message. 👎 prompts for a 1-line note so the
     // feedback is useful beyond a binary. Reactions live on the message
@@ -5697,6 +5767,7 @@ JSON:`
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
       if (isStreaming) return
       resetPromptHistory?.()
+      if (window._ttsIdx != null) stopReadAloud?.()
 
       // Prepend attached file contents to the message
       if (attachedFiles.length > 0) {
@@ -6314,10 +6385,13 @@ Title:`
         const reactionKind = msg.reaction?.kind
         const upActive = reactionKind === 'up' ? ' active' : ''
         const downActive = reactionKind === 'down' ? ' active' : ''
+        const ttsActive = (window._ttsIdx === i) ? ' active' : ''
+        const ttsIcon = (window._ttsIdx === i) ? '⏸' : '🔊'
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
               <button class="msg-action-btn reaction-btn${upActive}" data-kind="up" onclick="setReaction(${i}, 'up')" title="Mark as a good response">👍</button>
               <button class="msg-action-btn reaction-btn${downActive}" data-kind="down" onclick="setReaction(${i}, 'down')" title="Mark as a poor response (you'll be asked for a note)">👎</button>
+              <button class="msg-action-btn tts-btn${ttsActive}" onclick="toggleReadAloud(${i})" title="Read this reply aloud (Esc to stop)">${ttsIcon}</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
