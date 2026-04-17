@@ -306,6 +306,42 @@
     .summary-body li { margin: 2px 0; }
     .summary-meta { color: var(--text-faint); font-size: 10px; margin-top: 6px; font-style: italic; }
 
+    /* ─── Session Goal chip ──────────────────────────────────────── */
+    .session-goal {
+      margin: 6px auto 0;
+      max-width: 720px;
+      background: color-mix(in srgb, #9b59b6 8%, var(--bg-input));
+      border: 1px solid var(--border);
+      border-left: 3px solid #9b59b6;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text);
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .session-goal.show { display: flex; }
+    .session-goal.achieved { border-left-color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--bg-input)); }
+    .session-goal.abandoned { border-left-color: var(--text-faint); opacity: 0.7; }
+    .sg-icon { font-size: 14px; flex-shrink: 0; }
+    .sg-text { flex: 1; color: var(--text); line-height: 1.4; }
+    .session-goal.achieved .sg-text { color: var(--text-dim); text-decoration: line-through; }
+    .sg-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .sg-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .sg-btn:hover { border-color: #9b59b6; color: #9b59b6; }
+    .sg-btn.primary { border-color: var(--green); color: var(--green); }
+    .sg-btn.primary:hover { background: color-mix(in srgb, var(--green) 15%, transparent); }
+
     /* ─── Session TODO Checklist ─────────────────────────────────── */
     .session-todos {
       margin: 6px auto 0;
@@ -3531,6 +3567,7 @@
 
     <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
     <div class="pin-tray" id="pin-tray"></div>
+    <div class="session-goal" id="session-goal"></div>
     <div class="session-summary" id="session-summary"></div>
     <div class="session-todos" id="session-todos"></div>
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
@@ -3759,6 +3796,7 @@
         <dt>Export as HTML (share-ready)</dt><dd>command palette → "Export session as HTML"</dd>
         <dt>📝 Summarize this session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></dd>
         <dt>✓ Extract action items (TODOs)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></dd>
+        <dt>🎯 Set / edit session goal</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>G</kbd></dd>
         <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
         <dt>Rewind / Branch</dt><dd>buttons on any assistant reply</dd>
         <dt>Pin a message</dt><dd>📌 button on any reply</dd>
@@ -4838,6 +4876,90 @@ SUMMARY:`
       }
     })
 
+    // ── Session Goal tracker ────────────────────────────────────────
+    // Optional one-line objective per session. When set, shows as a chip
+    // atop the messages column with quick "✓ Done" / "✗ Abandon" / "Edit"
+    // / "Clear" actions. Sidebar sessions get a 🎯/✅ prefix so the goal
+    // status is visible from the session list too.
+    function renderGoalCard() {
+      const chip = document.getElementById('session-goal')
+      if (!chip) return
+      const s = sessions.find(s => s.id === currentSessionId)
+      const goal = s?.goal
+      if (!goal || !goal.text) {
+        chip.classList.remove('show', 'achieved', 'abandoned')
+        chip.innerHTML = ''
+        return
+      }
+      chip.classList.add('show')
+      chip.classList.toggle('achieved', goal.status === 'achieved')
+      chip.classList.toggle('abandoned', goal.status === 'abandoned')
+      const icon = goal.status === 'achieved' ? '✅'
+                 : goal.status === 'abandoned' ? '✗'
+                 : '🎯'
+      const actions = goal.status === 'active'
+        ? `<button class="sg-btn primary" onclick="setGoalStatus('achieved')" title="Mark this goal as achieved">✓ Done</button>
+           <button class="sg-btn" onclick="setGoalStatus('abandoned')" title="Abandon this goal">✗ Abandon</button>
+           <button class="sg-btn" onclick="promptSetGoal()" title="Edit the goal text">✎ Edit</button>
+           <button class="sg-btn" onclick="clearGoal()" title="Clear the goal entirely">×</button>`
+        : `<button class="sg-btn" onclick="setGoalStatus('active')" title="Reactivate this goal">↺ Reopen</button>
+           <button class="sg-btn" onclick="clearGoal()" title="Clear the goal entirely">×</button>`
+      chip.innerHTML = `
+        <span class="sg-icon">${icon}</span>
+        <span class="sg-text"><strong style="color:var(--text-faint);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;margin-right:6px">Goal</strong>${escapeHtml(goal.text)}</span>
+        <span class="sg-actions">${actions}</span>`
+    }
+    function promptSetGoal() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      const existing = s.goal?.text || ''
+      const raw = window.prompt('What\'s the goal for this session? (one line — press Cancel to clear)', existing)
+      if (raw == null) {
+        // Cancel clears only if there was a goal; otherwise no-op
+        if (existing) clearGoal()
+        return
+      }
+      const text = raw.trim().slice(0, 160)
+      if (!text) { clearGoal(); return }
+      s.goal = {
+        text,
+        status: 'active',
+        setAt: s.goal?.setAt || Date.now(),
+        updatedAt: Date.now(),
+      }
+      persistSessions()
+      renderGoalCard()
+      renderSessions?.()
+      showRewindToast?.('🎯 Goal set — focus achieved', false)
+    }
+    function setGoalStatus(status) {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s?.goal) return
+      s.goal.status = status
+      if (status === 'achieved') s.goal.completedAt = Date.now()
+      persistSessions()
+      renderGoalCard()
+      renderSessions?.()
+      if (status === 'achieved') showRewindToast?.('✅ Nice — goal achieved', false)
+      else if (status === 'abandoned') showRewindToast?.('✗ Goal abandoned', false)
+    }
+    function clearGoal() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      delete s.goal
+      persistSessions()
+      renderGoalCard()
+      renderSessions?.()
+    }
+    // Sidebar prefix helper — used inside renderSessions to prefix each
+    // session title with a goal indicator. Returns '' when no goal set.
+    function goalIconForSession(s) {
+      if (!s?.goal?.status) return ''
+      if (s.goal.status === 'achieved') return '✅ '
+      if (s.goal.status === 'abandoned') return ''
+      return '🎯 '
+    }
+
     // ── Message reactions + Feedback Journal ────────────────────────
     // 👍/👎 on any assistant message. 👎 prompts for a 1-line note so the
     // feedback is useful beyond a binary. Reactions live on the message
@@ -5584,6 +5706,8 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
+        { kind: 'action', icon: '🎯', label: 'Set / edit session goal', search: 'goal objective target focus intention set edit', action: () => { closeCmdPalette(); promptSetGoal() } },
+        { kind: 'action', icon: '✅', label: 'Mark goal achieved', search: 'goal done achieved complete mark finish', action: () => { closeCmdPalette(); setGoalStatus('achieved') } },
         { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
         { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
       )
@@ -6043,6 +6167,11 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z'
           && !e.target.matches?.('input, textarea, [contenteditable]')) {
         if (undoPrune?.()) { e.preventDefault() }
+      }
+      // Cmd/Ctrl+Shift+G → set / edit session goal
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault()
+        promptSetGoal()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
@@ -6855,6 +6984,7 @@ Title:`
       renderPinTray?.()
       renderSummaryCard?.()
       renderTodosCard?.()
+      renderGoalCard?.()
       updateSessionCostDisplay?.()
     }
 
@@ -7613,10 +7743,12 @@ Title:`
         const tagsHtml = (s.tags && s.tags.length)
           ? `<div class="session-item-tags">${s.tags.map(t => `<span class="session-item-tag" onclick="event.stopPropagation(); setTagFilter('${escapeHtml(t)}')" title="Filter to #${escapeHtml(t)}">#${escapeHtml(t)}</span>`).join('')}</div>`
           : ''
-        return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}">
+        const goalPrefix = goalIconForSession?.(s) || ''
+        const goalTip = s.goal?.text ? ` — goal: ${escapeHtml(s.goal.text)}` : ''
+        return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}${goalTip}">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
             <div style="display:flex;align-items:center;gap:4px;min-width:0">
-              ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${escapeHtml(s.title)}</span>
+              ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(s.title)}</span>
               ${costPill}
             </div>
             ${tagsHtml}
