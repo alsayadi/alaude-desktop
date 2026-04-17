@@ -6966,6 +6966,7 @@ footer a { color: var(--accent); text-decoration: none; }
       // Actions
       items.push(
         { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
+        { kind: 'action', icon: '⎘', label: 'Duplicate current session', search: 'duplicate copy clone session fork standalone', action: () => { closeCmdPalette(); duplicateCurrentSession() } },
         ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
@@ -9426,6 +9427,43 @@ Title:`
       renderMessages()
       persistSessions()
       input.focus()
+    }
+
+    // Duplicate the active session: full deep-copy of messages, plus title
+    // (prefixed "Copy of"), tags, goal, and any summary/todos. Unlike Branch
+    // (which sets parentId + forkPoint and creates a genealogy), duplicate
+    // produces a standalone peer — useful for forking into a wholly new
+    // working copy.
+    function duplicateCurrentSession() {
+      const src = sessions.find(s => s.id === currentSessionId)
+      if (!src) return
+      // Snapshot the live messages into the source first so we copy the latest.
+      src.messages = [...messages]
+      const newId = Date.now()
+      const copy = {
+        id: newId,
+        title: (src.title && !/^copy of /i.test(src.title)) ? `Copy of ${src.title}` : (src.title || 'Copy of session'),
+        titleIsAI: false,
+        tags: [...(src.tags || [])],
+        goal: src.goal ? { ...src.goal, status: 'active', setAt: Date.now(), completedAt: undefined } : undefined,
+        summary: src.summary ? { ...src.summary } : undefined,
+        todos: src.todos ? { ...src.todos, items: (src.todos.items || []).map(t => ({ ...t, id: 'td_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6) })) } : undefined,
+        // Deep-ish clone of messages: spread each, drop any streaming state
+        messages: (src.messages || [])
+          .filter(m => !m.streaming)
+          .map(m => ({ ...m, stats: undefined })),
+      }
+      sessions.unshift(copy)
+      if (sessions.length > MAX_SESSIONS) sessions = sessions.slice(0, MAX_SESSIONS)
+      currentSessionId = newId
+      messages = [...copy.messages]
+      ux.sessionId = 'sess_' + newId
+      ux.lastPromptHash = null
+      ux.lastMessageId = null
+      renderSessions()
+      renderMessages()
+      persistSessions()
+      showRewindToast?.(`✨ Duplicated — now editing "${copy.title}"`, false)
     }
 
     function switchSession(id) {
