@@ -1547,6 +1547,55 @@
     .translate-result .tr-close:hover { color: var(--text); }
     .translate-result .tr-body { white-space: pre-wrap; word-break: break-word; }
 
+    /* ─── Refine popover ──────────────────────────────────────── */
+    .refine-popover {
+      position: fixed;
+      z-index: 130;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.32);
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .refine-head {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 6px 6px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .refine-opt {
+      background: transparent;
+      border: 0;
+      color: var(--text);
+      font-size: 12px;
+      text-align: left;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: inherit;
+    }
+    .refine-opt:hover { background: var(--bg-hover); color: var(--green); }
+    .refine-opt .ro-key {
+      font-family: monospace;
+      font-size: 10px;
+      color: var(--text-faint);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
     /* ─── Task Board filter buttons ───────────────────────────── */
     .tb-filter.active {
       background: color-mix(in srgb, #3498db 18%, transparent);
@@ -5440,6 +5489,78 @@ SUMMARY:`
       }
     }
 
+    // ── Refine-with-another-model ──────────────────────────────────
+    // Composition feature: reuse the Model Hotkey Slots (v0.2.34) as the
+    // "switch model + seed input with a refinement prompt" menu. Click
+    // the ↪ button on any assistant reply → a small popover appears with
+    // the pinned slots (and the current model dropdown as a fallback
+    // "Other…" entry). Picking a target sets the model, fills the input
+    // with the refinement template, and focuses the textarea — the user
+    // reads it, tweaks if they want, and hits Enter.
+    function refineWithPicker(idx, anchorBtn) {
+      const msg = messages[idx]
+      if (!msg || msg.role !== 'assistant') return
+      // Remove any existing popover
+      document.querySelectorAll('.refine-popover').forEach(el => el.remove())
+      const slots = (typeof loadModelSlots === 'function') ? loadModelSlots() : {}
+      const select = document.getElementById('model-select')
+      const entries = []
+      for (let n = 1; n <= 6; n++) {
+        const mid = slots[n]
+        if (!mid) continue
+        const opt = select?.querySelector(`option[value="${CSS.escape(mid)}"]`)
+        const label = opt?.textContent || mid
+        entries.push(`<button class="refine-opt" onclick="refineApply(${idx}, '${escapeHtml(mid)}')"><span class="ro-key">⌘${n}</span>${escapeHtml(label)}</button>`)
+      }
+      // Always offer "same model again" as a baseline
+      const curModel = select?.value
+      if (curModel) {
+        const curLabel = select?.options[select.selectedIndex]?.text || curModel
+        entries.unshift(`<button class="refine-opt" onclick="refineApply(${idx}, '${escapeHtml(curModel)}')"><span class="ro-key">same</span>${escapeHtml(curLabel)}</button>`)
+      }
+      if (!entries.length) { showRewindToast?.('Pin a model to a slot first (command palette)', true); return }
+      const pop = document.createElement('div')
+      pop.className = 'refine-popover'
+      pop.innerHTML = `<div class="refine-head">↪ Refine with…</div>${entries.join('')}`
+      document.body.appendChild(pop)
+      // Position near the anchor button
+      const rect = anchorBtn.getBoundingClientRect()
+      pop.style.left = Math.min(window.innerWidth - pop.offsetWidth - 10, rect.left) + 'px'
+      pop.style.top = (rect.bottom + 4) + 'px'
+      // Dismiss on outside click / Esc
+      const dismiss = (e) => {
+        if (e.type === 'mousedown' && pop.contains(e.target)) return
+        if (e.type === 'keydown' && e.key !== 'Escape') return
+        pop.remove()
+        document.removeEventListener('mousedown', dismiss, true)
+        document.removeEventListener('keydown', dismiss, true)
+      }
+      setTimeout(() => {
+        document.addEventListener('mousedown', dismiss, true)
+        document.addEventListener('keydown', dismiss, true)
+      }, 0)
+    }
+    function refineApply(idx, modelId) {
+      document.querySelectorAll('.refine-popover').forEach(el => el.remove())
+      const msg = messages[idx]
+      if (!msg) return
+      const select = document.getElementById('model-select')
+      if (select && select.value !== modelId) {
+        select.value = modelId
+        changeModel(modelId)
+      }
+      const replyText = Array.isArray(msg.content)
+        ? msg.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+        : String(msg.content || '')
+      const template = `Refine and improve the response below. Keep what's already right, sharpen what's weak, fix any factual or logical mistakes. Explain briefly at the end what you changed and why.\n\n---\n\n${replyText}`
+      input.value = template
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.focus()
+      // Put caret at the very top so the user can prepend extra direction if they want.
+      try { input.setSelectionRange(0, 0); input.scrollTop = 0 } catch {}
+      showRewindToast?.(`↪ Ready to refine with ${modelId}`, false)
+    }
+
     // ── Inline Message Notes ────────────────────────────────────────
     // Lightweight personal annotation attached to any message. Stored
     // at msg.note as a plain string. Distinct from reaction-notes
@@ -8164,6 +8285,7 @@ Title:`
               <button class="msg-action-btn tts-btn${ttsActive}" onclick="toggleReadAloud(${i})" title="Read this reply aloud (Esc to stop)">${ttsIcon}</button>
               <button class="msg-action-btn compare-btn${compareClass}" onclick="armCompare(${i})" title="Pick two assistant messages to compare side-by-side">${compareLabel}</button>
               <button class="msg-action-btn" onclick="editMessageNote(${i})" title="${msg.note ? 'Edit your note' : 'Attach a personal note to this reply'}">${noteBtnLabel}</button>
+              <button class="msg-action-btn" onclick="refineWithPicker(${i}, this)" title="Refine this reply using a pinned model (⌘1..⌘6)">↪ Refine</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
