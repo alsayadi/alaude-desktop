@@ -909,6 +909,40 @@ ipcMain.handle('save-file', async (_, content, defaultName) => {
   return result.filePath
 })
 
+// Save a binary buffer (pptx/docx/xlsx/pdf/etc.) via the native save dialog.
+// Returns { path, size, name, mtime } or null if the user cancelled.
+ipcMain.handle('save-binary-file', async (_, arrayBuffer, defaultName) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    defaultPath: defaultName || 'output.bin',
+  })
+  if (result.canceled || !result.filePath) return null
+  const fs = require('fs')
+  const path = require('path')
+  const buf = Buffer.from(arrayBuffer)
+  fs.writeFileSync(result.filePath, buf)
+  const stat = fs.statSync(result.filePath)
+  return {
+    path: result.filePath,
+    size: stat.size,
+    name: path.basename(result.filePath),
+    mtime: stat.mtimeMs,
+  }
+})
+
+// Open a previously-saved file in its OS default application.
+// Returns true on success; a string error message otherwise.
+ipcMain.handle('open-path', async (_, filePath) => {
+  if (!filePath) return 'no path'
+  const err = await shell.openPath(filePath)
+  return err ? err : true
+})
+
+// Reveal a saved file in Finder / Explorer (so the user can see it lived).
+ipcMain.handle('show-in-folder', async (_, filePath) => {
+  if (!filePath) return false
+  try { shell.showItemInFolder(filePath); return true } catch { return false }
+})
+
 // ── IPC: Spaces ─────────────────────────────────────────────────────────────
 
 const { BUILT_IN_SPACES, getSpaceById } = require('./spaces.js')

@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('alaude', {
   readFileForChat: (filePath) => ipcRenderer.invoke('read-file-for-chat', filePath),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   saveFile: (content, defaultName) => ipcRenderer.invoke('save-file', content, defaultName),
+  saveBinaryFile: (arrayBuffer, defaultName) => ipcRenderer.invoke('save-binary-file', arrayBuffer, defaultName),
+  openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
+  showInFolder: (filePath) => ipcRenderer.invoke('show-in-folder', filePath),
 
   // Open URL in system browser
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

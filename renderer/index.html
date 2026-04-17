@@ -3145,6 +3145,56 @@
     .md-office.show-source .md-office-preview { display: none; }
     .md-office.show-source .md-office-src { display: block; }
     .md-office-error { padding: 10px 14px; font-size: 11px; color: #e74c3c; font-family: monospace; white-space: pre-wrap; }
+    .md-office-saved {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      background: color-mix(in srgb, var(--green) 8%, transparent);
+      font-size: 12px;
+    }
+    .md-office-saved .off-saved-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      background: var(--green);
+      color: #0a0a0a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .md-office-saved .off-saved-icon:hover { transform: scale(1.08); }
+    .md-office-saved .off-saved-body { flex: 1; min-width: 0; }
+    .md-office-saved .off-saved-name {
+      color: var(--text);
+      font-weight: 600;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .md-office-saved .off-saved-meta {
+      color: var(--text-faint);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .md-office-saved .off-saved-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .md-office-saved .off-saved-actions button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .md-office-saved .off-saved-actions button:hover { border-color: var(--green); color: var(--green); }
 
     /* ─── Native chart blocks (```chart JSON) ────────────────── */
     .md-chart {
@@ -9882,7 +9932,9 @@ Title:`
       if (!entry) return
       const { kind, spec } = entry
       const safeTitle = ((spec.title || 'alaude-' + kind) + '').replace(/[^a-z0-9_\- ]+/gi, '').trim().slice(0, 80) || ('alaude-' + kind)
+      const defaultName = safeTitle + '.' + kind
       try {
+        let buffer = null
         if (kind === 'pptx') {
           const P = await loadOfficeLib('pptx')
           const pptx = new P()
@@ -9911,11 +9963,11 @@ Title:`
             }
             if (slide.notes) s.addNotes(slide.notes)
           }
-          await pptx.writeFile({ fileName: safeTitle + '.pptx' })
-          showRewindToast?.(`💾 Saved ${safeTitle}.pptx`, false)
-          return
+          // PptxGenJS: write returns a base64 or ArrayBuffer
+          const out = await pptx.write({ outputType: 'arraybuffer' })
+          buffer = out
         }
-        if (kind === 'docx') {
+        else if (kind === 'docx') {
           const d = await loadOfficeLib('docx')
           const { Document, Packer, Paragraph, HeadingLevel, TextRun, AlignmentType } = d
           const children = []
@@ -9939,11 +9991,9 @@ Title:`
           }
           const doc = new Document({ sections: [{ properties: {}, children }] })
           const blob = await Packer.toBlob(doc)
-          triggerDownload(blob, safeTitle + '.docx')
-          showRewindToast?.(`💾 Saved ${safeTitle}.docx`, false)
-          return
+          buffer = await blob.arrayBuffer()
         }
-        if (kind === 'xlsx') {
+        else if (kind === 'xlsx') {
           const XLSX = await loadOfficeLib('xlsx')
           const wb = XLSX.utils.book_new()
           const sheets = spec.sheets || []
@@ -9956,24 +10006,59 @@ Title:`
             const ws = XLSX.utils.aoa_to_sheet([['(empty)']])
             XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
           }
-          const arr = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-          const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-          triggerDownload(blob, safeTitle + '.xlsx')
-          showRewindToast?.(`💾 Saved ${safeTitle}.xlsx`, false)
-          return
+          buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
         }
+        if (!buffer) throw new Error('builder returned no buffer')
+        // Use Electron's native save dialog so we know WHERE it lived.
+        const result = await window.alaude.saveBinaryFile(buffer, defaultName)
+        if (!result) return // user cancelled
+        showRewindToast?.(`💾 Saved ${result.name}`, false)
+        // Replace preview with a "saved" card showing metadata + Open button.
+        appendSavedCard(id, kind, result)
       } catch (err) {
         console.error('[office] save failed:', err)
         showRewindToast?.('Save failed: ' + (err?.message || 'unknown'), true)
       }
     }
-    function triggerDownload(blob, name) {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = name
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+    function appendSavedCard(id, kind, info) {
+      const root = document.getElementById(id)
+      if (!root) return
+      // Remove any prior saved card (for re-saves) to keep the chrome tidy.
+      root.querySelector('.md-office-saved')?.remove()
+      const icon = kind === 'pptx' ? '📊' : kind === 'docx' ? '📄' : '📗'
+      const card = document.createElement('div')
+      card.className = 'md-office-saved'
+      card.innerHTML = `
+        <div class="off-saved-icon" title="Click to open in default app" onclick="officeOpenSaved('${escapeHtml(id)}')">${icon}</div>
+        <div class="off-saved-body">
+          <div class="off-saved-name">${escapeHtml(info.name)}</div>
+          <div class="off-saved-meta">${formatFileSize(info.size)} · saved ${new Date(info.mtime).toLocaleTimeString()}</div>
+        </div>
+        <div class="off-saved-actions">
+          <button onclick="officeOpenSaved('${escapeHtml(id)}')">Open</button>
+          <button onclick="officeRevealSaved('${escapeHtml(id)}')">Show in Finder</button>
+        </div>`
+      // Stash the saved-file info on the spec record so the action buttons
+      // can find the path later.
+      window._officeSpecs[id].saved = info
+      root.appendChild(card)
+    }
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+      return (bytes / 1024 / 1024).toFixed(2) + ' MB'
+    }
+    async function officeOpenSaved(id) {
+      const info = window._officeSpecs[id]?.saved
+      if (!info?.path) return
+      const res = await window.alaude.openPath(info.path)
+      if (res !== true) showRewindToast?.('Open failed: ' + res, true)
+    }
+    async function officeRevealSaved(id) {
+      const info = window._officeSpecs[id]?.saved
+      if (!info?.path) return
+      await window.alaude.showInFolder(info.path)
     }
 
     // HTML Artifact toggles: the rendered iframe or the source view.
