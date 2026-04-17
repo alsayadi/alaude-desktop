@@ -119,10 +119,12 @@ function createWindow() {
  */
 const SRC_DIR = path.resolve(__dirname, '..', '..', 'claude_code_src')
 
-function getApiKey(provider) {
+// Returns { value, isOauth } | null. Prefers (in order): OAuth token from
+// the credentials file, API key from the credentials file, env var.
+// Env vars are ALWAYS treated as API keys — set your shell if you want
+// that path.
+function getCredential(provider) {
   const fs = require('fs')
-
-  // Check env vars first
   const envMap = {
     anthropic: 'ANTHROPIC_API_KEY',
     openai: 'OPENAI_API_KEY',
@@ -132,27 +134,32 @@ function getApiKey(provider) {
     dashscope: 'DASHSCOPE_API_KEY',
     zhipu: 'ZHIPU_API_KEY',
   }
-  const envKey = process.env[envMap[provider]]
-  if (envKey) return envKey
-
-  // Try multiple credential file locations
   const configDirs = [
     path.join(os.homedir(), '.claude'),
     path.join(os.homedir(), 'claude-local-src'),
   ]
-
   for (const dir of configDirs) {
     try {
       const credPath = path.join(dir, '.credentials.json')
-      if (fs.existsSync(credPath)) {
-        const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
-        const key = data?.providerApiKeys?.[provider]
-        if (key) return key
-      }
+      if (!fs.existsSync(credPath)) continue
+      const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
+      const oauth = data?.providerOauthTokens?.[provider]
+      if (oauth) return { value: oauth, isOauth: true }
+      const apiKey = data?.providerApiKeys?.[provider]
+      if (apiKey) return { value: apiKey, isOauth: false }
     } catch {}
   }
-
+  const envKey = process.env[envMap[provider]]
+  if (envKey) return { value: envKey, isOauth: false }
   return null
+}
+
+// Backwards-compat: some older callers just want the string value. Returns
+// null if no credential exists. Callers that care about OAuth vs API
+// should use getCredential() directly.
+function getApiKey(provider) {
+  const c = getCredential(provider)
+  return c ? c.value : null
 }
 
 function detectProvider(model) {
@@ -251,8 +258,10 @@ function oauthAnthropic() {
         const tokens = await tokenRes.json()
         const accessToken = tokens.access_token
 
-        // Save the token as the Anthropic API key
-        saveCredential('anthropic', accessToken)
+        // Save the OAuth access token under the oauth slot (not the api-key
+        // slot) so chatAnthropic can pass it as a Bearer token instead of
+        // x-api-key.
+        saveCredential('anthropic', accessToken, 'oauth')
 
         res.writeHead(200, { 'Content-Type': 'text/html' })
         res.end('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5f5f5"><h2 style="color:#00a846">Logged in!</h2><p>You can close this window and return to Alaude.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>')
@@ -296,7 +305,7 @@ function oauthAnthropic() {
   })
 }
 
-function saveCredential(provider, key) {
+function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
   const fs = require('fs')
   const configDir = path.join(os.homedir(), '.claude')
   const credPath = path.join(configDir, '.credentials.json')
@@ -308,8 +317,21 @@ function saveCredential(provider, key) {
     }
   } catch {}
 
-  if (!data.providerApiKeys) data.providerApiKeys = {}
-  data.providerApiKeys[provider] = key
+  if (kind === 'oauth') {
+    if (!data.providerOauthTokens) data.providerOauthTokens = {}
+    data.providerOauthTokens[provider] = key
+    // Clear any stale API key in the same slot — OAuth wins.
+    if (data.providerApiKeys && data.providerApiKeys[provider]) {
+      delete data.providerApiKeys[provider]
+    }
+  } else {
+    if (!data.providerApiKeys) data.providerApiKeys = {}
+    data.providerApiKeys[provider] = key
+    // And clear any stale OAuth token so API-key-set replaces it.
+    if (data.providerOauthTokens && data.providerOauthTokens[provider]) {
+      delete data.providerOauthTokens[provider]
+    }
+  }
 
   fs.mkdirSync(configDir, { recursive: true })
   fs.writeFileSync(credPath, JSON.stringify(data, null, 2), { mode: 0o600 })

@@ -9173,7 +9173,7 @@ Title:`
       }).join('')
 
       const allDone = !msg.streaming
-      const synthHtml = allDone && !msg.pickedLaneIdx && !msg.synthesizing && !msg.synthLane ? `
+      const synthHtml = allDone && msg.pickedLaneIdx == null && !msg.synthesizing && !msg.synthLane ? `
         <div class="council-synth-bar">
           <span>🎭 Pick a favourite, or let a model merge the best of all.</span>
           <button class="council-synth-btn" onclick="councilSynthesize(${msgIdx})">Synthesize</button>

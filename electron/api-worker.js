@@ -53,9 +53,22 @@ dns.lookup = function patchedLookup(hostname, options, callback) {
   })
 }
 
-function getApiKey(provider) {
-  // Ollama runs locally and ignores the key; the OpenAI SDK still requires a non-empty string.
-  if (provider === 'ollama') return 'ollama'
+// Returns { value, isOauth } | null.
+// OAuth tokens (Bearer) beat API keys (x-api-key) if both are present.
+function getCredential(provider) {
+  if (provider === 'ollama') return { value: 'ollama', isOauth: false }
+  const dirs = [path.join(os.homedir(), '.claude'), path.join(os.homedir(), 'claude-local-src')]
+  for (const dir of dirs) {
+    try {
+      const credPath = path.join(dir, '.credentials.json')
+      if (!fs.existsSync(credPath)) continue
+      const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
+      const oauth = data?.providerOauthTokens?.[provider]
+      if (oauth) return { value: oauth, isOauth: true }
+      const apiKey = data?.providerApiKeys?.[provider]
+      if (apiKey) return { value: apiKey, isOauth: false }
+    } catch {}
+  }
   const envMap = {
     anthropic: 'ANTHROPIC_API_KEY',
     openai: 'OPENAI_API_KEY',
@@ -66,19 +79,13 @@ function getApiKey(provider) {
     zhipu: 'ZHIPU_API_KEY',
   }
   const envKey = process.env[envMap[provider]]
-  if (envKey) return envKey
-
-  const dirs = [path.join(os.homedir(), '.claude'), path.join(os.homedir(), 'claude-local-src')]
-  for (const dir of dirs) {
-    try {
-      const credPath = path.join(dir, '.credentials.json')
-      if (fs.existsSync(credPath)) {
-        const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
-        if (data?.providerApiKeys?.[provider]) return data.providerApiKeys[provider]
-      }
-    } catch {}
-  }
+  if (envKey) return { value: envKey, isOauth: false }
   return null
+}
+
+function getApiKey(provider) {
+  const c = getCredential(provider)
+  return c ? c.value : null
 }
 
 function getBaseURL(provider) {
@@ -546,7 +553,19 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const { onActivity = () => {} } = opts
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
-  const client = new Anthropic({ apiKey: getApiKey('anthropic'), timeout: 60000, fetch: globalThis.fetch })
+  // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
+  // token. The SDK takes authToken for Bearer auth. When the credential
+  // came from the OAuth PKCE flow via claude.com, we must send Bearer
+  // plus the anthropic-beta header that unlocks the oauth scope.
+  const cred = getCredential('anthropic') || { value: '', isOauth: false }
+  const clientOpts = { timeout: 60000, fetch: globalThis.fetch }
+  if (cred.isOauth) {
+    clientOpts.authToken = cred.value
+    clientOpts.defaultHeaders = { 'anthropic-beta': 'oauth-2025-04-20' }
+  } else {
+    clientOpts.apiKey = cred.value
+  }
+  const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const allAnthTools = [...(workspacePath ? TOOLS : []), ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
