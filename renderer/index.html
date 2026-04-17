@@ -3864,6 +3864,25 @@
     </div>
   </div>
 
+  <!-- Daily Digest Modal -->
+  <div class="modal-overlay" id="digest-modal">
+    <div class="modal ux-modal">
+      <h2>
+        📅 Daily Digest
+        <button class="modal-close" onclick="toggleDigestModal()">&times;</button>
+      </h2>
+      <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
+        <button class="msg-action-btn" onclick="renderDigestBody(1)">Today</button>
+        <button class="msg-action-btn" onclick="renderDigestBody(7)">Last 7 days</button>
+        <button class="msg-action-btn" onclick="renderDigestBody(30)">Last 30 days</button>
+      </div>
+      <div id="digest-body" class="ux-scroll"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button class="msg-action-btn" onclick="exportDigestMarkdown()">📥 Export as Markdown</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Feedback Journal Modal -->
   <div class="modal-overlay" id="feedback-modal">
     <div class="modal ux-modal">
@@ -4876,6 +4895,155 @@ SUMMARY:`
       }
     })
 
+    // ── Daily Digest ────────────────────────────────────────────────
+    // Rolls up a time window's worth of sessions into a single markdown
+    // brief: titles, goals, tags, total spend, top models, reactions,
+    // TODOs created. Great for end-of-day reflection or standups.
+    let _digestWindowDays = 1
+    function collectDigest(days = 1) {
+      const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
+      const rows = []
+      for (const s of (sessions || [])) {
+        const msgs = s.messages || []
+        // Count a session as "active in window" if any message's ts is newer
+        // than cutoff, or the session id (timestamp) is newer.
+        const newestTs = msgs.reduce((max, m) => Math.max(max, m.ts || 0), 0) || s.id || 0
+        if (newestTs < cutoff) continue
+        let inputTok = 0, outputTok = 0, usd = 0, local = false, calls = 0, up = 0, down = 0
+        const models = new Map()
+        for (const m of msgs) {
+          if (m.role !== 'assistant') continue
+          if (m.council) continue
+          calls++
+          const c = computeMessageCost(m)
+          if (c) {
+            inputTok += c.input
+            outputTok += c.output
+            usd += c.usd
+            if (c.local) local = true
+          }
+          if (m.model) models.set(m.model, (models.get(m.model) || 0) + 1)
+          if (m.reaction?.kind === 'up') up++
+          else if (m.reaction?.kind === 'down') down++
+        }
+        rows.push({
+          id: s.id,
+          title: s.title || 'Untitled',
+          tags: s.tags || [],
+          goal: s.goal,
+          msgCount: msgs.filter(m => !m.streaming).length,
+          calls, inputTok, outputTok, usd, local,
+          models: Array.from(models.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3),
+          todos: s.todos?.items || [],
+          up, down,
+          newestTs,
+        })
+      }
+      return rows.sort((a, b) => b.newestTs - a.newestTs)
+    }
+
+    function digestToMarkdown(days, rows) {
+      if (!rows.length) {
+        const label = days === 1 ? 'today' : `the last ${days} days`
+        return `# Daily Digest\n\n*No sessions ${label}.*`
+      }
+      const label = days === 1 ? 'Today' : `Last ${days} days`
+      const totalCalls = rows.reduce((n, r) => n + r.calls, 0)
+      const totalIn = rows.reduce((n, r) => n + r.inputTok, 0)
+      const totalOut = rows.reduce((n, r) => n + r.outputTok, 0)
+      const totalUsd = rows.reduce((n, r) => n + r.usd, 0)
+      const totalTodosOpen = rows.reduce((n, r) => n + r.todos.filter(t => !t.done).length, 0)
+      const totalTodosDone = rows.reduce((n, r) => n + r.todos.filter(t => t.done).length, 0)
+      const goalsAchieved = rows.filter(r => r.goal?.status === 'achieved').length
+      const goalsActive = rows.filter(r => r.goal?.status === 'active').length
+      const modelTotals = new Map()
+      for (const r of rows) for (const [m, n] of r.models) modelTotals.set(m, (modelTotals.get(m) || 0) + n)
+      const topModels = Array.from(modelTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+
+      const lines = []
+      lines.push(`# 📅 Daily Digest — ${label}`)
+      lines.push('')
+      lines.push(`*Generated ${new Date().toLocaleString()}*`)
+      lines.push('')
+      lines.push('## At a glance')
+      lines.push('')
+      lines.push(`- **${rows.length}** session${rows.length === 1 ? '' : 's'} touched`)
+      lines.push(`- **${totalCalls}** assistant replies`)
+      if (goalsAchieved) lines.push(`- 🎯 **${goalsAchieved}** goal${goalsAchieved === 1 ? '' : 's'} achieved${goalsActive ? `, ${goalsActive} still active` : ''}`)
+      else if (goalsActive) lines.push(`- 🎯 **${goalsActive}** active goal${goalsActive === 1 ? '' : 's'}`)
+      if (totalTodosOpen + totalTodosDone) lines.push(`- ✓ **${totalTodosDone}/${totalTodosOpen + totalTodosDone}** action items done`)
+      lines.push(`- 💬 ${totalIn.toLocaleString()} tokens in · ${totalOut.toLocaleString()} tokens out`)
+      if (totalUsd > 0) lines.push(`- 💰 **${formatUsd(totalUsd)}** estimated spend`)
+      if (topModels.length) {
+        lines.push(`- 📊 Top models: ${topModels.map(([m, n]) => `\`${m}\` (${n})`).join(', ')}`)
+      }
+      lines.push('')
+      lines.push('## Sessions')
+      lines.push('')
+      for (const r of rows) {
+        const goalPrefix = r.goal?.status === 'achieved' ? '✅ '
+                         : r.goal?.status === 'active' ? '🎯 ' : ''
+        const tagChips = r.tags.length ? ` ${r.tags.map(t => '`#' + t + '`').join(' ')}` : ''
+        lines.push(`### ${goalPrefix}${r.title}${tagChips}`)
+        if (r.goal?.text) {
+          const emoji = r.goal.status === 'achieved' ? '✅' : r.goal.status === 'abandoned' ? '✗' : '🎯'
+          lines.push(`> ${emoji} ${r.goal.text}`)
+        }
+        const bits = []
+        bits.push(`${r.calls} replies`)
+        if (r.outputTok) bits.push(`${r.outputTok.toLocaleString()} out`)
+        if (r.usd > 0) bits.push(formatUsd(r.usd))
+        else if (r.local) bits.push('free')
+        if (r.up || r.down) bits.push(`${r.up ? `👍${r.up}` : ''}${r.down ? `👎${r.down}` : ''}`.trim())
+        if (r.models.length) bits.push(r.models.map(([m, n]) => `${m}×${n}`).join(' · '))
+        if (bits.length) lines.push(`*${bits.join(' · ')}*`)
+        const openTodos = r.todos.filter(t => !t.done).slice(0, 5)
+        if (openTodos.length) {
+          lines.push('')
+          lines.push('Open action items:')
+          for (const t of openTodos) lines.push(`- [ ] ${t.text}`)
+        }
+        lines.push('')
+      }
+      return lines.join('\n')
+    }
+
+    function toggleDigestModal() {
+      const modal = document.getElementById('digest-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        _digestWindowDays = 1
+        renderDigestBody(1)
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+    function renderDigestBody(days) {
+      _digestWindowDays = days
+      const body = document.getElementById('digest-body')
+      if (!body) return
+      const rows = collectDigest(days)
+      const md = digestToMarkdown(days, rows)
+      body.innerHTML = `<div class="msg-body" style="line-height:1.6">${renderMarkdown(md)}</div>`
+    }
+    function exportDigestMarkdown() {
+      const rows = collectDigest(_digestWindowDays)
+      const md = digestToMarkdown(_digestWindowDays, rows)
+      const days = _digestWindowDays
+      const dateLabel = new Date().toISOString().slice(0, 10)
+      const filename = `alaude-digest-${days === 1 ? 'today' : `${days}d`}-${dateLabel}.md`
+      const blob = new Blob([md], { type: 'text/markdown' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast?.(`📥 Digest exported — ${rows.length} sessions`, false)
+    }
+
     // ── Session Goal tracker ────────────────────────────────────────
     // Optional one-line objective per session. When set, shows as a chip
     // atop the messages column with quick "✓ Done" / "✗ Abandon" / "Edit"
@@ -5710,6 +5878,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '✅', label: 'Mark goal achieved', search: 'goal done achieved complete mark finish', action: () => { closeCmdPalette(); setGoalStatus('achieved') } },
         { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
         { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
+        { kind: 'action', icon: '📅', label: 'Daily Digest (today + last week)', search: 'digest daily recap summary standup today week activity rollup', action: () => { closeCmdPalette(); toggleDigestModal() } },
       )
       return items
     }
