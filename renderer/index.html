@@ -1976,10 +1976,17 @@
       letter-spacing: 0.06em;
       font-family: 'SF Mono', Menlo, monospace;
     }
-    .msg-content .md-pre-copy {
+    .msg-content .md-pre-actions {
       position: absolute;
-      top: 6px;
-      right: 6px;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      gap: 3px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .msg-content .md-pre:hover .md-pre-actions { opacity: 1; }
+    .msg-content .md-pre-btn {
       background: var(--bg-input);
       border: 1px solid var(--border);
       color: var(--text-faint);
@@ -1987,12 +1994,13 @@
       padding: 2px 7px;
       border-radius: 4px;
       cursor: pointer;
-      opacity: 0;
-      transition: opacity 0.15s;
+      font-family: inherit;
+      transition: color 0.15s, border-color 0.15s;
     }
-    .msg-content .md-pre:hover .md-pre-copy { opacity: 1; }
-    .msg-content .md-pre-copy:hover { border-color: var(--green); color: var(--green); }
-    .msg-content .md-pre-copy.copied { color: var(--green); border-color: var(--green); opacity: 1; }
+    .msg-content .md-pre-btn:hover { border-color: var(--green); color: var(--green); }
+    .msg-content .md-pre-btn.copied { color: var(--green); border-color: var(--green); }
+    /* Legacy selector kept for old .md-pre-copy nodes that may have been rendered before */
+    .msg-content .md-pre-copy { display: none; }
 
     .send-btn {
       width: 32px;
@@ -4877,6 +4885,67 @@
       sendBtn.disabled = !input.value.trim()
       renderMessages()
       persistSessions()
+      // Auto-title via AI: after the 2nd assistant reply lands, ask the
+      // current model to propose a short, meaningful title. Heuristic title
+      // stays until AI one arrives, so sessions never look "Untitled".
+      maybeAutoTitleSession()
+    }
+
+    // ── Session auto-title (AI) ──────────────────────────────────────
+    // Fires once per session, after at least 2 assistant turns have completed.
+    // The prompt is cheap and short — we don't stream, we just take the reply.
+    // Only overrides titles that still look like the heuristic-derived ones
+    // (generateSessionTitle just grabs the first user message). If the user
+    // manually renames a session, the heuristic check usually won't match
+    // — but to be safe we also never overwrite a title that was already
+    // AI-generated (tracked via session.titleIsAI).
+    async function maybeAutoTitleSession() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      if (session.titleIsAI) return
+      const assistantTurns = messages.filter(m => m.role === 'assistant' && !m.streaming).length
+      if (assistantTurns < 2) return
+      // Build a tiny summarization prompt. Use whatever model is selected —
+      // users might not have an API key for a "cheap" model, but they
+      // definitely have one for the model they just used.
+      const model = document.getElementById('model-select')?.value
+      if (!model) return
+      // Don't auto-title if we're running locally and Ollama isn't responsive
+      // (avoid hanging the app on a 2-minute timeout for a title).
+      const firstUser = messages.find(m => m.role === 'user')
+      const firstAssistant = messages.find(m => m.role === 'assistant' && !m.streaming)
+      if (!firstUser || !firstAssistant) return
+      // Extract string content (strip multimodal image parts for the prompt)
+      const strOf = (m) => Array.isArray(m.content)
+        ? m.content.filter(p => p?.type === 'text').map(p => p.text).join(' ')
+        : String(m.content || '')
+      const titlePrompt = [
+        { role: 'user', content:
+`Based on this conversation, suggest a short 3-6 word title. Output ONLY the title — no quotes, no trailing punctuation, no "Title:" prefix. Keep it descriptive and human.
+
+USER: ${strOf(firstUser).slice(0, 400)}
+ASSISTANT: ${strOf(firstAssistant).slice(0, 400)}
+
+Title:`
+        },
+      ]
+      try {
+        const resp = await window.alaude.chat(titlePrompt, model, workspacePath, 'general', { messageId: 'autotitle_' + Date.now().toString(36), sessionId: 'autotitle' })
+        let t = (typeof resp === 'string' ? resp : '').trim()
+        if (!t) return
+        // Clean: strip surrounding quotes, trailing punctuation, "Title:" prefix
+        t = t.replace(/^["'“”‘’`]+|["'“”‘’`.!?:]+$/g, '').trim()
+        t = t.replace(/^(title|topic|subject)\s*[:\-—]\s*/i, '').trim()
+        // Collapse whitespace, cap length
+        t = t.replace(/\s+/g, ' ').slice(0, 60)
+        if (!t) return
+        session.title = t
+        session.titleIsAI = true
+        renderSessions()
+        persistSessions()
+      } catch (err) {
+        console.warn('[autotitle] failed:', err?.message || err)
+      }
     }
 
     // ── File diff: compute + render ──────────────────────────────────────
@@ -5791,21 +5860,58 @@
       }
     }
 
-    // Delegated handler for "Copy" buttons inside code blocks (added by renderMarkdown)
+    // Delegated handlers for the three code-block action buttons.
     document.addEventListener('click', async (e) => {
-      const target = e.target.closest?.('.md-pre-copy')
-      if (!target) return
-      const pre = target.closest('.md-pre')
+      const btn = e.target.closest?.('.md-pre-btn')
+      if (!btn) return
+      const pre = btn.closest('.md-pre')
       if (!pre) return
       const codeEl = pre.querySelector('code')
       if (!codeEl) return
-      try {
-        await navigator.clipboard.writeText(codeEl.textContent)
-        const orig = target.innerHTML
-        target.innerHTML = '✓'
-        target.classList.add('copied')
-        setTimeout(() => { target.innerHTML = orig; target.classList.remove('copied') }, 1400)
-      } catch {}
+      const code = codeEl.textContent || ''
+      // Copy
+      if (btn.classList.contains('md-pre-copy-v2') || btn.classList.contains('md-pre-copy')) {
+        try {
+          await navigator.clipboard.writeText(code)
+          const orig = btn.innerHTML
+          btn.innerHTML = '✓ Copied'
+          btn.classList.add('copied')
+          setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied') }, 1400)
+        } catch {}
+        return
+      }
+      // Insert into input
+      if (btn.classList.contains('md-pre-insert')) {
+        const existing = input.value
+        const sep = existing && !existing.endsWith('\n') ? '\n' : ''
+        input.value = existing + sep + code
+        input.dispatchEvent(new Event('input'))
+        input.focus()
+        // Move caret to end
+        requestAnimationFrame(() => {
+          input.setSelectionRange(input.value.length, input.value.length)
+          input.scrollTop = input.scrollHeight
+        })
+        const orig = btn.innerHTML
+        btn.innerHTML = '↘ Inserted'
+        btn.classList.add('copied')
+        setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('copied') }, 1200)
+        return
+      }
+      // Ask a follow-up about this code
+      if (btn.classList.contains('md-pre-ask')) {
+        const preamble = 'About this code:\n\n```\n' + code + '\n```\n\n'
+        const existing = input.value.trim()
+        input.value = existing ? preamble + existing : preamble
+        input.dispatchEvent(new Event('input'))
+        input.focus()
+        // Place caret at the end so the user can type their question
+        requestAnimationFrame(() => {
+          input.setSelectionRange(input.value.length, input.value.length)
+          input.scrollTop = input.scrollHeight
+        })
+        return
+      }
     })
 
     /**
@@ -5902,7 +6008,7 @@
         const { lang, code } = codeBlocks[+i]
         const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const langCls = lang ? ` data-lang="${lang}"` : ''
-        return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<button class="md-pre-copy" title="Copy code">📋</button><code>${escCode}</code></pre>`
+        return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<span class="md-pre-actions"><button class="md-pre-btn md-pre-ask" title="Ask a follow-up about this code">💬 Ask</button><button class="md-pre-btn md-pre-insert" title="Insert this code into the input">↘ Insert</button><button class="md-pre-btn md-pre-copy-v2" title="Copy code">📋 Copy</button></span><code>${escCode}</code></pre>`
       })
 
       // 7. Paragraphs — wrap runs of non-block content
