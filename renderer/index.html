@@ -10780,6 +10780,11 @@ Title:`
           // uncaught errors inside the artifact and postMessages them back
           // to the parent so the user sees a clear banner instead of a
           // silent blank iframe.
+          // Injected at the top of the iframe: error capture + keyboard-focus
+          // helpers. Games need focus for key events, and a sandboxed iframe
+          // doesn't receive them unless the user clicks inside OR we
+          // explicitly focus it. We call window.focus() on load and on any
+          // pointer event.
           const errorHook = '<script>'
             + '(function(){'
             + '  function send(err){'
@@ -10787,6 +10792,10 @@ Title:`
             + '  }'
             + '  window.addEventListener("error", e => send(e.error || e.message || "unknown error"));'
             + '  window.addEventListener("unhandledrejection", e => send(e.reason || "unhandled promise rejection"));'
+            + '  function focusMe(){ try { window.focus(); document.body && document.body.focus && document.body.focus(); } catch(_) {} }'
+            + '  window.addEventListener("load", focusMe);'
+            + '  document.addEventListener("pointerdown", focusMe);'
+            + '  document.addEventListener("click", focusMe);'
             + '})();'
             + '<\/script>'
           // Auto-wrap: if the block doesn't include <html> or <body>, wrap it
@@ -10826,7 +10835,8 @@ Title:`
                 <button onclick="mdaCopySource(this)" title="Copy HTML">📋</button>
               </div>
               <div class="md-artifact-error-banner" style="display:none;padding:8px 12px;background:#fee;color:#a00;border-bottom:1px solid #fcc;font-family:monospace;font-size:11px;white-space:pre-wrap"></div>
-              <iframe class="md-artifact-frame" sandbox="allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox allow-forms" srcdoc="${srcdoc}"></iframe>
+              <iframe class="md-artifact-frame" tabindex="0" sandbox="allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox allow-forms" onload="this.focus();try{this.contentWindow.focus()}catch(_){}" onclick="this.focus();try{this.contentWindow.focus()}catch(_){}" srcdoc="${srcdoc}"></iframe>
+              <div class="md-artifact-hint" style="padding:4px 10px;font-size:10px;color:var(--text-faint);font-style:italic;border-top:1px solid var(--border-soft)">💡 Click inside the preview to give it keyboard focus</div>
               <pre class="md-artifact-src"><code>${escCode}</code></pre>
             </div>`
         }
