@@ -10450,6 +10450,26 @@ Title:`
         showRewindToast?.('📋 Copied artifact source', false)
       } catch {}
     }
+    // Listen for errors inside artifact iframes (posted by our injected hook)
+    // and surface them as a visible red banner on the owning artifact card.
+    window.addEventListener('message', (e) => {
+      const data = e.data
+      if (!data || !data.__alaudeArtifactError) return
+      // Find which iframe is the source
+      for (const root of document.querySelectorAll('.md-artifact')) {
+        const iframe = root.querySelector('.md-artifact-frame')
+        if (iframe && iframe.contentWindow === e.source) {
+          const banner = root.querySelector('.md-artifact-error-banner')
+          if (banner) {
+            banner.style.display = 'block'
+            banner.textContent = '⚠ Artifact error: ' + (data.message || 'unknown')
+              + (data.stack ? '\n' + data.stack.split('\n').slice(0, 3).join('\n') : '')
+          }
+          console.warn('[alaude artifact error]', data.message, data.stack)
+          break
+        }
+      }
+    })
 
     // SVG sanitizer: strip script, event handlers, and any JavaScript-carrying
     // attribute / URL scheme so rendered SVGs are safe. Uses DOMParser for
@@ -10756,15 +10776,42 @@ Title:`
         // artifact can't touch your chat data.
         // Detection: html/artifact lang + any recognisable HTML-ish tag.
         if ((lc === 'html' || lc === 'artifact') && /<[a-z!][a-z0-9]*\b/i.test(code)) {
+          // Instrumentation: inject a top-of-document script that catches
+          // uncaught errors inside the artifact and postMessages them back
+          // to the parent so the user sees a clear banner instead of a
+          // silent blank iframe.
+          const errorHook = '<script>'
+            + '(function(){'
+            + '  function send(err){'
+            + '    try { parent.postMessage({__alaudeArtifactError:true, message: String((err && err.message) || err), stack: (err && err.stack) || ""}, "*") } catch(_) {}'
+            + '  }'
+            + '  window.addEventListener("error", e => send(e.error || e.message || "unknown error"));'
+            + '  window.addEventListener("unhandledrejection", e => send(e.reason || "unhandled promise rejection"));'
+            + '})();'
+            + '<\/script>'
           // Auto-wrap: if the block doesn't include <html> or <body>, wrap it
           // in a minimal scaffold so bare fragments (a script or a handful of
           // divs) still work as a runnable artifact.
           const looksFull = /<(!doctype|html|body)\b/i.test(code)
-          const wrapped = looksFull ? code : `<!doctype html>
-<html><head><meta charset="utf-8"><style>
+          let wrapped
+          if (looksFull) {
+            // Inject the error hook right after <head> (or at the very top if
+            // no <head>). Simple insertion: replace the first <head...> open
+            // tag with itself + the hook. Falls back to prepending if no head.
+            if (/<head\b[^>]*>/i.test(code)) {
+              wrapped = code.replace(/<head\b[^>]*>/i, (m) => m + errorHook)
+            } else if (/<html\b[^>]*>/i.test(code)) {
+              wrapped = code.replace(/<html\b[^>]*>/i, (m) => m + '<head>' + errorHook + '</head>')
+            } else {
+              wrapped = errorHook + code
+            }
+          } else {
+            wrapped = `<!doctype html>
+<html><head><meta charset="utf-8">${errorHook}<style>
   html,body{margin:0;padding:0;background:#fff;color:#111;font-family:-apple-system,system-ui,sans-serif}
   body{padding:12px}
 </style></head><body>${code}</body></html>`
+          }
           const srcdoc = wrapped
             .replace(/&/g, '&amp;')
             .replace(/"/g, '&quot;')
@@ -10778,6 +10825,7 @@ Title:`
                 <button onclick="mdaToggleTall(this)" title="Taller viewport">⤢</button>
                 <button onclick="mdaCopySource(this)" title="Copy HTML">📋</button>
               </div>
+              <div class="md-artifact-error-banner" style="display:none;padding:8px 12px;background:#fee;color:#a00;border-bottom:1px solid #fcc;font-family:monospace;font-size:11px;white-space:pre-wrap"></div>
               <iframe class="md-artifact-frame" sandbox="allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox allow-forms" srcdoc="${srcdoc}"></iframe>
               <pre class="md-artifact-src"><code>${escCode}</code></pre>
             </div>`

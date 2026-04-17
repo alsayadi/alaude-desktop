@@ -58,6 +58,14 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'))
 
+  // DEV helper: ALAUDE_DEVTOOLS=1 auto-opens devtools so artifact-iframe
+  // script errors surface immediately. Ship as detached pane.
+  if (process.env.ALAUDE_DEVTOOLS === '1') {
+    mainWindow.webContents.once('did-finish-load', () => {
+      mainWindow.webContents.openDevTools({ mode: 'detach' })
+    })
+  }
+
   // Allow DevTools in packaged + dev builds so renderer-side bugs (chart
   // errors, artifact script issues) are debuggable. ⌘⌥I on macOS, Ctrl+Shift+I
   // elsewhere. Also relay any uncaught renderer errors to main's stderr so
