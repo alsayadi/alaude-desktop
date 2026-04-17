@@ -4015,6 +4015,44 @@
       document.getElementById('snippet-editor').style.display = 'flex'
       document.getElementById('snip-trigger').focus()
     }
+
+    // Promote a past user message into a reusable prompt snippet.
+    // Opens the snippet modal with trigger/name pre-guessed from the text
+    // and the body pre-filled. User still confirms or edits before saving.
+    function snippetFromMessage(idx) {
+      const msg = messages[idx]
+      if (!msg || msg.role !== 'user') return
+      const raw = Array.isArray(msg.content)
+        ? msg.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+        : String(msg.content || '')
+      const body = raw.trim()
+      if (!body) { showRewindToast?.('This message has no text to save', true); return }
+
+      // Suggest a slash-trigger from the first 2–3 words (lowercased, hyphenated).
+      const words = body.split(/\s+/).slice(0, 3).join(' ')
+      const slug = words.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 18) || 'prompt'
+      // Avoid collisions with existing triggers.
+      let trigger = '/' + slug, n = 2
+      const existing = new Set(snippets.map(s => s.trigger))
+      while (existing.has(trigger)) { trigger = '/' + slug + '-' + n; n++ }
+      // Title: first line, capped.
+      const firstLine = body.split('\n')[0].trim()
+      const name = firstLine.length > 40 ? firstLine.slice(0, 40).trim() + '…' : firstLine
+
+      // Open modal (no-op if already open) and populate editor form.
+      const modal = document.getElementById('snippet-modal')
+      if (modal && !(modal.classList.contains('show') || modal.style.display === 'flex')) toggleSnippetModal()
+      snippetEditId = '__new__'
+      document.getElementById('snip-trigger').value = trigger
+      document.getElementById('snip-name').value = name
+      document.getElementById('snip-desc').value = 'Saved from session "' + (sessions.find(s => s.id === currentSessionId)?.title || 'chat') + '"'
+      document.getElementById('snip-body').value = body
+      document.getElementById('snippet-editor').style.display = 'flex'
+      // Focus the name field so the user can quickly refine it.
+      document.getElementById('snip-name').focus()
+      document.getElementById('snip-name').select()
+      showRewindToast?.('✨ Snippet draft ready — confirm the name & save', false)
+    }
     function snippetEdit(id) {
       const s = snippets.find(x => x.id === id)
       if (!s) return
@@ -5845,9 +5883,13 @@ Title:`
         const memChip = (msg.role === 'assistant' && !msg.streaming && msg.memoriesUsed && msg.memoriesUsed.length)
           ? `<div><span class="memory-chip" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'" title="Click to expand">🧠 ${msg.memoriesUsed.length} ${msg.memoriesUsed.length === 1 ? 'memory' : 'memories'} used</span><div class="memory-chip-expanded" style="display:none">${msg.memoriesUsed.map(m => `<div class="mem-item">· ${escapeHtml(m.text)}</div>`).join('')}<div style="margin-top:6px"><a onclick="toggleMemoryModal()" style="color:var(--green);cursor:pointer;font-size:11px">Manage memories →</a></div></div></div>`
           : ''
-        // Remember button on user messages (so user can curate long-term facts).
+        // Remember + Save-as-Snippet buttons on user messages.
+        // Remember → long-term facts memory. Save-as-Snippet → reusable prompt template.
         const userRememberBtn = (msg.role === 'user' && (msg.content || '').length > 2)
-          ? `<div class="msg-actions"><button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i})" title="Save this to long-term memory">🧠 Remember</button></div>`
+          ? `<div class="msg-actions">
+               <button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i})" title="Save this to long-term memory">🧠 Remember</button>
+               <button class="msg-action-btn" onclick="snippetFromMessage(${i})" title="Turn this prompt into a reusable snippet">✨ Save as snippet</button>
+             </div>`
           : ''
         const statsPanel = (msg.statsFinal && msg.statsPanelOpen)
           ? renderStatsPanel(msg.statsFinal)
