@@ -129,6 +129,85 @@
       display: flex;
     }
 
+    /* ─── Focus Mode (F) ────────────────────────────────────────────
+       Zen pass: hide sidebar + topbar + workspace-bar for distraction-
+       free writing. Toggles via the F key (when not typing) or the
+       command palette. A subtle exit chip appears so users don't feel
+       trapped. */
+    body.focus-mode .sidebar,
+    body.focus-mode .topbar,
+    body.focus-mode .conv-minimap,
+    body.focus-mode .workspace-bar { display: none !important; }
+    body.focus-mode .messages { padding-top: 18px; }
+    .focus-exit-chip {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 90;
+      background: var(--bg-input);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+      -webkit-app-region: no-drag;
+    }
+    .focus-exit-chip:hover { color: var(--green); border-color: var(--green); }
+    body.focus-mode .focus-exit-chip { display: block; }
+
+    /* ─── Pinned Messages ──────────────────────────────────────────── */
+    .pin-tray {
+      position: sticky;
+      top: 28px;
+      z-index: 4;
+      margin: 4px 18px 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: none;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .pin-tray.show { display: block; }
+    .pin-tray-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .pin-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      cursor: pointer;
+      border-bottom: 1px dashed var(--border);
+    }
+    .pin-item:last-child { border-bottom: 0; }
+    .pin-item-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pin-item:hover .pin-item-text { color: var(--green); }
+    .pin-remove {
+      color: var(--text-faint);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .pin-item:hover .pin-remove { opacity: 0.7; }
+    .pin-remove:hover { color: #e74c3c; opacity: 1 !important; }
+    .msg.pinned { border-left: 3px solid var(--green); padding-left: 10px; background: color-mix(in srgb, var(--green) 4%, transparent); }
+
     /* ─── Sidebar ───────────────────────────────────────────────────────── */
     .sidebar {
       width: var(--sidebar-w);
@@ -2657,6 +2736,8 @@
     </div>
 
     <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
+    <div class="pin-tray" id="pin-tray"></div>
+    <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" />
@@ -3245,6 +3326,119 @@
     // on a menu item still registers before the menu hides).
     input.addEventListener('blur', () => setTimeout(closeSlashMenu, 150))
 
+    // ── Focus Mode ──────────────────────────────────────────────────────
+    // Zen pass: press F (outside inputs) or use the command palette to
+    // collapse the sidebar, topbar, and workspace-bar for distraction-free
+    // chat. Stays on across sessions via localStorage.
+    const LS_FOCUS = 'alaude:focus:v1'
+    function applyFocusMode() {
+      const on = localStorage.getItem(LS_FOCUS) === '1'
+      document.body.classList.toggle('focus-mode', on)
+    }
+    function toggleFocusMode() {
+      const now = localStorage.getItem(LS_FOCUS) === '1'
+      localStorage.setItem(LS_FOCUS, now ? '0' : '1')
+      applyFocusMode()
+    }
+    applyFocusMode()
+
+    // ── Pin a message ───────────────────────────────────────────────────
+    // Pinning marks a message for the pin-tray (sticky bar above the chat)
+    // so important context stays visible as you scroll. Click a pinned
+    // entry to jump back to its original location.
+    function togglePin(idx) {
+      const msg = messages[idx]
+      if (!msg) return
+      msg.pinned = !msg.pinned
+      persistSessions()
+      renderMessages()
+      renderPinTray()
+    }
+    function renderPinTray() {
+      const tray = document.getElementById('pin-tray')
+      if (!tray) return
+      const pinned = messages
+        .map((m, i) => ({ m, i }))
+        .filter(({ m }) => m.pinned && !m.streaming)
+      if (!pinned.length) {
+        tray.classList.remove('show')
+        tray.innerHTML = ''
+        return
+      }
+      const items = pinned.map(({ m, i }) => {
+        const preview = (m.content || '').slice(0, 120).replace(/\n+/g, ' ')
+        const roleIcon = m.role === 'user' ? '👤' : '✨'
+        return `<div class="pin-item" onclick="scrollToMsg(${i})">
+          <span>${roleIcon}</span>
+          <span class="pin-item-text">${escapeHtml(preview)}</span>
+          <button class="pin-remove" onclick="event.stopPropagation(); togglePin(${i})" title="Unpin">×</button>
+        </div>`
+      }).join('')
+      tray.innerHTML = `<div class="pin-tray-label">📌 Pinned (${pinned.length})</div>${items}`
+      tray.classList.add('show')
+    }
+
+    // ── Export current session as Markdown ──────────────────────────────
+    // Emits a self-contained markdown transcript. Branches are enumerated
+    // as a separate "Branches" section at the top with links to their
+    // fork points — if the user reopens the Alaude file ecosystem later,
+    // this is the source of truth for reconstruction.
+    function exportSessionMarkdown() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      const lines = []
+      lines.push(`# ${session.title || 'Alaude session'}`)
+      lines.push('')
+      lines.push(`*Exported: ${new Date().toISOString()}*`)
+      if (session.parentId) {
+        const parent = sessions.find(p => p.id === session.parentId)
+        if (parent) lines.push(`*Forked from: "${parent.title}" at message ${(session.forkPoint ?? 0) + 1}*`)
+      }
+      // Show descendants (branches forked off THIS session)
+      const branches = sessions.filter(s => s.parentId === session.id)
+      if (branches.length) {
+        lines.push('')
+        lines.push('## Branches')
+        for (const b of branches) {
+          lines.push(`- **${b.title}** — forked at message ${(b.forkPoint ?? 0) + 1} (${(b.messages || []).length} msgs)`)
+        }
+      }
+      lines.push('')
+      lines.push('---')
+      lines.push('')
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i]
+        if (m.streaming) continue
+        const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Alaude')
+        const meta = m.model ? ` · _${m.model}_` : ''
+        const pin = m.pinned ? ' 📌' : ''
+        lines.push(`### ${who}${meta}${pin}`)
+        lines.push('')
+        if (m.council && m.lanes) {
+          for (const lane of m.lanes) {
+            lines.push(`**${lane.model}:**`)
+            lines.push('')
+            lines.push((lane.content || '').trim())
+            lines.push('')
+          }
+        } else {
+          lines.push((m.content || '').trim())
+        }
+        lines.push('')
+      }
+      const md = lines.join('\n')
+      const filename = (session.title || 'alaude-session').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase() + '.md'
+      // Trigger browser-style download via data URI
+      const blob = new Blob([md], { type: 'text/markdown' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast(`📥 Exported "${filename}"`, false)
+    }
+
     // ── Command Palette ──────────────────────────────────────────────────
     let cmdPaletteItems = []
     let cmdPaletteActiveIdx = 0
@@ -3309,6 +3503,8 @@
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
+        { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
+        { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
       )
       return items
     }
@@ -3653,6 +3849,16 @@
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault()
         toggleThinkingGraph()
+      }
+      // Cmd/Ctrl+E → export current session as Markdown
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e' && !e.shiftKey) {
+        e.preventDefault()
+        exportSessionMarkdown()
+      }
+      // F → toggle Focus Mode (only when NOT typing)
+      if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
+        e.preventDefault()
+        toggleFocusMode()
       }
       // ? (shift + / on US layout) → show keyboard shortcuts
       // only when NOT typing in an input/textarea
@@ -4181,6 +4387,7 @@
           ? `<div class="msg-actions">
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
+              <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
               ${i < messages.length - 1 ? `<button class="msg-action-btn" onclick="rewindTo(${i})" title="Rewind conversation to this point — the rest is saved as a branch">↶ Rewind</button>` : ''}
               <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">⎇ Branch</button>
              </div>`
@@ -4218,7 +4425,7 @@
         const actionsFull = actions
           ? actions.replace('</div>', regenBtn + '</div>')
           : (isLastAssistant ? `<div class="msg-actions">${regenBtn}</div>` : '')
-        html += `<div class="msg">
+        html += `<div class="msg ${msg.pinned ? 'pinned' : ''}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
             ${modelBadge}
@@ -4267,6 +4474,7 @@
       updateScrollFab?.()
       updateContextRadar?.()
       renderConvMinimap?.()
+      renderPinTray?.()
     }
 
     async function saveMessage(idx) {
