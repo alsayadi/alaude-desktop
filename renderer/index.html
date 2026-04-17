@@ -208,6 +208,50 @@
     .pin-remove:hover { color: #e74c3c; opacity: 1 !important; }
     .msg.pinned { border-left: 3px solid var(--green); padding-left: 10px; background: color-mix(in srgb, var(--green) 4%, transparent); }
 
+    /* ─── Message reactions (thumbs up/down) ───────────────────── */
+    .msg.reacted-up { border-left: 3px solid var(--green); padding-left: 10px; }
+    .msg.reacted-down { border-left: 3px solid #e67e22; padding-left: 10px; }
+    .reaction-btn.active[data-kind="up"] { background: color-mix(in srgb, var(--green) 18%, transparent); border-color: var(--green); color: var(--green); }
+    .reaction-btn.active[data-kind="down"] { background: color-mix(in srgb, #e67e22 18%, transparent); border-color: #e67e22; color: #e67e22; }
+    .reaction-note {
+      color: var(--text-faint);
+      font-size: 10px;
+      font-style: italic;
+      margin-top: 4px;
+      padding: 4px 8px;
+      background: color-mix(in srgb, #e67e22 6%, transparent);
+      border-left: 2px solid #e67e22;
+      border-radius: 3px;
+    }
+    /* Feedback Journal modal: reuse .ux-modal shell, style the list rows */
+    .fb-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .fb-row:hover { background: var(--bg-hover); }
+    .fb-row-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .fb-row-body { color: var(--text); line-height: 1.5; }
+    .fb-kind-up { color: var(--green); font-weight: 600; }
+    .fb-kind-down { color: #e67e22; font-weight: 600; }
+    .fb-note {
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 11px;
+      border-left: 2px solid #e67e22;
+      padding-left: 6px;
+    }
+
     /* ─── Session Summary Card ─────────────────────────────────────── */
     .session-summary {
       margin: 6px auto 0;
@@ -3733,6 +3777,24 @@
     </div>
   </div>
 
+  <!-- Feedback Journal Modal -->
+  <div class="modal-overlay" id="feedback-modal">
+    <div class="modal ux-modal">
+      <h2>
+        📒 Feedback Journal
+        <button class="modal-close" onclick="toggleFeedbackModal()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
+        Every 👍 and 👎 you've tapped on an assistant reply, across every session.
+        Click any row to jump back to the message.
+      </div>
+      <div id="feedback-body" class="ux-scroll"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button class="msg-action-btn" onclick="exportFeedbackJsonl()">📥 Export JSONL</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Model Performance Modal -->
   <div class="modal-overlay" id="model-perf-modal">
     <div class="modal ux-modal">
@@ -4664,6 +4726,146 @@ SUMMARY:`
       }
     }
 
+    // ── Message reactions + Feedback Journal ────────────────────────
+    // 👍/👎 on any assistant message. 👎 prompts for a 1-line note so the
+    // feedback is useful beyond a binary. Reactions live on the message
+    // itself (persists with the session) and power the Feedback Journal
+    // modal that aggregates across every session + exports as JSONL.
+    function setReaction(idx, kind) {
+      const msg = messages[idx]
+      if (!msg) return
+      // Toggle off if re-clicked with the same kind
+      if (msg.reaction?.kind === kind) {
+        delete msg.reaction
+        persistSessions()
+        renderMessages()
+        return
+      }
+      let note = null
+      if (kind === 'down') {
+        const raw = window.prompt('What could be better about this response? (optional, 1 line)')
+        if (raw == null) return // user cancelled
+        note = raw.trim().slice(0, 200) || null
+      }
+      msg.reaction = { kind, note, ts: Date.now() }
+      persistSessions()
+      renderMessages()
+      showRewindToast?.(kind === 'up' ? '👍 Marked as good' : '👎 Feedback saved', false)
+    }
+
+    function collectFeedback() {
+      // Walk every session + its messages; flatten into a feedback list with
+      // enough context (the preceding user turn) to be useful for fine-tuning.
+      const rows = []
+      for (const s of (sessions || [])) {
+        const msgs = s.messages || []
+        for (let i = 0; i < msgs.length; i++) {
+          const m = msgs[i]
+          if (!m.reaction?.kind) continue
+          const strOf = (mm) => Array.isArray(mm?.content)
+            ? mm.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+            : String(mm?.content || '')
+          // The closest preceding user message is the prompt that elicited this reply.
+          let userPrompt = ''
+          for (let j = i - 1; j >= 0; j--) {
+            if (msgs[j]?.role === 'user') { userPrompt = strOf(msgs[j]); break }
+          }
+          rows.push({
+            sessionId: s.id,
+            sessionTitle: s.title || 'Untitled',
+            msgIdx: i,
+            model: m.model || '',
+            kind: m.reaction.kind,
+            note: m.reaction.note || '',
+            ts: m.reaction.ts || m.ts || 0,
+            userPrompt,
+            assistantReply: strOf(m),
+          })
+        }
+      }
+      return rows.sort((a, b) => b.ts - a.ts)
+    }
+
+    function toggleFeedbackModal() {
+      const modal = document.getElementById('feedback-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        renderFeedbackBody()
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+
+    function renderFeedbackBody() {
+      const body = document.getElementById('feedback-body')
+      if (!body) return
+      const rows = collectFeedback()
+      if (!rows.length) {
+        body.innerHTML = `
+          <div style="padding:32px 16px;text-align:center;color:var(--text-faint)">
+            <div style="font-size:36px">📒</div>
+            <div style="margin-top:8px">No feedback yet. Click 👍 or 👎 on any reply to start tracking.</div>
+          </div>`
+        return
+      }
+      const up = rows.filter(r => r.kind === 'up').length
+      const down = rows.length - up
+      body.innerHTML = `
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">
+          <span><strong style="color:var(--green)">👍 ${up}</strong> good</span>
+          <span><strong style="color:#e67e22">👎 ${down}</strong> poor</span>
+          <span style="color:var(--text-faint)">${rows.length} total</span>
+        </div>
+        ${rows.map(r => {
+          const kindCls = r.kind === 'up' ? 'fb-kind-up' : 'fb-kind-down'
+          const kindIcon = r.kind === 'up' ? '👍' : '👎'
+          const when = r.ts ? formatRelTime(r.ts) : ''
+          const promptPreview = r.userPrompt.slice(0, 160).replace(/\s+/g, ' ')
+          const replyPreview = r.assistantReply.slice(0, 240).replace(/\s+/g, ' ')
+          return `
+            <div class="fb-row" onclick="closeFeedbackModal(); switchSession(${r.sessionId}); setTimeout(() => scrollToMsg?.(${r.msgIdx}), 120)">
+              <div class="fb-row-head">
+                <span class="${kindCls}">${kindIcon} ${r.kind}</span>
+                <span style="color:var(--text-faint)">·</span>
+                <span style="font-family:monospace">${escapeHtml(r.model || 'unknown')}</span>
+                <span style="color:var(--text-faint)">·</span>
+                <span>${escapeHtml(r.sessionTitle)}</span>
+                <span style="color:var(--text-faint);margin-left:auto">${escapeHtml(when)}</span>
+              </div>
+              <div class="fb-row-body"><strong style="color:var(--text-faint)">Q:</strong> ${escapeHtml(promptPreview)}${r.userPrompt.length > 160 ? '…' : ''}</div>
+              <div class="fb-row-body" style="color:var(--text-dim)"><strong style="color:var(--text-faint)">A:</strong> ${escapeHtml(replyPreview)}${r.assistantReply.length > 240 ? '…' : ''}</div>
+              ${r.note ? `<div class="fb-note">"${escapeHtml(r.note)}"</div>` : ''}
+            </div>`
+        }).join('')}`
+    }
+    function closeFeedbackModal() {
+      document.getElementById('feedback-modal')?.classList.remove('show')
+    }
+
+    function exportFeedbackJsonl() {
+      const rows = collectFeedback()
+      if (!rows.length) { showRewindToast?.('No feedback yet', true); return }
+      const lines = rows.map(r => JSON.stringify({
+        kind: r.kind,
+        note: r.note || null,
+        model: r.model,
+        ts: new Date(r.ts || Date.now()).toISOString(),
+        session: r.sessionTitle,
+        prompt: r.userPrompt,
+        response: r.assistantReply,
+      }))
+      const blob = new Blob([lines.join('\n')], { type: 'application/x-ndjson' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alaude-feedback-${new Date().toISOString().slice(0, 10)}.jsonl`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast?.(`📥 Exported ${rows.length} feedback rows`, false)
+    }
+
     // ── Session TODO extraction ─────────────────────────────────────
     // Scans the conversation with the current model and pulls out action
     // items as a persistent checklist per session. Items can also be added
@@ -5090,6 +5292,7 @@ JSON:`
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
         { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
+        { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
       )
       return items
     }
@@ -6108,8 +6311,13 @@ Title:`
           continue
         }
 
+        const reactionKind = msg.reaction?.kind
+        const upActive = reactionKind === 'up' ? ' active' : ''
+        const downActive = reactionKind === 'down' ? ' active' : ''
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
+              <button class="msg-action-btn reaction-btn${upActive}" data-kind="up" onclick="setReaction(${i}, 'up')" title="Mark as a good response">👍</button>
+              <button class="msg-action-btn reaction-btn${downActive}" data-kind="down" onclick="setReaction(${i}, 'down')" title="Mark as a poor response (you'll be asked for a note)">👎</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
@@ -6201,7 +6409,10 @@ Title:`
         const statsPanel = (msg.statsFinal && msg.statsPanelOpen)
           ? renderStatsPanel(msg.statsFinal)
           : ''
-        html += `<div class="msg ${msg.pinned ? 'pinned' : ''}" data-msg-idx="${i}">
+        const reactionClass = msg.reaction?.kind === 'up' ? ' reacted-up' : msg.reaction?.kind === 'down' ? ' reacted-down' : ''
+        const reactionNote = (msg.reaction?.kind === 'down' && msg.reaction?.note)
+          ? `<div class="reaction-note">👎 ${escapeHtml(msg.reaction.note)}</div>` : ''
+        html += `<div class="msg ${msg.pinned ? 'pinned' : ''}${reactionClass}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
             ${modelBadge}
@@ -6210,6 +6421,7 @@ Title:`
             ${timestamp}
           </div>
           <div class="msg-content">${body}</div>
+          ${reactionNote}
           ${statsPanel}
           ${memChip}
           ${actionsFull || userRememberBtn}
