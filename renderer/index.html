@@ -3011,6 +3011,64 @@
       overflow-x: auto;
     }
     .msg-content .md-svg > svg { max-width: 100%; height: auto; }
+
+    /* ─── HTML Artifacts (sandboxed iframes) ───────────────────── */
+    .md-artifact {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-input);
+    }
+    .md-artifact-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: color-mix(in srgb, var(--border) 40%, transparent);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-faint);
+      border-bottom: 1px solid var(--border);
+    }
+    .md-artifact-head .mda-label { flex: 1; }
+    .md-artifact-head button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .md-artifact-head button:hover { border-color: var(--green); color: var(--green); }
+    .md-artifact-head button.active { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
+    .md-artifact-frame {
+      width: 100%;
+      height: 340px;
+      border: 0;
+      background: white;
+      display: block;
+    }
+    .md-artifact-src {
+      display: none;
+      padding: 10px;
+      overflow: auto;
+      max-height: 340px;
+      font-family: "SF Mono", Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      white-space: pre;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .md-artifact.show-source .md-artifact-frame { display: none; }
+    .md-artifact.show-source .md-artifact-src { display: block; }
+    .md-artifact.tall .md-artifact-frame,
+    .md-artifact.tall .md-artifact-src { height: 560px; max-height: 560px; }
     .msg-content .md-pre-lang {
       position: absolute;
       top: 6px;
@@ -9452,6 +9510,29 @@ Title:`
      * inline code, links. Pre-extracts health cards and fenced code so
      * neither gets mangled by the escape pass.
      */
+    // HTML Artifact toggles: the rendered iframe or the source view.
+    function mdaToggleSource(btn, showSource) {
+      const root = btn.closest('.md-artifact')
+      if (!root) return
+      root.classList.toggle('show-source', !!showSource)
+      root.querySelector('.mda-toggle-running')?.classList.toggle('active', !showSource)
+      root.querySelector('.mda-toggle-source')?.classList.toggle('active', !!showSource)
+    }
+    function mdaToggleTall(btn) {
+      const root = btn.closest('.md-artifact')
+      if (!root) return
+      root.classList.toggle('tall')
+    }
+    async function mdaCopySource(btn) {
+      const root = btn.closest('.md-artifact')
+      if (!root) return
+      const src = root.querySelector('.md-artifact-src code')?.textContent || ''
+      try {
+        await navigator.clipboard.writeText(src)
+        showRewindToast?.('📋 Copied artifact source', false)
+      } catch {}
+    }
+
     // SVG sanitizer: strip script, event handlers, and any JavaScript-carrying
     // attribute / URL scheme so rendered SVGs are safe. Uses DOMParser for
     // correctness instead of regex-only parsing.
@@ -9680,11 +9761,34 @@ Title:`
       //    so the <pre> is recognised as a block element and not wrapped in <p>.
       s = s.replace(new RegExp(`${CODE_TOKEN}(\\d+)${CODE_TOKEN}`, 'g'), (_m, i) => {
         const { lang, code } = codeBlocks[+i]
+        const lc = lang.toLowerCase()
         // Mermaid diagrams: lazy-rendered below after the HTML is inserted.
         // We emit a placeholder with the raw source encoded as a data attr.
-        if (lang.toLowerCase() === 'mermaid') {
+        if (lc === 'mermaid') {
           const encoded = btoa(unescape(encodeURIComponent(code)))
           return `<div class="md-mermaid loading" data-mermaid-src="${encoded}">Rendering diagram…</div>`
+        }
+        // HTML Artifacts: ```html or ```artifact → sandboxed iframe. The model
+        // can now ship small games, interactive demos, canvas animations,
+        // etc. Iframe has allow-scripts but NOT allow-same-origin, so the
+        // artifact can't touch your chat data.
+        if ((lc === 'html' || lc === 'artifact') && /<(html|body|script|canvas|svg|div|style)\b/i.test(code)) {
+          const srcdoc = code
+            // Escape the double quotes + ampersands so it survives the HTML attr
+            .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+          const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          return `
+            <div class="md-artifact">
+              <div class="md-artifact-head">
+                <span class="mda-label">✨ HTML Artifact · sandboxed</span>
+                <button class="mda-toggle-running active" onclick="mdaToggleSource(this, false)">▶ Run</button>
+                <button class="mda-toggle-source" onclick="mdaToggleSource(this, true)">&lt;&gt; Source</button>
+                <button onclick="mdaToggleTall(this)" title="Taller viewport">⤢</button>
+                <button onclick="mdaCopySource(this)" title="Copy HTML">📋</button>
+              </div>
+              <iframe class="md-artifact-frame" sandbox="allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox allow-forms" srcdoc="${srcdoc}"></iframe>
+              <pre class="md-artifact-src"><code>${escCode}</code></pre>
+            </div>`
         }
         const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const langCls = lang ? ` data-lang="${lang}"` : ''
@@ -9701,7 +9805,7 @@ Title:`
       s = blocks.map(b => {
         const trimmed = b.trim()
         if (!trimmed) return ''
-        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg))/i.test(trimmed)) return trimmed
+        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg|artifact))/i.test(trimmed)) return trimmed
         return `<p class="md-p">${trimmed.replace(/\n/g, '<br>')}</p>`
       }).join('\n')
 
