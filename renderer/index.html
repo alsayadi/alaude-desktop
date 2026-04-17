@@ -1495,6 +1495,13 @@
     .translate-result .tr-close:hover { color: var(--text); }
     .translate-result .tr-body { white-space: pre-wrap; word-break: break-word; }
 
+    /* ─── Task Board filter buttons ───────────────────────────── */
+    .tb-filter.active {
+      background: color-mix(in srgb, #3498db 18%, transparent);
+      border-color: #3498db;
+      color: #3498db;
+    }
+
     /* ─── Activity Heatmap ────────────────────────────────────── */
     .hm-grid {
       display: inline-grid;
@@ -4279,6 +4286,22 @@
     </div>
   </div>
 
+  <!-- Cross-session Task Board -->
+  <div class="modal-overlay" id="taskboard-modal">
+    <div class="modal ux-modal" style="max-width:760px;width:94vw">
+      <h2>
+        ✓ Task Board
+        <button class="modal-close" onclick="toggleTaskBoard()">&times;</button>
+      </h2>
+      <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
+        <button class="msg-action-btn tb-filter" data-filter="open" onclick="setTaskBoardFilter('open')">Open</button>
+        <button class="msg-action-btn tb-filter" data-filter="done" onclick="setTaskBoardFilter('done')">Done</button>
+        <button class="msg-action-btn tb-filter" data-filter="all" onclick="setTaskBoardFilter('all')">All</button>
+      </div>
+      <div id="taskboard-body" class="ux-scroll" style="max-height:60vh"></div>
+    </div>
+  </div>
+
   <!-- Activity Heatmap Modal -->
   <div class="modal-overlay" id="heatmap-modal">
     <div class="modal ux-modal" style="max-width:820px;width:92vw">
@@ -6770,6 +6793,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
+        { kind: 'action', icon: '✓', label: 'Task Board (all sessions)', search: 'task board todos all cross session combined plate work queue', action: () => { closeCmdPalette(); toggleTaskBoard() } },
         { kind: 'action', icon: '🎯', label: 'Set / edit session goal', search: 'goal objective target focus intention set edit', action: () => { closeCmdPalette(); promptSetGoal() } },
         { kind: 'action', icon: '✅', label: 'Mark goal achieved', search: 'goal done achieved complete mark finish', action: () => { closeCmdPalette(); setGoalStatus('achieved') } },
         { kind: 'action', icon: '🍅', label: 'Start 25-minute focus block (Pomodoro)', search: 'pomodoro focus timer 25 minutes tomato block deep work', action: () => { closeCmdPalette(); togglePomodoro() } },
@@ -10635,6 +10659,107 @@ Title:`
           refreshLocalOptgroup()
         }
       } catch {}
+    }
+
+    // ── Cross-session Task Board ────────────────────────────────────
+    // A single view that flattens every session's TODO items into one
+    // "what's on my plate" list, grouped by source session. Check-
+    // boxes mutate the source session's todos[] directly so changes
+    // propagate everywhere (per-session TODO card, Digest, backup).
+    let _tbFilter = 'open'
+    function setTaskBoardFilter(f) {
+      _tbFilter = f
+      document.querySelectorAll('.tb-filter').forEach(el => el.classList.toggle('active', el.dataset.filter === f))
+      renderTaskBoard()
+    }
+    function toggleTaskBoard() {
+      const modal = document.getElementById('taskboard-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        setTaskBoardFilter(_tbFilter || 'open')
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+    function collectAllTodos() {
+      const out = []
+      for (const s of (sessions || [])) {
+        const items = s.todos?.items || []
+        if (!items.length) continue
+        out.push({
+          sessionId: s.id,
+          sessionTitle: s.title || 'Untitled session',
+          tags: s.tags || [],
+          items: items.map(t => ({ ...t })),
+          goalPrefix: (typeof goalIconForSession === 'function') ? goalIconForSession(s) : '',
+        })
+      }
+      return out
+    }
+    function toggleTaskBoardItem(sessionId, itemId) {
+      const s = sessions.find(s => s.id === sessionId)
+      if (!s?.todos?.items) return
+      const item = s.todos.items.find(t => t.id === itemId)
+      if (!item) return
+      item.done = !item.done
+      persistSessions()
+      // If the currently-open session is this one, also refresh the inline card
+      if (sessionId === currentSessionId) renderTodosCard?.()
+      renderTaskBoard()
+    }
+    function renderTaskBoard() {
+      const body = document.getElementById('taskboard-body')
+      if (!body) return
+      const groups = collectAllTodos()
+      if (!groups.length) {
+        body.innerHTML = `
+          <div style="padding:32px 16px;text-align:center;color:var(--text-faint)">
+            <div style="font-size:36px">✓</div>
+            <div style="margin-top:8px">No action items yet. Use ⌘⇧T in any session to extract some.</div>
+          </div>`
+        return
+      }
+      let totalOpen = 0, totalDone = 0
+      for (const g of groups) for (const t of g.items) { if (t.done) totalDone++; else totalOpen++ }
+      const filterMatch = (t) => _tbFilter === 'all' ? true : _tbFilter === 'done' ? t.done : !t.done
+      const sections = []
+      for (const g of groups) {
+        const visible = g.items.filter(filterMatch)
+        if (!visible.length) continue
+        const open = g.items.filter(t => !t.done).length
+        const total = g.items.length
+        const tagChips = g.tags.length
+          ? ' ' + g.tags.map(t => `<span style="font-size:10px;color:var(--text-faint)">#${escapeHtml(t)}</span>`).join(' ')
+          : ''
+        sections.push(`
+          <div style="margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px">
+              <a onclick="closeTaskBoard(); switchSession(${g.sessionId})" style="color:var(--text);cursor:pointer;font-weight:600;text-decoration:none" title="Open session">${escapeHtml(g.goalPrefix)}${escapeHtml(g.sessionTitle)}</a>
+              ${tagChips}
+              <span style="color:var(--text-faint);font-size:10px;margin-left:auto">${total - open}/${total}</span>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              ${visible.map(t => `
+                <label style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-bottom:1px dashed var(--border);cursor:pointer;font-size:12px;line-height:1.4;${t.done ? 'opacity:0.7' : ''}">
+                  <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTaskBoardItem(${g.sessionId}, '${escapeHtml(t.id)}')" style="margin-top:3px;accent-color:#3498db;cursor:pointer" />
+                  <span style="flex:1;color:var(--text);${t.done ? 'text-decoration:line-through;color:var(--text-faint)' : ''}">${escapeHtml(t.text)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>`)
+      }
+      body.innerHTML = `
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px">
+          <span><strong style="color:#3498db">${totalOpen}</strong> open</span>
+          <span><strong style="color:var(--green)">${totalDone}</strong> done</span>
+          <span style="color:var(--text-faint)">across ${groups.length} session${groups.length === 1 ? '' : 's'}</span>
+        </div>
+        ${sections.join('') || '<div style="padding:24px;text-align:center;color:var(--text-faint)">Nothing matches the current filter.</div>'}`
+    }
+    function closeTaskBoard() {
+      document.getElementById('taskboard-modal')?.classList.remove('show')
     }
 
     // ── Activity Heatmap ────────────────────────────────────────────
