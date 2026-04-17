@@ -4511,16 +4511,13 @@
     }
 
     /* ───── Messages refresh ───── */
+    /* Non-destructive: preserve the left-border accent rules from earlier
+       (.msg.pinned, .msg.reacted-up/-down). We only restyle color + size. */
     .messages { background: transparent; }
     .msg {
-      background: transparent !important;
-      border: 0 !important;
-      padding: 0 !important;
-      margin: 28px auto !important;
       max-width: 760px;
-      box-shadow: none !important;
-      display: flex;
-      gap: 14px;
+      margin-left: auto;
+      margin-right: auto;
     }
     .msg .msg-header {
       font-family: var(--mono);
@@ -4583,56 +4580,39 @@
       border: 1px solid var(--border-soft);
     }
 
-    /* ───── Input / composer refresh ───── */
+    /* ───── Input / composer refresh — additive only ───── */
     .input-area {
-      background: transparent;
-      border-top: 0;
-      padding-bottom: 24px;
+      border-top-color: var(--border-soft);
     }
     .input-wrap {
       max-width: 760px;
-      margin: 0 auto;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
       border-radius: 14px;
-      box-shadow: 0 4px 20px color-mix(in oklch, var(--bg) 50%, transparent);
-      padding: 4px;
-      display: flex;
-      align-items: flex-end;
+      background: var(--bg-panel);
+      box-shadow: 0 4px 20px color-mix(in oklch, var(--bg) 40%, transparent);
     }
     .input-wrap:focus-within {
       border-color: color-mix(in oklch, var(--green) 40%, var(--border));
     }
-    .input-wrap .input-field {
+    .input-field {
       font-family: var(--sans);
       font-size: 14.5px;
       font-weight: 450;
       line-height: 1.55;
-      background: transparent;
-      border: 0;
-      padding: 12px 10px;
-      color: var(--text);
     }
-    .input-wrap .input-field::placeholder { color: var(--text-faint); }
+    .input-field::placeholder { color: var(--text-faint); }
     .send-btn {
       background: var(--green);
-      color: var(--accent-ink);
-      width: 30px;
-      height: 30px;
-      border-radius: 7px;
-      border: 0;
-      margin: 6px;
+      color: var(--accent-ink, #0a0a0a);
     }
-    .send-btn:disabled { background: var(--bg-hover); color: var(--text-ghost); }
     .icon-btn {
       color: var(--text-faint);
-      border: 0;
-      background: transparent;
       border-radius: 6px;
     }
     .icon-btn:hover { color: var(--text); background: var(--bg-hover); }
 
-    /* ───── Cards (summary / todos / goal / office / building) ───── */
+    /* ───── Cards (summary / todos / goal / office / building) ─────
+       Only nudge size + panel background — preserve the 3px accent
+       border-left from the original styles so the color bar stays. */
     .session-summary,
     .session-todos,
     .session-goal,
@@ -4641,12 +4621,8 @@
     .md-artifact,
     .md-building {
       max-width: 760px;
-      border: 1px solid var(--border);
       background: var(--bg-panel);
     }
-    .session-summary { border-left-color: #f39c12; }
-    .session-todos { border-left-color: oklch(0.65 0.14 240); }
-    .session-goal { border-left-color: oklch(0.58 0.12 290); }
 
     /* ───── Welcome screen serif ───── */
     .welcome-title {
@@ -4692,13 +4668,9 @@
     ::-webkit-scrollbar-thumb { background: var(--border) !important; }
     ::-webkit-scrollbar-thumb:hover { background: var(--text-faint) !important; }
 
-    /* ───── Quality of life: soft radial space tint in main ───── */
-    .main {
-      background:
-        radial-gradient(ellipse 55% 45% at 100% 0%, var(--green-glow), transparent 55%),
-        radial-gradient(ellipse 40% 30% at 0% 100%, var(--green-glow), transparent 60%),
-        var(--bg) !important;
-    }
+    /* Quality of life: the legacy --space-tint radial in .main already
+       gives us ambient color — we don't need to override it. Leaving
+       the existing rule alone. */
   </style>
 </head>
 <body>
