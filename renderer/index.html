@@ -5759,6 +5759,31 @@ SUMMARY:`
       input.dispatchEvent(new Event('input', { bubbles: true }))
       hideEmojiPop()
     }
+    // Per-session input drafts: debounced save of the current input value
+    // onto the active session so half-typed messages survive session
+    // switches + app relaunches (sessions already persist via persistSessions).
+    let _draftSaveTimer = null
+    input.addEventListener('input', () => {
+      clearTimeout(_draftSaveTimer)
+      _draftSaveTimer = setTimeout(() => {
+        const s = sessions.find(s => s.id === currentSessionId)
+        if (!s) return
+        const v = input.value
+        if (v) s.inputDraft = v
+        else delete s.inputDraft
+        persistSessions()
+      }, 400)
+    })
+    // Restore the current session's draft at startup (runs once after the
+    // initial renderSessions + renderMessages).
+    setTimeout(() => {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (s?.inputDraft && !input.value) {
+        input.value = s.inputDraft
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+    }, 50)
+
     // Wire emoji popover into existing input events. Uses the same 'input'
     // listener as the rest — we just piggyback.
     input.addEventListener('input', updateEmojiPop)
@@ -7920,6 +7945,9 @@ footer a { color: var(--accent); text-decoration: none; }
       resetPromptHistory?.()
       if (window._ttsIdx != null) stopReadAloud?.()
       hideSmartPasteChip?.()
+      // Clear the per-session draft — the message is about to be sent.
+      const _sdCurrent = sessions.find(s => s.id === currentSessionId)
+      if (_sdCurrent) { delete _sdCurrent.inputDraft; persistSessions() }
 
       // Prepend attached file contents to the message
       if (attachedFiles.length > 0) {
@@ -9770,13 +9798,22 @@ Title:`
       // UX: mark previous session as ended
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
-      // Save current
+      // Save current — including the half-typed input draft so it's waiting
+      // when the user comes back to this session.
       const current = sessions.find(s => s.id === currentSessionId)
-      if (current) current.messages = [...messages]
+      if (current) {
+        current.messages = [...messages]
+        const draft = input.value || ''
+        if (draft) current.inputDraft = draft
+        else delete current.inputDraft
+      }
 
       currentSessionId = id
       const session = sessions.find(s => s.id === id)
       messages = session ? [...session.messages] : []
+      // Restore the new session's draft (or clear).
+      input.value = session?.inputDraft || ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
       ux.sessionId = 'sess_' + id
       ux.lastPromptHash = null
       ux.lastMessageId = null
