@@ -244,6 +244,31 @@
       border-left: 2px solid #e67e22;
       border-radius: 3px;
     }
+    .msg-note {
+      color: var(--text-dim);
+      font-size: 12px;
+      margin-top: 6px;
+      padding: 6px 10px;
+      background: color-mix(in srgb, #f1c40f 7%, transparent);
+      border-left: 2px solid #f1c40f;
+      border-radius: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .msg-note:hover { background: color-mix(in srgb, #f1c40f 12%, transparent); }
+    .msg-note-text { flex: 1; white-space: pre-wrap; word-break: break-word; }
+    .msg-note-remove {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .msg-note-remove:hover { color: #e74c3c; }
     /* Feedback Journal modal: reuse .ux-modal shell, style the list rows */
     .fb-row {
       display: flex;
@@ -5331,6 +5356,34 @@ SUMMARY:`
       }
     }
 
+    // ── Inline Message Notes ────────────────────────────────────────
+    // Lightweight personal annotation attached to any message. Stored
+    // at msg.note as a plain string. Distinct from reaction-notes
+    // (v0.2.25) which require a 👎 downvote — this is for general
+    // curation/study without judging the reply.
+    function editMessageNote(idx) {
+      const msg = messages[idx]
+      if (!msg) return
+      const existing = msg.note || ''
+      const raw = window.prompt(existing ? 'Edit note (empty to remove):' : 'Attach a note to this message:', existing)
+      if (raw == null) return // cancelled
+      const text = raw.trim().slice(0, 500)
+      if (!text) { delete msg.note; delete msg.noteTs }
+      else { msg.note = text; msg.noteTs = Date.now() }
+      persistSessions()
+      renderMessages()
+      if (text) showRewindToast?.('📝 Note saved', false)
+      else showRewindToast?.('Note removed', false)
+    }
+    function removeMessageNote(idx) {
+      const msg = messages[idx]
+      if (!msg?.note) return
+      delete msg.note
+      delete msg.noteTs
+      persistSessions()
+      renderMessages()
+    }
+
     // ── Read-aloud (TTS) ────────────────────────────────────────────
     // Uses browser speechSynthesis (zero network, OS voices). One voice at
     // a time: clicking a different message cancels the current utterance
@@ -6582,6 +6635,8 @@ footer a { color: var(--accent); text-decoration: none; }
                          : m.reaction?.kind === 'down' ? `<span style="color:#e67e22">👎</span>` : ''
           const note = (m.reaction?.kind === 'down' && m.reaction?.note)
             ? `<div class="reaction-note">${escapeHtml(m.reaction.note)}</div>` : ''
+          const personalNoteHtml = m.note
+            ? `<div class="reaction-note" style="border-left-color:#f1c40f;background:rgba(241,196,15,0.08)">📝 ${escapeHtml(m.note)}</div>` : ''
           return `
             <div class="msg ${m.role} ${m.pinned ? 'pinned' : ''}">
               <div class="msg-head">
@@ -6593,6 +6648,7 @@ footer a { color: var(--accent); text-decoration: none; }
               </div>
               <div class="msg-body">${renderBody(m)}</div>
               ${note}
+              ${personalNoteHtml}
             </div>`
         }).join('\n')
 
@@ -7899,12 +7955,14 @@ Title:`
         const compareArmedHere = (window._compareArmedIdx === i && window._compareArmedSession === currentSessionId)
         const compareClass = compareArmedHere ? ' active' : ''
         const compareLabel = compareArmedHere ? '⚖ Armed…' : '⚖ Compare'
+        const noteBtnLabel = msg.note ? '📝 Note ✓' : '📝 Note'
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
               <button class="msg-action-btn reaction-btn${upActive}" data-kind="up" onclick="setReaction(${i}, 'up')" title="Mark as a good response">👍</button>
               <button class="msg-action-btn reaction-btn${downActive}" data-kind="down" onclick="setReaction(${i}, 'down')" title="Mark as a poor response (you'll be asked for a note)">👎</button>
               <button class="msg-action-btn tts-btn${ttsActive}" onclick="toggleReadAloud(${i})" title="Read this reply aloud (Esc to stop)">${ttsIcon}</button>
               <button class="msg-action-btn compare-btn${compareClass}" onclick="armCompare(${i})" title="Pick two assistant messages to compare side-by-side">${compareLabel}</button>
+              <button class="msg-action-btn" onclick="editMessageNote(${i})" title="${msg.note ? 'Edit your note' : 'Attach a personal note to this reply'}">${noteBtnLabel}</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
@@ -7999,6 +8057,9 @@ Title:`
         const reactionClass = msg.reaction?.kind === 'up' ? ' reacted-up' : msg.reaction?.kind === 'down' ? ' reacted-down' : ''
         const reactionNote = (msg.reaction?.kind === 'down' && msg.reaction?.note)
           ? `<div class="reaction-note">👎 ${escapeHtml(msg.reaction.note)}</div>` : ''
+        const personalNote = msg.note
+          ? `<div class="msg-note" onclick="editMessageNote(${i})" title="Click to edit your note"><span class="msg-note-icon">📝</span><span class="msg-note-text">${escapeHtml(msg.note)}</span><button class="msg-note-remove" onclick="event.stopPropagation(); removeMessageNote(${i})" title="Remove note">×</button></div>`
+          : ''
         html += `<div class="msg ${msg.pinned ? 'pinned' : ''}${reactionClass}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
@@ -8009,6 +8070,7 @@ Title:`
           </div>
           <div class="msg-content">${body}</div>
           ${reactionNote}
+          ${personalNote}
           ${statsPanel}
           ${memChip}
           ${actionsFull || userRememberBtn}
