@@ -3456,17 +3456,40 @@
         <dt>Command palette</dt><dd><kbd id="kbd-mod">⌘</kbd><kbd>P</kbd></dd>
         <dt>Focus input</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>K</kbd></dd>
         <dt>New session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>N</kbd></dd>
-        <dt>Close modal</dt><dd><kbd>Esc</kbd></dd>
+        <dt>Global search (every session)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>F</kbd></dd>
+        <dt>Thinking Graph (session DAG)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>M</kbd></dd>
+        <dt>Menu-bar Quick (from anywhere)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></dd>
+        <dt>Close any overlay</dt><dd><kbd>Esc</kbd></dd>
 
         <div class="shortcuts-section">Chat</div>
         <dt>Send message</dt><dd><kbd>↵</kbd></dd>
         <dt>New line in message</dt><dd><kbd>⇧</kbd><kbd>↵</kbd></dd>
-        <dt>Regenerate last response</dt><dd>↻ button</dd>
+        <dt>Next <code>{{variable}}</code> in snippet</dt><dd><kbd>Tab</kbd></dd>
+        <dt>Trigger snippet menu</dt><dd><kbd>/</kbd> at start of input</dd>
+        <dt>Push-to-talk (input empty)</dt><dd>hold <kbd>Space</kbd></dd>
+        <dt>Cancel voice</dt><dd><kbd>Esc</kbd></dd>
         <dt>Toggle Council mode</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>C</kbd></dd>
+
+        <div class="shortcuts-section">Session</div>
+        <dt>Export current as Markdown</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>E</kbd></dd>
+        <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
+        <dt>Rewind / Branch</dt><dd>buttons on any assistant reply</dd>
+        <dt>Pin a message</dt><dd>📌 button on any reply</dd>
+        <dt>Undo session delete</dt><dd>click <em>undo</em> in toast (4s)</dd>
+
+        <div class="shortcuts-section">Code blocks</div>
+        <dt>Copy code</dt><dd>📋 button (on hover)</dd>
+        <dt>Insert code into input</dt><dd>↘ Insert button</dd>
+        <dt>Ask a follow-up about code</dt><dd>💬 Ask button</dd>
+
+        <div class="shortcuts-section">Files & images</div>
+        <dt>Attach a file</dt><dd>📎 button or drop</dd>
+        <dt>Paste an image</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>V</kbd> in input</dd>
+        <dt>Attach workspace file</dt><dd>click in sidebar Files tree</dd>
 
         <div class="shortcuts-section">Appearance</div>
         <dt>Toggle theme (light/dark)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></dd>
-        <dt>Show these shortcuts</dt><dd><kbd>?</kbd></dd>
+        <dt>Show these shortcuts</dt><dd><kbd>?</kbd> or <kbd class="kbd-mod-mirror">⌘</kbd><kbd>/</kbd></dd>
       </dl>
     </div>
   </div>
@@ -7754,6 +7777,36 @@ Title:`
           try { window.alaude.openExternal(releasesUrl) } catch {}
         }
       }
+      // "What's new" — show a one-time toast when the running version differs
+      // from the last-seen version in localStorage. Makes rapid releases
+      // discoverable without spamming on every launch.
+      try {
+        const key = 'alaude:lastSeenVersion'
+        const prev = localStorage.getItem(key)
+        if (prev && prev !== v && v !== 'dev') {
+          // Small delay so the rest of the UI renders first.
+          setTimeout(() => {
+            showRewindToast?.(`✨ Updated ${prev} → ${v}. See what's new →`, false)
+            const toast = document.getElementById('rewind-toast')
+            if (toast) {
+              const link = toast.querySelector('a') || (() => {
+                const a = document.createElement('a')
+                a.textContent = 'release notes'
+                a.onclick = () => { try { window.alaude.openExternal(releasesUrl) } catch {} }
+                toast.appendChild(document.createTextNode(' '))
+                toast.appendChild(a)
+                return a
+              })()
+              link.onclick = () => { try { window.alaude.openExternal(releasesUrl) } catch {} }
+              // Extend the toast's visible duration for version announcements
+              toast.classList.add('show')
+              clearTimeout(toast._t)
+              toast._t = setTimeout(() => toast.classList.remove('show'), 8000)
+            }
+          }, 600)
+        }
+        if (v !== 'dev') localStorage.setItem(key, v)
+      } catch {}
       // Also stamp it into the welcome footer hint row so first-time users see it
       try {
         const hints = document.querySelector('.welcome-hints')
