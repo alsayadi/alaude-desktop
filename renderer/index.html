@@ -2022,6 +2022,137 @@
     }
     .shortcuts-section:first-child { margin-top: 0; }
 
+    /* ─── Thinking Graph (session DAG) ───────────────────────────────── */
+    .tgraph-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.62);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: none;
+      z-index: 300;
+      flex-direction: column;
+    }
+    .tgraph-overlay.show { display: flex; }
+    .tgraph-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 22px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .tgraph-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .tgraph-title small {
+      font-weight: normal;
+      color: var(--text-faint);
+      margin-left: 10px;
+      font-size: 12px;
+    }
+    .tgraph-actions { display: flex; gap: 8px; }
+    .tgraph-close {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 5px 12px;
+      border-radius: 6px;
+    }
+    .tgraph-close:hover { border-color: var(--green); color: var(--green); }
+    .tgraph-canvas {
+      flex: 1;
+      position: relative;
+      overflow: auto;
+      background:
+        radial-gradient(circle at 2px 2px, var(--border) 1px, transparent 1px) 0 0 / 24px 24px,
+        var(--bg);
+    }
+    .tgraph-svg {
+      display: block;
+      min-width: 100%;
+      min-height: 100%;
+    }
+    .tgraph-node {
+      cursor: pointer;
+    }
+    .tgraph-node-card {
+      fill: var(--bg-input);
+      stroke: var(--border);
+      stroke-width: 1.5;
+      transition: stroke 0.15s, filter 0.15s;
+    }
+    .tgraph-node.current .tgraph-node-card {
+      stroke: var(--green);
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 12px rgba(46, 204, 113, 0.45));
+    }
+    .tgraph-node:hover .tgraph-node-card {
+      stroke: var(--green);
+    }
+    .tgraph-node-title {
+      fill: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      pointer-events: none;
+    }
+    .tgraph-node-sub {
+      fill: var(--text-faint);
+      font-size: 11px;
+      font-family: inherit;
+      pointer-events: none;
+    }
+    .tgraph-node-badge {
+      fill: var(--text-dim);
+      font-size: 10px;
+      font-family: inherit;
+      pointer-events: none;
+    }
+    .tgraph-edge {
+      fill: none;
+      stroke: var(--text-faint);
+      stroke-width: 1.6;
+      opacity: 0.55;
+    }
+    .tgraph-edge.to-current { stroke: var(--green); opacity: 0.9; stroke-width: 2; }
+    .tgraph-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-faint);
+      font-size: 14px;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .tgraph-empty-icon { font-size: 48px; opacity: 0.5; }
+    .tgraph-legend {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      gap: 14px;
+    }
+    .tgraph-legend-item { display: flex; align-items: center; gap: 5px; }
+    .tgraph-legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
     /* ─── Command Palette ────────────────────────────────────────────────── */
     .cmd-palette-overlay {
       position: fixed;
@@ -2352,6 +2483,7 @@
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
+        <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
         <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
         <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
@@ -2518,6 +2650,20 @@
         <dt>Show these shortcuts</dt><dd><kbd>?</kbd></dd>
       </dl>
     </div>
+  </div>
+
+  <!-- Thinking Graph (⌘⇧M) — visual DAG of all sessions + branches -->
+  <div class="tgraph-overlay" id="tgraph-overlay" onclick="if(event.target===this)toggleThinkingGraph()">
+    <div class="tgraph-header">
+      <div>
+        <span class="tgraph-title">🌳 Thinking Graph</span>
+        <small id="tgraph-stats"></small>
+      </div>
+      <div class="tgraph-actions">
+        <button class="tgraph-close" onclick="toggleThinkingGraph()">Close (esc)</button>
+      </div>
+    </div>
+    <div class="tgraph-canvas" id="tgraph-canvas"></div>
   </div>
 
   <!-- Command Palette (⌘P / Ctrl+P) -->
@@ -2746,6 +2892,7 @@
         { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
         { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
+        { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
       )
       return items
     }
@@ -3051,9 +3198,9 @@
 
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Esc → close any open overlay (modal, command palette, shortcuts)
+      // Esc → close any open overlay (modal, command palette, shortcuts, thinking graph)
       if (e.key === 'Escape') {
-        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show')
+        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show')
         if (open) {
           open.classList.remove('show')
           if (open.style.display === 'flex') open.style.display = 'none'
@@ -3085,6 +3232,11 @@
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         toggleCouncilMode()
+      }
+      // Cmd/Ctrl+Shift+M → open Thinking Graph (DAG of all sessions + branches)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        toggleThinkingGraph()
       }
       // ? (shift + / on US layout) → show keyboard shortcuts
       // only when NOT typing in an input/textarea
@@ -3918,6 +4070,160 @@
       const container = document.getElementById('messages')
       const el = container.querySelector(`.msg[data-msg-idx="${idx}"]`)
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    // ── Thinking Graph: DAG visualization of all sessions + branches ─────
+    // Full-screen SVG view of every session. Roots = sessions without a
+    // parent; branches = sessions with parentId. Tree layout algorithm
+    // positions children beneath parents with horizontal spacing by
+    // sub-tree width, so sibling branches spread apart cleanly.
+    function toggleThinkingGraph() {
+      const overlay = document.getElementById('tgraph-overlay')
+      if (!overlay) return
+      const isOpen = overlay.classList.contains('show')
+      if (isOpen) {
+        overlay.classList.remove('show')
+        return
+      }
+      renderThinkingGraph()
+      overlay.classList.add('show')
+    }
+
+    function renderThinkingGraph() {
+      const canvas = document.getElementById('tgraph-canvas')
+      const stats = document.getElementById('tgraph-stats')
+      if (!canvas) return
+
+      if (!sessions.length) {
+        canvas.innerHTML = `<div class="tgraph-empty"><div class="tgraph-empty-icon">🌱</div><div>No sessions yet — start a chat and branches will grow here.</div></div>`
+        if (stats) stats.textContent = ''
+        return
+      }
+
+      // Build parent→children index. Sessions with no parent (or an invalid
+      // parent) become roots.
+      const byId = new Map(sessions.map(s => [s.id, s]))
+      const childrenOf = new Map()
+      const roots = []
+      for (const s of sessions) {
+        if (s.parentId && byId.has(s.parentId)) {
+          if (!childrenOf.has(s.parentId)) childrenOf.set(s.parentId, [])
+          childrenOf.get(s.parentId).push(s)
+        } else {
+          roots.push(s)
+        }
+      }
+      // Sort siblings by recency so the "newest branch" lands rightmost —
+      // matches users' mental model of growth.
+      const sortByTs = (a, b) => (a.ts || a.id) - (b.ts || b.id)
+      roots.sort(sortByTs)
+      for (const kids of childrenOf.values()) kids.sort(sortByTs)
+
+      // Tree layout. Walk subtrees, assign x-positions by cumulative leaf
+      // width, and y-positions by depth. Pure recursion — no external lib.
+      const NODE_W = 220
+      const NODE_H = 72
+      const GAP_X = 40
+      const GAP_Y = 60
+      const PADDING = 60
+      const positions = new Map()  // sessionId → { x, y, depth }
+
+      function leafCount(node) {
+        const kids = childrenOf.get(node.id) || []
+        if (!kids.length) return 1
+        return kids.reduce((sum, k) => sum + leafCount(k), 0)
+      }
+
+      function layout(node, depth, leftX) {
+        const kids = childrenOf.get(node.id) || []
+        const subtreeLeaves = leafCount(node)
+        const subtreeWidth = subtreeLeaves * (NODE_W + GAP_X) - GAP_X
+        const centerX = leftX + subtreeWidth / 2
+        const y = PADDING + depth * (NODE_H + GAP_Y)
+        positions.set(node.id, { x: centerX - NODE_W / 2, y, depth })
+        let cursor = leftX
+        for (const kid of kids) {
+          const kidLeaves = leafCount(kid)
+          const kidWidth = kidLeaves * (NODE_W + GAP_X) - GAP_X
+          layout(kid, depth + 1, cursor)
+          cursor += kidWidth + GAP_X
+        }
+      }
+      let cursor = PADDING
+      for (const root of roots) {
+        const w = leafCount(root) * (NODE_W + GAP_X) - GAP_X
+        layout(root, 0, cursor)
+        cursor += w + GAP_X * 2
+      }
+
+      // Canvas dimensions
+      const maxX = Math.max(...[...positions.values()].map(p => p.x + NODE_W)) + PADDING
+      const maxY = Math.max(...[...positions.values()].map(p => p.y + NODE_H)) + PADDING
+      const width = Math.max(maxX, canvas.clientWidth || 800)
+      const height = Math.max(maxY, canvas.clientHeight || 600)
+
+      // Build SVG
+      let edges = ''
+      for (const s of sessions) {
+        if (!s.parentId || !byId.has(s.parentId)) continue
+        const p = positions.get(s.parentId)
+        const c = positions.get(s.id)
+        if (!p || !c) continue
+        const x1 = p.x + NODE_W / 2
+        const y1 = p.y + NODE_H
+        const x2 = c.x + NODE_W / 2
+        const y2 = c.y
+        // Smooth cubic curve between parent bottom and child top
+        const midY = (y1 + y2) / 2
+        const isToCurrent = s.id === currentSessionId
+        edges += `<path class="tgraph-edge${isToCurrent ? ' to-current' : ''}" d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" />`
+      }
+
+      let nodes = ''
+      for (const s of sessions) {
+        const pos = positions.get(s.id)
+        if (!pos) continue
+        const isCurrent = s.id === currentSessionId
+        const msgCount = (s.messages || []).length
+        const title = (s.title || 'Untitled').length > 28 ? s.title.slice(0, 26) + '…' : (s.title || 'Untitled')
+        const forkLabel = s.parentId ? `forked @ msg ${(s.forkPoint ?? 0) + 1}` : 'root'
+        const tsLabel = s.ts ? new Date(s.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+        nodes += `<g class="tgraph-node${isCurrent ? ' current' : ''}" transform="translate(${pos.x},${pos.y})" onclick="window.tgraphSwitchTo(${s.id})">
+          <rect class="tgraph-node-card" width="${NODE_W}" height="${NODE_H}" rx="10" ry="10" />
+          <text class="tgraph-node-title" x="14" y="24">${escapeHtml(title)}</text>
+          <text class="tgraph-node-sub" x="14" y="44">${escapeHtml(forkLabel)} · ${msgCount} msg${msgCount === 1 ? '' : 's'}</text>
+          <text class="tgraph-node-badge" x="14" y="62">${escapeHtml(tsLabel)}</text>
+        </g>`
+      }
+
+      canvas.innerHTML = `<svg class="tgraph-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+        <g>${edges}</g>
+        <g>${nodes}</g>
+      </svg>
+      <div class="tgraph-legend">
+        <span class="tgraph-legend-item"><span class="tgraph-legend-dot" style="background:var(--green)"></span>current</span>
+        <span class="tgraph-legend-item"><span class="tgraph-legend-dot" style="background:var(--text-faint)"></span>branch edge</span>
+      </div>`
+
+      const branchCount = sessions.filter(s => s.parentId).length
+      if (stats) stats.textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'} · ${branchCount} branch${branchCount === 1 ? '' : 'es'} · ${roots.length} root${roots.length === 1 ? '' : 's'}`
+
+      // Scroll the current session into view
+      setTimeout(() => {
+        const cur = positions.get(currentSessionId)
+        if (cur && canvas) {
+          canvas.scrollTo({
+            left: Math.max(0, cur.x - canvas.clientWidth / 2 + NODE_W / 2),
+            top: Math.max(0, cur.y - canvas.clientHeight / 2 + NODE_H / 2),
+            behavior: 'smooth',
+          })
+        }
+      }, 50)
+    }
+    // Exposed so the inline SVG onclick can call it without stale-closure issues.
+    window.tgraphSwitchTo = (id) => {
+      toggleThinkingGraph()
+      switchSession(id)
     }
 
     async function copyMessage(idx, btn) {
