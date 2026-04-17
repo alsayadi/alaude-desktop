@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('alaude', {
   // Folder picker
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   listFiles: (path) => ipcRenderer.invoke('list-files', path),
+  workspaceList: (path) => ipcRenderer.invoke('workspace-list', path),
 
   // File handling
   readFileForChat: (filePath) => ipcRenderer.invoke('read-file-for-chat', filePath),

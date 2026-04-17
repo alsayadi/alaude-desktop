@@ -557,6 +557,76 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* ── Workspace File Browser ────────────────────────────────────── */
+    .sidebar-files {
+      border-top: 1px solid var(--border);
+      padding: 8px 8px 4px;
+      max-height: 240px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-files.collapsed .sidebar-files-list { display: none; }
+    .sidebar-files.collapsed { max-height: 40px; }
+    .sidebar-files-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 4px 6px;
+    }
+    .files-refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      font-size: 11px;
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .files-refresh-btn:hover { color: var(--green); border-color: var(--green); }
+    .sidebar-files-list {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      position: relative;
+    }
+    .file-row:hover { background: var(--bg-hover); color: var(--text); }
+    .file-row.dir { color: var(--text); }
+    .file-row-icon { flex-shrink: 0; font-size: 12px; width: 14px; text-align: center; }
+    .file-row-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .file-row-size { color: var(--text-faint); font-size: 10px; font-family: 'SF Mono', monospace; flex-shrink: 0; }
+    .file-row-edited {
+      position: absolute;
+      left: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .file-row.child { padding-left: 24px; }
+    .file-row.child.grand { padding-left: 40px; }
+    .files-empty {
+      color: var(--text-faint);
+      font-size: 11px;
+      padding: 8px;
+      text-align: center;
+    }
+
     .sidebar-footer {
       padding: 12px 16px;
       border-top: 1px solid var(--border);
@@ -3121,6 +3191,15 @@
     </div>
     <div class="sidebar-label">Recent</div>
     <div class="sidebar-sessions" id="sessions"></div>
+    <div class="sidebar-files" id="sidebar-files" style="display:none">
+      <div class="sidebar-files-header">
+        <span class="sidebar-label" style="padding:0;flex:1;cursor:pointer" onclick="toggleFilesPanel()">
+          <span id="files-chevron">▾</span> Files <span id="files-folder-name" style="color:var(--text-faint);font-weight:normal"></span>
+        </span>
+        <button class="files-refresh-btn" onclick="refreshWorkspaceFiles()" title="Refresh">↻</button>
+      </div>
+      <div class="sidebar-files-list" id="files-list"></div>
+    </div>
     <div class="sidebar-footer">
       <button class="sidebar-new-btn" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
@@ -6657,6 +6736,11 @@ Title:`
             isNewFile: activity.isNewFile,
             ts: Date.now(),
           })
+          // Mark file as AI-edited in the sidebar file browser
+          if (activity.path && typeof filesEditedByAi?.add === 'function') {
+            filesEditedByAi.add(activity.path)
+            renderWorkspaceFiles?.()
+          }
           renderMessages()
         }
         return
@@ -6985,7 +7069,128 @@ Title:`
         document.getElementById('folder-btn').classList.add('active')
         document.getElementById('open-btn').style.display = 'flex'
         refreshWorkspaceHint()
+        refreshWorkspaceFiles()
       }
+    }
+
+    // ── Workspace File Browser ──────────────────────────────────────
+    // Shows a tree of files in the picked folder. Click a file → attach to
+    // input (the worker will also see it via its read_file tool, but the
+    // attach lets the user explicitly push file contents without prompting).
+    // Dirs expand inline on click.
+    let workspaceFiles = []        // flat with { name, isDir, size, path, depth, parent }
+    let filesExpanded = new Set()  // paths of expanded directories
+    let filesPanelCollapsed = false
+    let filesEditedByAi = new Set() // paths touched by assistant file_edit activity
+    function toggleFilesPanel() {
+      filesPanelCollapsed = !filesPanelCollapsed
+      const el = document.getElementById('sidebar-files')
+      const ch = document.getElementById('files-chevron')
+      if (el) el.classList.toggle('collapsed', filesPanelCollapsed)
+      if (ch) ch.textContent = filesPanelCollapsed ? '▸' : '▾'
+    }
+    async function refreshWorkspaceFiles() {
+      const container = document.getElementById('sidebar-files')
+      const list = document.getElementById('files-list')
+      const folderLabel = document.getElementById('files-folder-name')
+      if (!container || !list) return
+      if (!workspacePath) {
+        container.style.display = 'none'
+        return
+      }
+      container.style.display = 'flex'
+      if (folderLabel) folderLabel.textContent = workspacePath.split('/').pop() || ''
+      list.innerHTML = '<div class="files-empty">Loading…</div>'
+      const res = await window.alaude.workspaceList(workspacePath)
+      if (res?.error) {
+        list.innerHTML = `<div class="files-empty">${escapeHtml(res.error)}</div>`
+        return
+      }
+      const entries = (res?.entries || []).map(e => ({ ...e, depth: 0, parent: workspacePath }))
+      workspaceFiles = entries
+      // If any dirs were expanded previously, re-fetch their children so state persists.
+      const expandedPaths = [...filesExpanded]
+      for (const p of expandedPaths) {
+        const parentIdx = workspaceFiles.findIndex(f => f.path === p)
+        if (parentIdx < 0) continue
+        const children = await fetchChildren(p, workspaceFiles[parentIdx].depth + 1)
+        workspaceFiles.splice(parentIdx + 1, 0, ...children)
+      }
+      renderWorkspaceFiles()
+    }
+    async function fetchChildren(path, depth) {
+      const res = await window.alaude.workspaceList(path)
+      if (res?.error) return []
+      return (res?.entries || []).map(e => ({ ...e, depth, parent: path }))
+    }
+    function formatFileSize(bytes) {
+      if (!bytes) return ''
+      if (bytes < 1024) return bytes + 'B'
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + 'K'
+      return (bytes / (1024 * 1024)).toFixed(1) + 'M'
+    }
+    function iconFor(name, isDir, isExpanded) {
+      if (isDir) return isExpanded ? '📂' : '📁'
+      const ext = (name.split('.').pop() || '').toLowerCase()
+      if (['js','jsx','mjs','cjs'].includes(ext)) return '🟨'
+      if (['ts','tsx'].includes(ext)) return '🟦'
+      if (['py'].includes(ext)) return '🐍'
+      if (['rs'].includes(ext)) return '🦀'
+      if (['go'].includes(ext)) return '🐹'
+      if (['rb'].includes(ext)) return '💎'
+      if (['md','mdx'].includes(ext)) return '📝'
+      if (['json','yml','yaml','toml'].includes(ext)) return '⚙️'
+      if (['html','htm'].includes(ext)) return '🌐'
+      if (['css','scss','sass'].includes(ext)) return '🎨'
+      if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return '🖼️'
+      if (['sh','bash','zsh','fish'].includes(ext)) return '⚡'
+      if (['sql'].includes(ext)) return '🗄️'
+      return '📄'
+    }
+    function renderWorkspaceFiles() {
+      const list = document.getElementById('files-list')
+      if (!list) return
+      if (!workspaceFiles.length) {
+        list.innerHTML = '<div class="files-empty">Empty folder</div>'
+        return
+      }
+      list.innerHTML = workspaceFiles.map((f, i) => {
+        const isExpanded = filesExpanded.has(f.path)
+        const icon = iconFor(f.name, f.isDir, isExpanded)
+        const cls = f.isDir ? 'dir' : ''
+        const depthCls = f.depth === 1 ? 'child' : f.depth >= 2 ? 'child grand' : ''
+        const size = f.isDir ? '' : `<span class="file-row-size">${formatFileSize(f.size)}</span>`
+        const edited = filesEditedByAi.has(f.path) ? `<span class="file-row-edited" title="Edited by Alaude this session"></span>` : ''
+        return `<div class="file-row ${cls} ${depthCls}" data-file-idx="${i}" onclick="${f.isDir ? `toggleDir(${i})` : `attachWorkspaceFile(${i})`}" title="${escapeHtml(f.path)}">${edited}<span class="file-row-icon">${icon}</span><span class="file-row-name">${escapeHtml(f.name)}</span>${size}</div>`
+      }).join('')
+    }
+    async function toggleDir(idx) {
+      const dir = workspaceFiles[idx]
+      if (!dir || !dir.isDir) return
+      if (filesExpanded.has(dir.path)) {
+        // Collapse: remove all entries whose path is under this dir
+        filesExpanded.delete(dir.path)
+        workspaceFiles = workspaceFiles.filter(f => !f.path.startsWith(dir.path + '/') || f.path === dir.path)
+        renderWorkspaceFiles()
+      } else {
+        filesExpanded.add(dir.path)
+        const children = await fetchChildren(dir.path, dir.depth + 1)
+        workspaceFiles.splice(idx + 1, 0, ...children)
+        renderWorkspaceFiles()
+      }
+    }
+    async function attachWorkspaceFile(idx) {
+      const f = workspaceFiles[idx]
+      if (!f || f.isDir) return
+      const result = await window.alaude.readFileForChat(f.path)
+      if (result?.type === 'error') { alert('Could not read file: ' + result.error); return }
+      if (result?.type === 'image') {
+        attachedFiles.push({ name: result.name, type: 'image', content: `[Image: ${result.name}]`, base64: result.base64, mime: result.mime })
+      } else {
+        attachedFiles.push({ name: result.name, type: result.type, content: result.text || '', pages: result.pages, rows: result.rows })
+      }
+      renderFileChips()
+      input.focus()
     }
 
     function openInBrowser() {

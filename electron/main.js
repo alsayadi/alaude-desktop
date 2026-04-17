@@ -963,6 +963,38 @@ ipcMain.handle('list-files', async (_, folderPath) => {
   }
 })
 
+// Workspace tree: returns up to `maxEntries` files+dirs with sizes, skipping
+// heavy noise directories. Used by the sidebar File Browser.
+const WORKSPACE_IGNORE = new Set([
+  'node_modules', '.git', '.next', '.nuxt', 'dist', 'build', 'out',
+  '__pycache__', '.venv', 'venv', '.mypy_cache', '.pytest_cache',
+  'target', '.gradle', '.idea', '.vscode', '.cache', '.DS_Store',
+])
+ipcMain.handle('workspace-list', async (_, folderPath) => {
+  const fs = require('fs')
+  const p = require('path')
+  if (!folderPath) return { error: 'no-folder' }
+  try {
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+    const out = []
+    for (const e of entries) {
+      if (e.name.startsWith('.') && e.name !== '.env.example') continue
+      if (WORKSPACE_IGNORE.has(e.name)) continue
+      const full = p.join(folderPath, e.name)
+      let size = 0
+      try {
+        if (!e.isDirectory()) size = fs.statSync(full).size
+      } catch {}
+      out.push({ name: e.name, isDir: e.isDirectory(), size, path: full })
+    }
+    // Sort: dirs first, then alphabetically
+    out.sort((a, b) => (a.isDir === b.isDir) ? a.name.localeCompare(b.name) : (a.isDir ? -1 : 1))
+    return { entries: out.slice(0, 200) }
+  } catch (err) {
+    return { error: err.message || 'read-failed' }
+  }
+})
+
 ipcMain.handle('open-external', async (_, url) => {
   shell.openExternal(url)
 })
