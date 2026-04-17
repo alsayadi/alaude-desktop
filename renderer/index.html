@@ -1173,6 +1173,42 @@
     .welcome-space-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .welcome-space-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 
+    /* ─── Session Templates on welcome ────────────────────────── */
+    .template-section { margin-top: 18px; }
+    .template-section-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    @media (max-width: 720px) { .template-grid { grid-template-columns: repeat(2, 1fr); } }
+    .template-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.1s;
+      text-align: left;
+    }
+    .template-card:hover { border-color: var(--green); transform: translateY(-1px); }
+    .template-icon { font-size: 18px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
+    .template-body { flex: 1; min-width: 0; }
+    .template-name { color: var(--text); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+    .template-desc { color: var(--text-faint); font-size: 11px; line-height: 1.35; }
+
     .welcome-hints {
       display: flex;
       gap: 12px;
@@ -5857,6 +5893,13 @@ footer a { color: var(--accent); text-decoration: none; }
       // Actions
       items.push(
         { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
+        ...SESSION_TEMPLATES.map(t => ({
+          kind: 'template',
+          icon: t.icon,
+          label: `New session: ${t.name}`,
+          search: `template ${t.name} ${t.desc} ${(t.tags || []).join(' ')}`,
+          action: () => { closeCmdPalette(); startFromTemplate(t.id) },
+        })),
         { kind: 'action', icon: '🌙', label: 'Toggle theme', search: 'theme dark light', action: () => { toggleTheme(); closeCmdPalette() } },
         { kind: 'action', icon: '📁', label: 'Pick workspace folder', search: 'workspace folder', action: () => { closeCmdPalette(); pickWorkspace() } },
         { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
@@ -7128,12 +7171,16 @@ Title:`
         }).join('')
         spaceCardsHtml = `<div class="welcome-spaces">${spaceCards}</div>`
       }
+      const templateCards = (typeof renderTemplatePickerHtml === 'function')
+        ? renderTemplatePickerHtml()
+        : ''
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
         <div class="welcome-title"><span class="welcome-gradient">Alaude</span> — what are we building?</div>
         <div class="welcome-sub">Drop a file, or just start typing. Local and cloud models in one window.</div>
         ${spaceCardsHtml}
         <div class="quick-actions" id="quick-actions"></div>
+        ${templateCards}
         <div class="welcome-hints">
           <span><kbd>⌘K</kbd> focus input</span>
           <span><kbd>⌘P</kbd> jump anywhere</span>
@@ -7925,6 +7972,110 @@ Title:`
           <button class="session-item-delete" onclick="event.stopPropagation(); if(confirm('Delete this session?')) deleteSession(${s.id})" title="Delete">×</button>
         </div>`
       }).join('')
+    }
+
+    // ── Session Templates ─────────────────────────────────────────
+    // Curated session starters that pre-configure goal, tags, and a
+    // first-message draft. Shown as a card grid on the empty welcome
+    // screen. Each template ties together features that already exist
+    // (Goal Tracker + Tags + starter prompt) into one click.
+    const SESSION_TEMPLATES = [
+      {
+        id: 'standup',
+        icon: '📅',
+        name: 'Daily Standup',
+        desc: 'Turn yesterday\'s work into today\'s plan',
+        goal: 'Prepare today\'s standup update',
+        tags: ['standup'],
+        starter: 'Here\'s what I worked on yesterday:\n- \n\nBlockers:\n- \n\nPlan for today:\n- \n\nPolish this into a tight 3-bullet standup update.',
+      },
+      {
+        id: 'code-review',
+        icon: '🧐',
+        name: 'Code Review',
+        desc: 'Paste code, get line-by-line feedback',
+        goal: 'Review code for bugs, perf, and clarity',
+        tags: ['review', 'coding'],
+        starter: 'Review the code below. Flag bugs, performance issues, code smells, and clarity problems. Cite specific line numbers and be direct — no hedging.\n\n```\n\n```',
+      },
+      {
+        id: 'debug',
+        icon: '🐛',
+        name: 'Debug Help',
+        desc: 'Root-cause a stack trace or weird behavior',
+        goal: 'Root-cause and fix the bug',
+        tags: ['debug'],
+        starter: 'I\'m seeing this error/behavior:\n\n\n\nRelevant code:\n\n```\n\n```\n\nList the top 3 most likely causes in order of probability. For each, give a one-line fix + how to verify.',
+      },
+      {
+        id: 'brainstorm',
+        icon: '💡',
+        name: 'Brainstorm',
+        desc: 'Generate and evaluate ideas',
+        goal: 'Generate and evaluate ideas',
+        tags: ['brainstorm'],
+        starter: 'Help me brainstorm approaches to:\n\n\n\nGenerate 5 meaningfully different options. For each: one-line pitch, main upside, main risk, and where it\'d shine. Then recommend a favorite with reasoning.',
+      },
+      {
+        id: 'research',
+        icon: '🔬',
+        name: 'Research Brief',
+        desc: 'Structured answer with citations',
+        goal: 'Produce a research brief',
+        tags: ['research'],
+        starter: 'Topic:\n\n\n\nWrite a ~400-word brief covering: current state, 2-3 competing viewpoints, what changed recently, and what\'s still contested. Where you\'re uncertain, say so. Cite sources inline.',
+      },
+      {
+        id: 'writing',
+        icon: '✍️',
+        name: 'Writing Polish',
+        desc: 'Rewrite for clarity and tone',
+        goal: 'Polish a piece of writing',
+        tags: ['writing'],
+        starter: 'Rewrite this for clarity and a professional but warm tone. Preserve the meaning; trim anything redundant. Show the polished version, then a short bulleted list of what you changed and why.\n\n---\n\n',
+      },
+    ]
+    function renderTemplatePickerHtml() {
+      // Only render if there are zero sessions in the welcome state — we're
+      // already in a newSession/empty context when this is called. The
+      // single-card row doubles as a lightweight "what is Alaude good at"
+      // teaser for first-time users.
+      const cards = SESSION_TEMPLATES.map(t => `
+        <div class="template-card" onclick="startFromTemplate('${t.id}')" title="${escapeHtml(t.desc)}">
+          <span class="template-icon">${t.icon}</span>
+          <div class="template-body">
+            <div class="template-name">${escapeHtml(t.name)}</div>
+            <div class="template-desc">${escapeHtml(t.desc)}</div>
+          </div>
+        </div>`).join('')
+      return `
+        <div class="template-section">
+          <div class="template-section-label">Or start from a template</div>
+          <div class="template-grid">${cards}</div>
+        </div>`
+    }
+    function startFromTemplate(id) {
+      const t = SESSION_TEMPLATES.find(x => x.id === id)
+      if (!t) return
+      newSession()
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      s.title = t.name
+      s.tags = [...(t.tags || [])]
+      if (t.goal) s.goal = { text: t.goal, status: 'active', setAt: Date.now() }
+      persistSessions()
+      renderSessions?.()
+      renderGoalCard?.()
+      // Pre-fill the input with the starter prompt and drop the caret at
+      // the first blank line so the user can just start typing.
+      input.value = t.starter || ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      const firstEmptyLineIdx = t.starter ? (t.starter.indexOf('\n\n\n\n') >= 0 ? t.starter.indexOf('\n\n\n\n') + 2 : t.starter.length) : 0
+      try {
+        input.focus()
+        input.setSelectionRange(firstEmptyLineIdx, firstEmptyLineIdx)
+      } catch {}
+      showRewindToast?.(`${t.icon} ${t.name} template ready`, false)
     }
 
     function newSession() {
