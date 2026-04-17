@@ -5837,8 +5837,90 @@ footer a { color: var(--accent); text-decoration: none; }
       }
       const currentModel = document.getElementById('model-select')?.value || 'default'
       const ctxSize = modelContextSize(currentModel)
+      const fileChars = (typeof attachedFiles !== 'undefined') ? attachedFiles.reduce((n, f) => n + (f.content?.length || 0), 0) : 0
+      const usedTokens = approxTokens(msgChars) + approxTokens(fileChars)
+      const usagePct = ctxSize > 0 ? usedTokens / ctxSize : 0
       rows.push(`<div class="radar-row"><span class="radar-row-label" style="color:var(--text-faint)">Model window</span><span class="radar-row-meta">${formatCompact(ctxSize)} tokens max</span></div>`)
+      // Prune Context: offer a trim action once usage is meaningful. The
+      // threshold (>40% OR >12 turns) kicks in before the user is actively
+      // in pain — so the button is findable rather than an emergency brake.
+      const nonStream = messages.filter(m => !m.streaming)
+      if (nonStream.length >= 12 || usagePct > 0.4) {
+        const pinnedCount = nonStream.filter(m => m.pinned).length
+        rows.push(`
+          <div class="radar-row" style="flex-direction:column;align-items:stretch;gap:6px">
+            <span class="radar-row-label" style="color:var(--text-faint)">✂️ Compact conversation</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px">
+              <button class="msg-action-btn" onclick="pruneConversation(10)">Keep last 10 turns</button>
+              <button class="msg-action-btn" onclick="pruneConversation(20)">Keep last 20 turns</button>
+              <button class="msg-action-btn" onclick="pruneConversation(6)" title="Aggressive trim">Keep last 6 turns</button>
+            </div>
+            <div style="font-size:10px;color:var(--text-faint)">
+              Drops the oldest turns. Pinned messages${pinnedCount ? ` (${pinnedCount})` : ''} are always preserved.
+              Tip: ⌘⇧S for a summary first, then prune.
+            </div>
+          </div>`)
+      }
       detail.innerHTML = rows.join('')
+    }
+
+    // Prune the current session's messages down to the last N turns
+    // (user+assistant pairs). Pinned messages are always preserved. The
+    // removed messages are stashed so the user can undo within 10s if the
+    // trim was a mistake.
+    let _pruneUndo = null
+    function pruneConversation(keepLast) {
+      if (!Array.isArray(messages) || !messages.length) return
+      const nonStream = messages.filter(m => !m.streaming)
+      if (nonStream.length <= keepLast) {
+        showRewindToast?.(`Already at ${nonStream.length} turns — nothing to prune`, false)
+        return
+      }
+      // Count backwards to find the cutoff index (keeping pinned + last N)
+      const pinnedIdxs = new Set(nonStream.map((m, i) => m.pinned ? i : -1).filter(i => i >= 0))
+      const toKeep = new Set()
+      // Keep the last `keepLast` non-streaming messages
+      for (let i = nonStream.length - 1, kept = 0; i >= 0 && kept < keepLast; i--) {
+        toKeep.add(i); kept++
+      }
+      // Always keep pinned
+      for (const i of pinnedIdxs) toKeep.add(i)
+      const before = [...messages]
+      const removed = []
+      const next = []
+      let nsIdx = 0
+      for (const m of messages) {
+        if (m.streaming) { next.push(m); continue }
+        if (toKeep.has(nsIdx)) next.push(m)
+        else removed.push(m)
+        nsIdx++
+      }
+      if (!removed.length) {
+        showRewindToast?.('Nothing to trim — all messages are pinned or within the keep-window', false)
+        return
+      }
+      if (!window.confirm(`Trim ${removed.length} older message${removed.length === 1 ? '' : 's'} from this conversation? (Pinned messages are preserved. You can undo for 10 seconds.)`)) return
+      messages = next
+      _pruneUndo = { before, ts: Date.now() }
+      // Clear any prior undo timer and start a new one.
+      clearTimeout(window._pruneUndoTimer)
+      window._pruneUndoTimer = setTimeout(() => { _pruneUndo = null }, 10000)
+      persistSessions()
+      renderMessages()
+      // Offer undo via the toast mechanism (reuses showRewindToast). The
+      // toast text is a hint; undo is actually available through the
+      // command palette or the ⌘Z-like keybinding below.
+      showRewindToast?.(`✂️ Pruned ${removed.length} turn${removed.length === 1 ? '' : 's'} — undo with ⌘Z within 10s`, false)
+    }
+    function undoPrune() {
+      if (!_pruneUndo) return false
+      messages = _pruneUndo.before
+      _pruneUndo = null
+      clearTimeout(window._pruneUndoTimer)
+      persistSessions()
+      renderMessages()
+      showRewindToast?.('↶ Prune undone', false)
+      return true
     }
 
     // ── Scroll-to-latest FAB ─────────────────────────────────────────────
@@ -5955,6 +6037,12 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault()
         extractSessionTodos()
+      }
+      // Cmd/Ctrl+Z → undo a recent prune (if any). Only intercepts when not
+      // focused inside a text input, so normal undo keeps working there.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z'
+          && !e.target.matches?.('input, textarea, [contenteditable]')) {
+        if (undoPrune?.()) { e.preventDefault() }
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
