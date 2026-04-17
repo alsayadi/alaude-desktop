@@ -4272,6 +4272,106 @@
       tray.classList.add('show')
     }
 
+    // ── Full backup export/import ───────────────────────────────────
+    // Writes ALL local state to a single JSON file: sessions (with branches,
+    // tags, message history), memories, prompt snippets, and metadata.
+    // Can be re-imported later to restore or migrate between machines.
+    function exportFullBackup() {
+      // Snapshot current session's messages into its session entry first
+      const current = sessions.find(s => s.id === currentSessionId)
+      if (current) current.messages = messages
+      const backup = {
+        schema: 'alaude-backup-v1',
+        exportedAt: new Date().toISOString(),
+        appVersion: (window.alaude?.version) || 'dev',
+        sessions: sessions,
+        memories: memories,
+        snippets: snippets,
+        // Feature flags + preferences
+        prefs: {
+          focusMode: localStorage.getItem('alaude:focus:v1') === '1',
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
+          activeSessionId: currentSessionId,
+        },
+      }
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const date = new Date().toISOString().slice(0, 10)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alaude-backup-${date}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      const stats = `${sessions.length} sessions · ${memories.length} memories · ${snippets.length} snippets`
+      showRewindToast?.(`📦 Backup exported (${stats})`, false)
+    }
+
+    async function importFullBackup() {
+      // Use a native file picker via a hidden <input type=file> since we
+      // don't have an IPC handler for JSON reads.
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'application/json,.json'
+      input.onchange = async () => {
+        const file = input.files?.[0]
+        if (!file) return
+        try {
+          const text = await file.text()
+          const data = JSON.parse(text)
+          if (!data || typeof data !== 'object') throw new Error('Invalid JSON shape')
+          if (data.schema && !String(data.schema).startsWith('alaude-backup')) {
+            if (!confirm(`This looks like a non-Alaude file (schema: ${data.schema}). Try anyway?`)) return
+          }
+          // Merge sessions: new ones added, existing ones keep their local
+          // version unless the imported one has strictly more messages.
+          const before = { sessions: sessions.length, memories: memories.length, snippets: snippets.length }
+          if (Array.isArray(data.sessions)) {
+            const byId = new Map(sessions.map(s => [s.id, s]))
+            for (const imp of data.sessions) {
+              if (!imp?.id) continue
+              const existing = byId.get(imp.id)
+              if (!existing) {
+                sessions.push(imp)
+              } else if ((imp.messages || []).length > (existing.messages || []).length) {
+                // Imported version is more complete — replace
+                const idx = sessions.findIndex(s => s.id === imp.id)
+                if (idx >= 0) sessions[idx] = imp
+              }
+              // else: keep local (more or equal messages)
+            }
+          }
+          if (Array.isArray(data.memories)) {
+            const byId = new Set(memories.map(m => m.id))
+            for (const m of data.memories) {
+              if (!m?.id || byId.has(m.id)) continue
+              memories.push(m)
+            }
+            saveMemories()
+          }
+          if (Array.isArray(data.snippets)) {
+            const byId = new Set(snippets.map(s => s.id))
+            for (const s of data.snippets) {
+              if (!s?.id || byId.has(s.id)) continue
+              snippets.push(s)
+            }
+            saveSnippets()
+          }
+          persistSessions()
+          renderSessions()
+          renderMessages()
+          const added = {
+            sessions: sessions.length - before.sessions,
+            memories: memories.length - before.memories,
+            snippets: snippets.length - before.snippets,
+          }
+          showRewindToast?.(`📥 Imported +${added.sessions} sessions · +${added.memories} memories · +${added.snippets} snippets`, false)
+        } catch (err) {
+          alert('Import failed: ' + (err?.message || String(err)))
+        }
+      }
+      input.click()
+    }
+
     // ── Export current session as Markdown ──────────────────────────────
     // Emits a self-contained markdown transcript. Branches are enumerated
     // as a separate "Branches" section at the top with links to their
@@ -4402,6 +4502,8 @@
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
         { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
         { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
+        { kind: 'action', icon: '📦', label: 'Export full backup (JSON)', search: 'backup export all json sessions memories snippets', action: () => { closeCmdPalette(); exportFullBackup() } },
+        { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
       )
       return items
     }
@@ -4756,6 +4858,11 @@
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e' && !e.shiftKey) {
         e.preventDefault()
         exportSessionMarkdown()
+      }
+      // Cmd/Ctrl+Shift+E → export FULL backup (all sessions + memories + snippets)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault()
+        exportFullBackup()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
