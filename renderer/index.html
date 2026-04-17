@@ -1669,6 +1669,23 @@
       text-align: left;
     }
     .template-card:hover { border-color: var(--green); transform: translateY(-1px); }
+    .template-card { position: relative; }
+    .template-card .tmpl-del {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+      padding: 0 2px;
+    }
+    .template-card:hover .tmpl-del { opacity: 0.7; }
+    .template-card .tmpl-del:hover { opacity: 1 !important; color: #e74c3c; }
     .template-icon { font-size: 18px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
     .template-body { flex: 1; min-width: 0; }
     .template-name { color: var(--text); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
@@ -6949,13 +6966,14 @@ footer a { color: var(--accent); text-decoration: none; }
       // Actions
       items.push(
         { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
-        ...SESSION_TEMPLATES.map(t => ({
+        ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
           label: `New session: ${t.name}`,
-          search: `template ${t.name} ${t.desc} ${(t.tags || []).join(' ')}`,
+          search: `template ${t.name} ${t.desc || ''} ${(t.tags || []).join(' ')}`,
           action: () => { closeCmdPalette(); startFromTemplate(t.id) },
         })),
+        { kind: 'action', icon: '⭐', label: 'Save current session as template', search: 'save template custom starter promote turn into capture', action: () => { closeCmdPalette(); saveCurrentSessionAsTemplate() } },
         { kind: 'action', icon: '🌙', label: 'Toggle theme', search: 'theme dark light', action: () => { toggleTheme(); closeCmdPalette() } },
         { kind: 'action', icon: '◧', label: 'Toggle sidebar (collapse / expand)', search: 'sidebar collapse hide expand toggle panel layout width', action: () => { toggleSidebar(); closeCmdPalette() } },
         { kind: 'action', icon: '📝', label: 'Toggle Living Document mode', search: 'living document reader prose flowing markdown view layout', action: () => { toggleLivingDoc(); closeCmdPalette() } },
@@ -9281,19 +9299,83 @@ Title:`
         starter: 'Rewrite this for clarity and a professional but warm tone. Preserve the meaning; trim anything redundant. Show the polished version, then a short bulleted list of what you changed and why.\n\n---\n\n',
       },
     ]
+    // User-saved custom templates live in localStorage, merged with the
+    // built-in set above. Each has the same shape as SESSION_TEMPLATES.
+    const LS_CUSTOM_TEMPLATES = 'alaude:templates:v1'
+    function loadCustomTemplates() {
+      try {
+        const raw = localStorage.getItem(LS_CUSTOM_TEMPLATES)
+        if (!raw) return []
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+      } catch { return [] }
+    }
+    function saveCustomTemplates(arr) {
+      try { localStorage.setItem(LS_CUSTOM_TEMPLATES, JSON.stringify(arr)) } catch {}
+    }
+    function allTemplates() {
+      return [...SESSION_TEMPLATES, ...loadCustomTemplates()]
+    }
+    function saveCurrentSessionAsTemplate() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      const firstUser = (s.messages || []).find(m => m.role === 'user')
+      const starter = firstUser
+        ? (Array.isArray(firstUser.content)
+            ? firstUser.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+            : String(firstUser.content || ''))
+        : ''
+      if (!starter.trim() && !s.goal?.text && !(s.tags || []).length) {
+        showRewindToast?.('Nothing to capture — session has no goal, tags, or prompts yet', true)
+        return
+      }
+      const nameRaw = window.prompt('Template name:', s.title || 'Custom starter')
+      if (nameRaw == null) return
+      const name = nameRaw.trim().slice(0, 40)
+      if (!name) return
+      const icon = (window.prompt('Icon / emoji (one char, optional):', '⭐') || '⭐').slice(0, 4)
+      const descRaw = window.prompt('Short description (optional):', '') || ''
+      const id = 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
+      const tmpl = {
+        id,
+        icon: icon || '⭐',
+        name,
+        desc: descRaw.slice(0, 80),
+        goal: s.goal?.text || '',
+        tags: [...(s.tags || [])],
+        starter: starter.slice(0, 4000),
+        custom: true,
+      }
+      const list = loadCustomTemplates()
+      list.push(tmpl)
+      saveCustomTemplates(list)
+      showRewindToast?.(`${icon} Saved "${name}" as a template`, false)
+      // Refresh the welcome screen so the new card shows up immediately
+      renderMessages?.()
+    }
+    function deleteCustomTemplate(id) {
+      const list = loadCustomTemplates()
+      const next = list.filter(t => t.id !== id)
+      saveCustomTemplates(next)
+      renderMessages?.()
+    }
+
     function renderTemplatePickerHtml() {
-      // Only render if there are zero sessions in the welcome state — we're
-      // already in a newSession/empty context when this is called. The
-      // single-card row doubles as a lightweight "what is Alaude good at"
-      // teaser for first-time users.
-      const cards = SESSION_TEMPLATES.map(t => `
-        <div class="template-card" onclick="startFromTemplate('${t.id}')" title="${escapeHtml(t.desc)}">
-          <span class="template-icon">${t.icon}</span>
-          <div class="template-body">
-            <div class="template-name">${escapeHtml(t.name)}</div>
-            <div class="template-desc">${escapeHtml(t.desc)}</div>
-          </div>
-        </div>`).join('')
+      // Merge built-in + user templates for the welcome-screen grid.
+      const cards = allTemplates().map(t => {
+        const delX = t.custom
+          ? `<button class="tmpl-del" onclick="event.stopPropagation(); if(confirm('Delete this template?')) deleteCustomTemplate('${escapeHtml(t.id)}')" title="Delete custom template">×</button>`
+          : ''
+        return `
+          <div class="template-card" onclick="startFromTemplate('${escapeHtml(t.id)}')" title="${escapeHtml(t.desc || '')}">
+            <span class="template-icon">${t.icon}</span>
+            <div class="template-body">
+              <div class="template-name">${escapeHtml(t.name)}</div>
+              <div class="template-desc">${escapeHtml(t.desc || '')}</div>
+            </div>
+            ${delX}
+          </div>`
+      }).join('')
       return `
         <div class="template-section">
           <div class="template-section-label">Or start from a template</div>
@@ -9301,7 +9383,7 @@ Title:`
         </div>`
     }
     function startFromTemplate(id) {
-      const t = SESSION_TEMPLATES.find(x => x.id === id)
+      const t = allTemplates().find(x => x.id === id)
       if (!t) return
       newSession()
       const s = sessions.find(s => s.id === currentSessionId)
