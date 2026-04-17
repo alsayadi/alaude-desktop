@@ -3564,6 +3564,7 @@
         <div class="shortcuts-section">Chat</div>
         <dt>Send message</dt><dd><kbd>↵</kbd></dd>
         <dt>New line in message</dt><dd><kbd>⇧</kbd><kbd>↵</kbd></dd>
+        <dt>Recall previous prompts</dt><dd><kbd>↑</kbd> / <kbd>↓</kbd> in empty input</dd>
         <dt>Next <code>{{variable}}</code> in snippet</dt><dd><kbd>Tab</kbd></dd>
         <dt>Trigger snippet menu</dt><dd><kbd>/</kbd> at start of input</dd>
         <dt>Push-to-talk (input empty)</dt><dd>hold <kbd>Space</kbd></dd>
@@ -3781,6 +3782,36 @@
       updateSlashMenu()
     })
 
+    // Prompt history: ↑/↓ in the input recalls previous user messages for
+    // the active session. `historyIdx` is -1 when not browsing; when the user
+    // starts typing we reset to -1 so edits stay out of history mode.
+    let historyIdx = -1
+    let historyDraft = ''
+    function resetPromptHistory() { historyIdx = -1; historyDraft = '' }
+    function collectUserPrompts() {
+      // Oldest → newest, string-only (drops image-only messages).
+      return messages
+        .filter(m => m.role === 'user' && !m.streaming)
+        .map(m => Array.isArray(m.content)
+          ? m.content.filter(p => p?.type === 'text').map(p => p.text).join('\n').trim()
+          : String(m.content || '').trim())
+        .filter(Boolean)
+    }
+    function canEnterHistory() {
+      // Empty input → always. Otherwise only if caret is at position 0 on
+      // the first line (so ↑ still navigates within multi-line drafts).
+      if (!input.value) return true
+      if (historyIdx >= 0) return true // already browsing
+      const pos = input.selectionStart ?? 0
+      return pos === 0 && input.value.indexOf('\n') !== 0
+    }
+    function applyHistoryEntry(value) {
+      input.value = value
+      // Caret at end for easy append; auto-grow the textarea.
+      input.selectionStart = input.selectionEnd = value.length
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+
     input.addEventListener('keydown', (e) => {
       // Slash-menu keyboard navigation takes priority while visible
       const slashOpen = document.getElementById('slash-menu')?.classList.contains('show')
@@ -3794,6 +3825,34 @@
       // Tab cycles to the next {{placeholder}} inside the input
       if (e.key === 'Tab' && !slashOpen && input.value.includes('{{')) {
         if (jumpToNextPlaceholder()) { e.preventDefault(); return }
+      }
+      // ↑ / ↓ prompt history recall
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !slashOpen && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const history = collectUserPrompts() // oldest → newest
+        if (history.length && canEnterHistory()) {
+          if (e.key === 'ArrowUp') {
+            if (historyIdx === -1) historyDraft = input.value
+            if (historyIdx < history.length - 1) {
+              e.preventDefault()
+              historyIdx++
+              applyHistoryEntry(history[history.length - 1 - historyIdx])
+              return
+            }
+          } else {
+            // ArrowDown — only consume if we're currently browsing
+            if (historyIdx >= 0) {
+              e.preventDefault()
+              historyIdx--
+              if (historyIdx === -1) applyHistoryEntry(historyDraft)
+              else applyHistoryEntry(history[history.length - 1 - historyIdx])
+              return
+            }
+          }
+        }
+      }
+      // Any other key breaks out of history mode (typing, paste, etc.)
+      if (historyIdx >= 0 && !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Shift', 'Meta', 'Control', 'Alt'].includes(e.key)) {
+        resetPromptHistory()
       }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
@@ -5089,6 +5148,7 @@ SUMMARY:`
       let text = input.value.trim()
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
       if (isStreaming) return
+      resetPromptHistory?.()
 
       // Prepend attached file contents to the message
       if (attachedFiles.length > 0) {
@@ -6658,6 +6718,7 @@ Title:`
       renderMessages()
       renderPinTray?.()
       renderSummaryCard?.()
+      resetPromptHistory?.()
       persistSessions()
     }
 
