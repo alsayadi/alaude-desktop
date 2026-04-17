@@ -208,6 +208,53 @@
     .pin-remove:hover { color: #e74c3c; opacity: 1 !important; }
     .msg.pinned { border-left: 3px solid var(--green); padding-left: 10px; background: color-mix(in srgb, var(--green) 4%, transparent); }
 
+    /* ─── Session Summary Card ─────────────────────────────────────── */
+    .session-summary {
+      margin: 6px auto 0;
+      max-width: 720px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--green) 5%, var(--bg-input)) 0%, var(--bg-input) 100%);
+      border: 1px solid var(--border);
+      border-left: 3px solid #f39c12;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: none;
+    }
+    .session-summary.show { display: block; }
+    .session-summary.loading { border-left-color: var(--text-faint); opacity: 0.7; }
+    .summary-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .summary-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .summary-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .summary-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .summary-btn:hover { border-color: var(--green); color: var(--green); }
+    .summary-body { color: var(--text); font-size: 12px; line-height: 1.55; }
+    .summary-body ul { margin: 2px 0 0 16px; padding: 0; }
+    .summary-body li { margin: 2px 0; }
+    .summary-meta { color: var(--text-faint); font-size: 10px; margin-top: 6px; font-style: italic; }
+
     /* ─── Sidebar ───────────────────────────────────────────────────────── */
     .sidebar {
       width: var(--sidebar-w);
@@ -3304,6 +3351,7 @@
 
     <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
     <div class="pin-tray" id="pin-tray"></div>
+    <div class="session-summary" id="session-summary"></div>
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
@@ -3524,6 +3572,8 @@
 
         <div class="shortcuts-section">Session</div>
         <dt>Export current as Markdown</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>E</kbd></dd>
+        <dt>Export full backup (JSON)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>E</kbd></dd>
+        <dt>📝 Summarize this session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></dd>
         <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
         <dt>Rewind / Branch</dt><dd>buttons on any assistant reply</dd>
         <dt>Pin a message</dt><dd>📌 button on any reply</dd>
@@ -4272,6 +4322,142 @@
       tray.classList.add('show')
     }
 
+    // ── Session Summary Card ────────────────────────────────────────
+    // Generates a 3-6 bullet recap of the current session using the
+    // active model. Stored on the session and re-rendered on switch.
+    // Useful for long conversations: keeps decisions/open questions
+    // visible without scrolling back.
+    function getSessionSummary() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      return s?.summary || null
+    }
+    function renderSummaryCard() {
+      const card = document.getElementById('session-summary')
+      if (!card) return
+      const summary = getSessionSummary()
+      if (summary && summary.loading) {
+        card.classList.add('show', 'loading')
+        card.innerHTML = `
+          <div class="summary-head">
+            <span class="summary-label">📝 Summarizing…</span>
+          </div>
+          <div class="summary-body">Reading your conversation and extracting key points…</div>`
+        return
+      }
+      card.classList.remove('loading')
+      if (!summary || !summary.text) {
+        card.classList.remove('show')
+        card.innerHTML = ''
+        return
+      }
+      const when = summary.generatedAt ? new Date(summary.generatedAt).toLocaleString() : ''
+      const body = renderMarkdown(summary.text)
+      card.classList.add('show')
+      card.innerHTML = `
+        <div class="summary-head">
+          <span class="summary-label">📝 Session Summary</span>
+          <span class="summary-actions">
+            <button class="summary-btn" onclick="generateSummary()" title="Regenerate with current model">↻ Refresh</button>
+            <button class="summary-btn" onclick="dismissSummary()" title="Hide this summary">× Dismiss</button>
+          </span>
+        </div>
+        <div class="summary-body">${body}</div>
+        <div class="summary-meta">via ${escapeHtml(summary.model || 'unknown')} · ${escapeHtml(when)}</div>`
+    }
+    function dismissSummary() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      delete s.summary
+      persistSessions()
+      renderSummaryCard()
+    }
+    async function generateSummary() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      const modelSelect = document.getElementById('model-select')
+      const model = modelSelect?.value
+      if (!model) {
+        showRewindToast?.('Pick a model first', true)
+        return
+      }
+      // Need at least two turns (one Q+A) to summarize anything meaningful.
+      const turns = messages.filter(m => !m.streaming && (m.role === 'user' || m.role === 'assistant'))
+      if (turns.length < 2) {
+        showRewindToast?.('Nothing to summarize yet — have a short chat first', true)
+        return
+      }
+      // Preserve old summary text so a refresh doesn't make it flash empty
+      const prior = session.summary
+      session.summary = { ...(prior || {}), loading: true }
+      renderSummaryCard()
+      // Flatten multimodal content + trim very long messages so we stay under
+      // reasonable input sizes regardless of model.
+      const strOf = (m) => {
+        const raw = Array.isArray(m.content)
+          ? m.content.filter(p => p?.type === 'text').map(p => p.text).join(' ')
+          : String(m.content || '')
+        return raw.slice(0, 1500)
+      }
+      const transcript = turns
+        .slice(-30)            // last ~30 turns is plenty for a summary
+        .map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${strOf(m)}`)
+        .join('\n\n')
+      const prompt = [
+        { role: 'user', content:
+`You are summarising an ongoing conversation so the user can catch up at a glance.
+
+Produce a markdown summary with these sections, only including sections that apply:
+- **Topic** — one sentence
+- **Decisions** — bullet points of things agreed or concluded
+- **Open questions** — bullet points of unresolved items
+- **Key facts** — bullet points of concrete details worth remembering
+
+Keep it under 140 words total. No preamble, no wrap-up — go straight to the markdown.
+
+CONVERSATION:
+${transcript}
+
+SUMMARY:`
+        },
+      ]
+      try {
+        const resp = await window.alaude.chat(
+          prompt,
+          model,
+          workspacePath,
+          'general',
+          { messageId: 'summary_' + Date.now().toString(36), sessionId: 'summary_' + session.id }
+        )
+        let text = (typeof resp === 'string' ? resp : '').trim()
+        // Some models add a leading "Summary:" or code fence — clean that up.
+        text = text.replace(/^```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/,'').trim()
+        text = text.replace(/^summary\s*[:\-—]\s*/i, '').trim()
+        if (!text) {
+          showRewindToast?.('Model returned an empty summary', true)
+          // Roll back to prior state (or unset)
+          if (prior) session.summary = prior
+          else delete session.summary
+          renderSummaryCard()
+          return
+        }
+        session.summary = {
+          text,
+          model,
+          generatedAt: Date.now(),
+          messageCount: turns.length,
+        }
+        persistSessions()
+        renderSummaryCard()
+        showRewindToast?.('📝 Summary generated', false)
+      } catch (err) {
+        console.warn('[summary] failed:', err?.message || err)
+        showRewindToast?.('Summary failed: ' + (err?.message || 'unknown'), true)
+        if (prior) session.summary = prior
+        else delete session.summary
+        renderSummaryCard()
+      }
+    }
+
     // ── Full backup export/import ───────────────────────────────────
     // Writes ALL local state to a single JSON file: sessions (with branches,
     // tags, message history), memories, prompt snippets, and metadata.
@@ -4504,6 +4690,7 @@
         { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
         { kind: 'action', icon: '📦', label: 'Export full backup (JSON)', search: 'backup export all json sessions memories snippets', action: () => { closeCmdPalette(); exportFullBackup() } },
         { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
+        { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
       )
       return items
     }
@@ -4863,6 +5050,11 @@
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
         exportFullBackup()
+      }
+      // Cmd/Ctrl+Shift+S → generate/refresh session summary card
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        generateSummary()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
@@ -5654,6 +5846,7 @@ Title:`
       updateContextRadar?.()
       renderConvMinimap?.()
       renderPinTray?.()
+      renderSummaryCard?.()
       updateSessionCostDisplay?.()
     }
 
@@ -6463,6 +6656,8 @@ Title:`
       ux.lastMessageId = null
       renderSessions()
       renderMessages()
+      renderPinTray?.()
+      renderSummaryCard?.()
       persistSessions()
     }
 
