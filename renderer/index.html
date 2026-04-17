@@ -887,6 +887,22 @@
     }
     .session-item:hover .session-item-delete { opacity: 0.7; }
     .session-item-delete:hover { color: #e74c3c; opacity: 1; }
+    .session-item-star {
+      flex-shrink: 0;
+      background: none;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 13px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .session-item:hover .session-item-star,
+    .session-item-star.starred { opacity: 1; }
+    .session-item-star:hover { color: #f1c40f; }
+    .session-item-star.starred { color: #f1c40f; }
 
     /* ── Time-Travel: branch tree in sidebar ─────────────────────────── */
     .session-item.branch {
@@ -6967,6 +6983,7 @@ footer a { color: var(--accent); text-decoration: none; }
       items.push(
         { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
         { kind: 'action', icon: '⎘', label: 'Duplicate current session', search: 'duplicate copy clone session fork standalone', action: () => { closeCmdPalette(); duplicateCurrentSession() } },
+        { kind: 'action', icon: '★', label: 'Star / unstar current session', search: 'star unstar favorite pin top sidebar bookmark', action: () => { closeCmdPalette(); toggleCurrentSessionStar() } },
         ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
@@ -9202,6 +9219,13 @@ Title:`
       if (activeTagFilter) {
         list = list.filter(s => Array.isArray(s.tags) && s.tags.includes(activeTagFilter))
       }
+      // Starred sessions float to the top. Stable-sort preserves the source
+      // order (which is newest-first) within each group.
+      list = list.slice().sort((a, b) => {
+        const sa = a.starred ? 1 : 0
+        const sb = b.starred ? 1 : 0
+        return sb - sa
+      })
       if (!list.length) {
         const reason = activeTagFilter ? `no sessions tagged #${activeTagFilter}` : `No sessions match "${escapeHtml(sessionSearchQuery)}"`
         container.innerHTML = `<div style="color:var(--text-faint);font-size:12px;padding:14px 16px">${reason}</div>`
@@ -9226,7 +9250,9 @@ Title:`
           : ''
         const goalPrefix = goalIconForSession?.(s) || ''
         const goalTip = s.goal?.text ? ` — goal: ${escapeHtml(s.goal.text)}` : ''
+        const starBtn = `<button class="session-item-star ${s.starred ? 'starred' : ''}" onclick="event.stopPropagation(); toggleSessionStar(${s.id})" title="${s.starred ? 'Unstar' : 'Star — pin to top'}">${s.starred ? '★' : '☆'}</button>`
         return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}${goalTip}">
+          ${starBtn}
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
             <div style="display:flex;align-items:center;gap:4px;min-width:0">
               ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(s.title)}</span>
@@ -9427,6 +9453,20 @@ Title:`
       renderMessages()
       persistSessions()
       input.focus()
+    }
+
+    // Star a session → float it to the top of the sidebar. Order among
+    // starred sessions follows the underlying recency sort (newest first).
+    function toggleSessionStar(id) {
+      const s = sessions.find(s => s.id === id)
+      if (!s) return
+      s.starred = !s.starred
+      persistSessions()
+      renderSessions()
+      showRewindToast?.(s.starred ? '★ Starred' : '☆ Unstarred', false)
+    }
+    function toggleCurrentSessionStar() {
+      toggleSessionStar(currentSessionId)
     }
 
     // Duplicate the active session: full deep-copy of messages, plus title
