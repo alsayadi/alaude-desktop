@@ -273,6 +273,81 @@
       padding-left: 6px;
     }
 
+    /* ─── Living Document Mode ─────────────────────────────────── */
+    /* Toggle that flattens the bubble UI into a clean reader view.
+       Useful when you're using a long conversation as a working
+       document (a research brief, notes, a draft). */
+    body.living-doc .msg {
+      background: transparent !important;
+      border: 0 !important;
+      padding: 2px 0 !important;
+      margin: 0 0 14px !important;
+      box-shadow: none !important;
+      border-left: 0 !important;
+    }
+    body.living-doc .msg.user {
+      border-left: 2px solid var(--text-faint) !important;
+      padding-left: 14px !important;
+      margin-bottom: 18px !important;
+    }
+    body.living-doc .msg .msg-header { display: none; }
+    body.living-doc .msg .msg-actions { display: none !important; }
+    body.living-doc .msg .memory-chip,
+    body.living-doc .msg .memory-chip-expanded { display: none !important; }
+    body.living-doc .msg .reaction-note { display: none !important; }
+    body.living-doc .msg .stats-badge,
+    body.living-doc .msg .cost-badge { display: none !important; }
+    body.living-doc .msg-img { max-height: 220px !important; }
+    body.living-doc .context-radar,
+    body.living-doc .context-detail,
+    body.living-doc .conv-minimap,
+    body.living-doc .pin-tray,
+    body.living-doc .session-summary,
+    body.living-doc .session-todos,
+    body.living-doc .session-goal,
+    body.living-doc .scroll-fab { display: none !important; }
+    body.living-doc .messages {
+      padding: 40px 16px 80px !important;
+      line-height: 1.75 !important;
+    }
+    body.living-doc .msg.user .msg-content {
+      color: var(--text-dim);
+      font-style: italic;
+      font-size: 13px;
+    }
+    body.living-doc .msg.user .msg-content::before {
+      content: '❝ ';
+      color: var(--text-faint);
+    }
+    body.living-doc .msg.user .msg-content::after {
+      content: ' ❞';
+      color: var(--text-faint);
+    }
+    body.living-doc .msg.assistant .msg-content {
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    body.living-doc .welcome,
+    body.living-doc .welcome-hints,
+    body.living-doc .template-section { display: none !important; }
+    .ld-badge {
+      position: fixed;
+      top: 8px;
+      right: 12px;
+      z-index: 30;
+      background: color-mix(in srgb, var(--green) 20%, transparent);
+      border: 1px solid var(--green);
+      color: var(--green);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: monospace;
+      display: none;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    body.living-doc .ld-badge { display: inline-block; }
+
     /* ─── Session Summary Card ─────────────────────────────────────── */
     .session-summary {
       margin: 6px auto 0;
@@ -3731,6 +3806,7 @@
 
   <!-- Sidebar -->
   <button class="sidebar-peek" onclick="toggleSidebar()" title="Show sidebar (⌘\)">›</button>
+  <button class="ld-badge" onclick="toggleLivingDoc()" title="Exit Living Document mode (⌘⇧D)">📝 Document · exit</button>
   <div class="sidebar">
     <div class="sidebar-header">
       <img class="sidebar-logo" id="logo" />
@@ -4064,6 +4140,7 @@
         <div class="shortcuts-section">Appearance</div>
         <dt>Toggle theme (light/dark)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></dd>
         <dt>Toggle sidebar</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>\\</kbd></dd>
+        <dt>📝 Living Document reader</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>D</kbd></dd>
         <dt>Show these shortcuts</dt><dd><kbd>?</kbd> or <kbd class="kbd-mod-mirror">⌘</kbd><kbd>/</kbd></dd>
       </dl>
     </div>
@@ -6477,6 +6554,7 @@ footer a { color: var(--accent); text-decoration: none; }
         })),
         { kind: 'action', icon: '🌙', label: 'Toggle theme', search: 'theme dark light', action: () => { toggleTheme(); closeCmdPalette() } },
         { kind: 'action', icon: '◧', label: 'Toggle sidebar (collapse / expand)', search: 'sidebar collapse hide expand toggle panel layout width', action: () => { toggleSidebar(); closeCmdPalette() } },
+        { kind: 'action', icon: '📝', label: 'Toggle Living Document mode', search: 'living document reader prose flowing markdown view layout', action: () => { toggleLivingDoc(); closeCmdPalette() } },
         { kind: 'action', icon: '📁', label: 'Pick workspace folder', search: 'workspace folder', action: () => { closeCmdPalette(); pickWorkspace() } },
         { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
         { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
@@ -6903,6 +6981,23 @@ footer a { color: var(--accent); text-decoration: none; }
       localStorage.setItem(LS_SIDEBAR, collapsed ? '1' : '0')
     }
     applySidebarState()
+
+    // ── Living Document mode ──────────────────────────────────────
+    // A reader-style layout that treats the conversation as a flowing
+    // markdown document — callouts for user turns, body paragraphs for
+    // replies, no action buttons or stats. Distinct from Focus Mode,
+    // which merely hides sidebar chrome.
+    const LS_LIVING_DOC = 'alaude:living-doc:v1'
+    function applyLivingDocState() {
+      const on = localStorage.getItem(LS_LIVING_DOC) === '1'
+      document.body.classList.toggle('living-doc', on)
+    }
+    function toggleLivingDoc() {
+      const on = document.body.classList.toggle('living-doc')
+      localStorage.setItem(LS_LIVING_DOC, on ? '1' : '0')
+      showRewindToast?.(on ? '📝 Living Document on — turn-to-prose reader view' : '↩ Living Document off', false)
+    }
+    applyLivingDocState()
     // Track system changes when no explicit preference is set
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (!localStorage.getItem(LS_THEME)) applyTheme(null)
@@ -6997,6 +7092,11 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === '\\') {
         e.preventDefault()
         toggleSidebar()
+      }
+      // Cmd/Ctrl+Shift+D → toggle Living Document mode
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        toggleLivingDoc()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
