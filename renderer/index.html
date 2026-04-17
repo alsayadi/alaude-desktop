@@ -3049,10 +3049,11 @@
     .md-artifact-head button.active { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); }
     .md-artifact-frame {
       width: 100%;
-      height: 340px;
+      height: 420px;
       border: 0;
       background: white;
       display: block;
+      resize: vertical;
     }
     .md-artifact-src {
       display: none;
@@ -10413,12 +10414,27 @@ Title:`
     }
 
     // HTML Artifact toggles: the rendered iframe or the source view.
+    // Clicking ▶ Run on an already-running artifact now reloads the iframe
+    // (re-executes the script). This is what users actually expect —
+    // previously it was a no-op which felt like the button was broken.
     function mdaToggleSource(btn, showSource) {
       const root = btn.closest('.md-artifact')
       if (!root) return
+      const wasSource = root.classList.contains('show-source')
       root.classList.toggle('show-source', !!showSource)
       root.querySelector('.mda-toggle-running')?.classList.toggle('active', !showSource)
       root.querySelector('.mda-toggle-source')?.classList.toggle('active', !!showSource)
+      // If the user clicked ▶ Run and we're already on the run view,
+      // reload the iframe so the script runs fresh.
+      if (!showSource && !wasSource) {
+        const iframe = root.querySelector('.md-artifact-frame')
+        if (iframe) {
+          const src = iframe.getAttribute('srcdoc')
+          // Force reload: clear + re-assign
+          iframe.removeAttribute('srcdoc')
+          requestAnimationFrame(() => iframe.setAttribute('srcdoc', src))
+        }
+      }
     }
     function mdaToggleTall(btn) {
       const root = btn.closest('.md-artifact')
