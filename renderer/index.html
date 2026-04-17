@@ -3069,6 +3069,44 @@
     .md-artifact.show-source .md-artifact-src { display: block; }
     .md-artifact.tall .md-artifact-frame,
     .md-artifact.tall .md-artifact-src { height: 560px; max-height: 560px; }
+
+    /* ─── Native chart blocks (```chart JSON) ────────────────── */
+    .md-chart {
+      margin: 10px 0;
+      padding: 12px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .md-chart .mdc-title {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .md-chart svg { width: 100%; height: auto; font-family: inherit; }
+    .md-chart .mdc-error {
+      font-size: 11px;
+      color: #e74c3c;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .md-chart .mdc-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 6px;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .md-chart .mdc-legend-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
     .msg-content .md-pre-lang {
       position: absolute;
       top: 6px;
@@ -9510,6 +9548,124 @@ Title:`
      * inline code, links. Pre-extracts health cards and fenced code so
      * neither gets mangled by the escape pass.
      */
+    // ── Native chart block renderer ────────────────────────────────
+    // Lightweight, dep-free: writes SVG directly. Designed for small
+    // at-a-glance data: model emits a compact JSON spec like
+    //   { type: "bar", title: "...", data: { labels: [...], values: [...] } }
+    // and we turn it into an inline chart that respects the app theme,
+    // works offline, and doesn't slow the chat down.
+    const CHART_COLORS = ['#2ecc71', '#3498db', '#e67e22', '#9b59b6', '#e74c3c', '#f1c40f', '#1abc9c', '#95a5a6']
+    function renderChartBlock(rawJson) {
+      let spec
+      try { spec = JSON.parse(rawJson) }
+      catch (e) {
+        return `<div class="md-chart"><div class="mdc-error">Invalid chart JSON: ${escapeHtml(e.message)}</div></div>`
+      }
+      try {
+        const type = (spec.type || 'bar').toLowerCase()
+        const title = spec.title || ''
+        const W = 560, H = 240, PAD = 36
+        const labels = spec.data?.labels || []
+        // Normalise data into series[]: either from spec.data.series or a single series from data.values
+        let series = Array.isArray(spec.data?.series) ? spec.data.series
+          : (Array.isArray(spec.data?.values) ? [{ name: spec.name || '', values: spec.data.values }] : [])
+        if (!series.length) throw new Error('no data.values or data.series[]')
+        series = series.slice(0, 8) // cap
+        const color = (i) => spec.options?.color && series.length === 1 ? spec.options.color : CHART_COLORS[i % CHART_COLORS.length]
+        const fmtNum = (v) => {
+          const fmt = spec.options?.format
+          if (fmt === 'percent') return (v * 100).toFixed(0) + '%'
+          if (fmt === 'currency') return '$' + v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+          return typeof v === 'number' ? (Math.abs(v) >= 1000 ? v.toLocaleString() : String(v)) : String(v)
+        }
+
+        let svg = ''
+        if (type === 'pie' || type === 'donut') {
+          const vals = series[0].values || []
+          const total = vals.reduce((a, b) => a + (+b || 0), 0) || 1
+          const cx = H / 2, cy = H / 2, r = H / 2 - 10, rInner = type === 'donut' ? r * 0.55 : 0
+          let angle = -Math.PI / 2
+          const slices = vals.map((v, i) => {
+            const frac = (+v || 0) / total
+            const a0 = angle, a1 = angle + frac * 2 * Math.PI
+            angle = a1
+            const large = a1 - a0 > Math.PI ? 1 : 0
+            const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0)
+            const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1)
+            if (rInner > 0) {
+              const ix0 = cx + rInner * Math.cos(a0), iy0 = cy + rInner * Math.sin(a0)
+              const ix1 = cx + rInner * Math.cos(a1), iy1 = cy + rInner * Math.sin(a1)
+              return `<path d="M${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} L${ix1} ${iy1} A${rInner} ${rInner} 0 ${large} 0 ${ix0} ${iy0} Z" fill="${color(i)}"><title>${escapeHtml(labels[i] || '')}: ${escapeHtml(fmtNum(v))} (${(frac*100).toFixed(1)}%)</title></path>`
+            }
+            return `<path d="M${cx} ${cy} L${x0} ${y0} A${r} ${r} 0 ${large} 1 ${x1} ${y1} Z" fill="${color(i)}"><title>${escapeHtml(labels[i] || '')}: ${escapeHtml(fmtNum(v))} (${(frac*100).toFixed(1)}%)</title></path>`
+          }).join('')
+          svg = `<svg viewBox="0 0 ${H} ${H}" preserveAspectRatio="xMidYMid meet" style="max-width:${H}px;margin:0 auto;display:block">${slices}</svg>`
+        } else {
+          // bar or line: compute shared x/y scale
+          const nCats = labels.length || (series[0].values || []).length
+          const allVals = series.flatMap(s => (s.values || []).map(v => +v || 0))
+          let yMin = spec.options?.yMin != null ? spec.options.yMin : Math.min(0, ...allVals)
+          let yMax = spec.options?.yMax != null ? spec.options.yMax : Math.max(...allVals, 1)
+          if (yMin === yMax) yMax = yMin + 1
+          const plotW = W - PAD * 2, plotH = H - PAD * 1.4
+          const xStep = plotW / Math.max(1, nCats)
+          const yScale = (v) => PAD + plotH - ((v - yMin) / (yMax - yMin)) * plotH
+          // Gridlines + y axis labels
+          const gridY = [yMin, (yMin + yMax) / 2, yMax]
+          const grid = gridY.map(v => {
+            const y = yScale(v)
+            return `<line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}" stroke="currentColor" stroke-opacity="0.12"/><text x="${PAD - 6}" y="${y + 3}" text-anchor="end" fill="currentColor" fill-opacity="0.55" font-size="10">${escapeHtml(fmtNum(v))}</text>`
+          }).join('')
+          // X labels
+          const xLabels = labels.map((l, i) => {
+            const x = PAD + i * xStep + xStep / 2
+            return `<text x="${x}" y="${H - 6}" text-anchor="middle" fill="currentColor" fill-opacity="0.7" font-size="10">${escapeHtml(String(l))}</text>`
+          }).join('')
+          // Series drawing
+          let seriesSvg = ''
+          if (type === 'line' || type === 'area') {
+            series.forEach((s, si) => {
+              const pts = (s.values || []).map((v, i) => `${PAD + i * xStep + xStep / 2},${yScale(+v || 0)}`).join(' ')
+              const first = (s.values || [])[0]
+              const lastIdx = (s.values || []).length - 1
+              if (type === 'area') {
+                const y0 = yScale(Math.max(yMin, 0))
+                const polyPts = `${PAD + xStep / 2},${y0} ${pts} ${PAD + lastIdx * xStep + xStep / 2},${y0}`
+                seriesSvg += `<polygon points="${polyPts}" fill="${color(si)}" fill-opacity="0.24"/>`
+              }
+              seriesSvg += `<polyline points="${pts}" fill="none" stroke="${color(si)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`
+              ;(s.values || []).forEach((v, i) => {
+                seriesSvg += `<circle cx="${PAD + i * xStep + xStep / 2}" cy="${yScale(+v || 0)}" r="3" fill="${color(si)}"><title>${escapeHtml(labels[i] || '')}: ${escapeHtml(fmtNum(+v || 0))}</title></circle>`
+              })
+            })
+          } else {
+            // bar: grouped when multiple series
+            const groupW = xStep * 0.72
+            const barW = series.length > 1 ? groupW / series.length : groupW
+            series.forEach((s, si) => {
+              ;(s.values || []).forEach((v, i) => {
+                const x = PAD + i * xStep + (xStep - groupW) / 2 + si * barW
+                const y = yScale(Math.max(+v || 0, yMin))
+                const y0 = yScale(Math.max(yMin, 0))
+                const h = Math.max(1, Math.abs(y - y0))
+                const top = Math.min(y, y0)
+                seriesSvg += `<rect x="${x}" y="${top}" width="${barW - 1}" height="${h}" fill="${color(si)}" rx="2"><title>${escapeHtml(labels[i] || '')}${s.name ? ' · ' + escapeHtml(s.name) : ''}: ${escapeHtml(fmtNum(+v || 0))}</title></rect>`
+              })
+            })
+          }
+          svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="color:var(--text)">${grid}${xLabels}${seriesSvg}</svg>`
+        }
+        const needsLegend = series.length > 1 || type === 'pie' || type === 'donut'
+        const legend = needsLegend
+          ? `<div class="mdc-legend">${series.map((s, i) => `<span><span class="mdc-legend-dot" style="background:${color(i)}"></span>${escapeHtml(s.name || labels[i] || 'series ' + (i+1))}</span>`).join('')}</div>`
+          : ''
+        const titleHtml = title ? `<div class="mdc-title">${escapeHtml(title)}</div>` : ''
+        return `<div class="md-chart">${titleHtml}${svg}${legend}</div>`
+      } catch (err) {
+        return `<div class="md-chart"><div class="mdc-error">Chart error: ${escapeHtml(err.message)}</div></div>`
+      }
+    }
+
     // HTML Artifact toggles: the rendered iframe or the source view.
     function mdaToggleSource(btn, showSource) {
       const root = btn.closest('.md-artifact')
@@ -9768,6 +9924,11 @@ Title:`
           const encoded = btoa(unescape(encodeURIComponent(code)))
           return `<div class="md-mermaid loading" data-mermaid-src="${encoded}">Rendering diagram…</div>`
         }
+        // Native chart blocks: ```chart with a JSON spec → inline SVG chart.
+        // Supports bar / line / pie / donut with optional multi-series.
+        if (lc === 'chart') {
+          return renderChartBlock(code)
+        }
         // HTML Artifacts: ```html or ```artifact → sandboxed iframe. The model
         // can now ship small games, interactive demos, canvas animations,
         // etc. Iframe has allow-scripts but NOT allow-same-origin, so the
@@ -9805,7 +9966,7 @@ Title:`
       s = blocks.map(b => {
         const trimmed = b.trim()
         if (!trimmed) return ''
-        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg|artifact))/i.test(trimmed)) return trimmed
+        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg|artifact|chart))/i.test(trimmed)) return trimmed
         return `<p class="md-p">${trimmed.replace(/\n/g, '<br>')}</p>`
       }).join('\n')
 
