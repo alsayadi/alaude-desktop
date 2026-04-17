@@ -7050,6 +7050,28 @@ footer a { color: var(--accent); text-decoration: none; }
       return score / (text.length + query.length)
     }
 
+    // Palette recents: track the last N executed action labels in
+    // localStorage. When the palette opens with an empty query, we pin
+    // these to the top as a "Recent" section so frequently-used actions
+    // don't drift behind new ones.
+    const LS_PALETTE_RECENTS = 'alaude:palette-recents:v1'
+    const PALETTE_RECENTS_MAX = 8
+    function loadPaletteRecents() {
+      try {
+        const raw = localStorage.getItem(LS_PALETTE_RECENTS)
+        const arr = raw ? JSON.parse(raw) : []
+        return Array.isArray(arr) ? arr : []
+      } catch { return [] }
+    }
+    function recordPaletteRecent(label) {
+      if (!label) return
+      try {
+        const list = loadPaletteRecents().filter(l => l !== label)
+        list.unshift(label)
+        localStorage.setItem(LS_PALETTE_RECENTS, JSON.stringify(list.slice(0, PALETTE_RECENTS_MAX)))
+      } catch {}
+    }
+
     function renderCmdPalette(q) {
       const all = buildCmdItems()
       cmdPaletteItems = q
@@ -7063,11 +7085,31 @@ footer a { color: var(--accent); text-decoration: none; }
         return
       }
 
-      // Group by kind with headers (only when no query)
+      // Group by kind with headers (only when no query). Recents go first.
       let html = ''
       if (!q) {
+        const recents = loadPaletteRecents()
+        const recentRows = []
+        const usedLabels = new Set()
+        if (recents.length) {
+          for (const lbl of recents) {
+            // Find the matching item in the live list (still-available actions only)
+            const match = cmdPaletteItems.find(it => it.label === lbl)
+            if (!match) continue
+            const i = cmdPaletteItems.indexOf(match)
+            recentRows.push({ it: match, i })
+            usedLabels.add(lbl)
+          }
+        }
+        if (recentRows.length) {
+          html += `<div class="cmd-section-header">Recent</div>`
+          for (const { it, i } of recentRows) html += cmdItemHtml(it, i)
+        }
         const groups = {}
-        cmdPaletteItems.forEach((it, i) => { (groups[it.kind] ||= []).push({ it, i }) })
+        cmdPaletteItems.forEach((it, i) => {
+          if (usedLabels.has(it.label)) return // already shown under Recent
+          (groups[it.kind] ||= []).push({ it, i })
+        })
         const order = ['action', 'session', 'space']
         const seen = new Set()
         for (const k of order) {
@@ -7092,11 +7134,19 @@ footer a { color: var(--accent); text-decoration: none; }
     }
     function cmdItemHtml(it, i) {
       const active = i === cmdPaletteActiveIdx ? ' active' : ''
-      return `<div class="cmd-item${active}" onmouseenter="cmdPaletteActiveIdx=${i}; renderCmdPalette(document.getElementById('cmd-palette-input').value)" onclick="cmdPaletteItems[${i}]?.action()">
+      return `<div class="cmd-item${active}" onmouseenter="cmdPaletteActiveIdx=${i}; renderCmdPalette(document.getElementById('cmd-palette-input').value)" onclick="runCmdItem(${i})">
         <span class="cmd-item-icon">${it.icon || ''}</span>
         <span class="cmd-item-label">${escapeHtml(it.label)}</span>
         <span class="cmd-item-kind">${it.kind}</span>
       </div>`
+    }
+    // Central wrapper so both mouse clicks and keyboard Enter record the
+    // action in the Recents list before firing it.
+    function runCmdItem(i) {
+      const it = cmdPaletteItems[i]
+      if (!it) return
+      recordPaletteRecent(it.label)
+      it.action?.()
     }
 
     // Wire palette input events after DOM is ready
@@ -7107,7 +7157,7 @@ footer a { color: var(--accent); text-decoration: none; }
       input.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowDown') { e.preventDefault(); cmdPaletteActiveIdx = Math.min(cmdPaletteItems.length - 1, cmdPaletteActiveIdx + 1); renderCmdPalette(input.value) }
         else if (e.key === 'ArrowUp') { e.preventDefault(); cmdPaletteActiveIdx = Math.max(0, cmdPaletteActiveIdx - 1); renderCmdPalette(input.value) }
-        else if (e.key === 'Enter') { e.preventDefault(); cmdPaletteItems[cmdPaletteActiveIdx]?.action() }
+        else if (e.key === 'Enter') { e.preventDefault(); runCmdItem(cmdPaletteActiveIdx) }
         else if (e.key === 'Escape') { e.preventDefault(); closeCmdPalette() }
       })
     }, 0)
