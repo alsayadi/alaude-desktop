@@ -321,6 +321,125 @@
     .session-item:hover .session-item-delete { opacity: 0.7; }
     .session-item-delete:hover { color: #e74c3c; opacity: 1; }
 
+    /* ── Time-Travel: branch tree in sidebar ─────────────────────────── */
+    .session-item.branch {
+      padding-left: 26px;
+      position: relative;
+    }
+    .session-item.branch::before {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 0;
+      bottom: 50%;
+      width: 1px;
+      background: var(--border);
+    }
+    .session-item.branch::after {
+      content: '';
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      width: 10px;
+      height: 1px;
+      background: var(--border);
+    }
+    .session-item-fork-mark {
+      color: var(--text-faint);
+      font-size: 11px;
+      margin-right: 2px;
+    }
+    .session-item.active .session-item-fork-mark { color: var(--green); }
+
+    /* ── Time-Travel: conversation minimap ───────────────────────────── */
+    .conv-minimap {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 6px 18px;
+      background: linear-gradient(to bottom, var(--bg) 70%, transparent);
+      overflow-x: auto;
+      scrollbar-width: none;
+      min-height: 22px;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .conv-minimap::-webkit-scrollbar { display: none; }
+    .conv-minimap-empty { display: none; }
+    .conv-dot {
+      flex-shrink: 0;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-faint);
+      opacity: 0.35;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s, background 0.15s;
+      position: relative;
+    }
+    .conv-dot:hover { opacity: 1; transform: scale(1.6); }
+    .conv-dot.user { background: var(--text-dim); }
+    .conv-dot.assistant { background: var(--green); }
+    .conv-dot.council { background: #c084fc; }
+    .conv-dot.in-view { opacity: 1; transform: scale(1.4); box-shadow: 0 0 0 2px var(--bg-hover); }
+    .conv-dot[data-preview]:hover::after {
+      content: attr(data-preview);
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-hover);
+      color: var(--text);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border: 1px solid var(--border);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .conv-minimap-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── Time-Travel: rewind animation ──────────────────────────────── */
+    @keyframes rewindFade {
+      0%   { opacity: 1; transform: translateX(0); filter: blur(0); }
+      100% { opacity: 0; transform: translateX(40px); filter: blur(3px); }
+    }
+    .msg.rewinding { animation: rewindFade 0.32s ease-in forwards; pointer-events: none; }
+
+    /* Rewind toast */
+    .rewind-toast {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      background: var(--bg-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 100;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    }
+    .rewind-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .rewind-toast a { color: var(--green); cursor: pointer; text-decoration: underline; margin-left: 6px; }
+
     .sidebar-search {
       padding: 0 16px 8px;
     }
@@ -2239,6 +2358,7 @@
       </div>
     </div>
 
+    <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" />
@@ -3493,6 +3613,8 @@
           ? `<div class="msg-actions">
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
+              ${i < messages.length - 1 ? `<button class="msg-action-btn" onclick="rewindTo(${i})" title="Rewind conversation to this point — the rest is saved as a branch">↶ Rewind</button>` : ''}
+              <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">⎇ Branch</button>
              </div>`
           : ''
         // Render inline file-diff cards (attached to assistant messages during tool calls)
@@ -3576,6 +3698,7 @@
       if (wasNearBottom) container.scrollTop = container.scrollHeight
       updateScrollFab?.()
       updateContextRadar?.()
+      renderConvMinimap?.()
     }
 
     async function saveMessage(idx) {
@@ -3654,6 +3777,147 @@
       // Piggy-back on callAI (the last user message is already in messages[])
       const lastUserText = [...messages].reverse().find(m => m.role === 'user')?.content || ''
       callAI(lastUserText, uxMeta)
+    }
+
+    // ── Time-Travel: Rewind & Branch ─────────────────────────────────
+    // Rewind: truncates the current conversation to the given index and saves
+    // everything after as a sibling "branch" session — so you can't lose what
+    // you had. Branch: forks a NEW session at this point without touching the
+    // current one, letting you explore an alternative path in parallel.
+    let _rewindUndo = null  // { sessions, messages, sessionId } — single-level undo
+    function showRewindToast(text, undoable) {
+      let toast = document.getElementById('rewind-toast')
+      if (!toast) {
+        toast = document.createElement('div')
+        toast.id = 'rewind-toast'
+        toast.className = 'rewind-toast'
+        document.body.appendChild(toast)
+      }
+      toast.innerHTML = escapeHtml(text) + (undoable ? ' <a onclick="undoRewind()">undo</a>' : '')
+      toast.classList.add('show')
+      clearTimeout(toast._t)
+      toast._t = setTimeout(() => toast.classList.remove('show'), 4200)
+    }
+    function undoRewind() {
+      if (!_rewindUndo) return
+      sessions = _rewindUndo.sessions
+      messages = _rewindUndo.messages
+      currentSessionId = _rewindUndo.sessionId
+      _rewindUndo = null
+      renderSessions()
+      renderMessages()
+      persistSessions()
+      showRewindToast('↷ Restored', false)
+    }
+    function rewindTo(idx) {
+      if (isStreaming) return
+      if (idx < 0 || idx >= messages.length - 1) return
+      // Snapshot for undo
+      _rewindUndo = {
+        sessions: JSON.parse(JSON.stringify(sessions)),
+        messages: JSON.parse(JSON.stringify(messages)),
+        sessionId: currentSessionId,
+      }
+      const tail = messages.slice(idx + 1)
+      if (tail.length) {
+        const branchId = Date.now()
+        const branchTitle = '⎇ ' + (generateSessionTitle(tail.find(m => m.role === 'user')?.content) || 'Branch ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+        sessions.unshift({
+          id: branchId,
+          title: branchTitle,
+          messages: [...messages.slice(0, idx + 1), ...tail],
+          parentId: currentSessionId,
+          forkPoint: idx,
+          ts: Date.now(),
+        })
+      }
+      // Animate message removal visually before truncation
+      const container = document.getElementById('messages')
+      const rewinding = container.querySelectorAll('.msg')
+      for (let k = idx + 1; k < rewinding.length; k++) {
+        rewinding[k].classList.add('rewinding')
+      }
+      setTimeout(() => {
+        messages = messages.slice(0, idx + 1)
+        renderSessions()
+        renderMessages()
+        persistSessions()
+        showRewindToast(`↶ Rewound ${tail.length} msg${tail.length === 1 ? '' : 's'}${tail.length ? ' — saved as branch' : ''}.`, true)
+      }, 320)
+    }
+    function branchFrom(idx) {
+      if (idx < 0 || idx >= messages.length) return
+      // Save current first so switchSession doesn't lose in-flight state
+      const current = sessions.find(s => s.id === currentSessionId)
+      if (current) current.messages = [...messages]
+      const branchId = Date.now()
+      const baseMsg = messages[idx]
+      const branchTitle = '⎇ ' + (generateSessionTitle(baseMsg?.content) || 'Fork ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+      sessions.unshift({
+        id: branchId,
+        title: branchTitle,
+        messages: messages.slice(0, idx + 1),
+        parentId: currentSessionId,
+        forkPoint: idx,
+        ts: Date.now(),
+      })
+      // Switch to the new branch so the user lands in the fork
+      currentSessionId = branchId
+      messages = sessions[0].messages.slice()
+      ux.sessionId = 'sess_' + branchId
+      renderSessions()
+      renderMessages()
+      persistSessions()
+      showRewindToast('⎇ New branch started — pick up where you left off.', false)
+      input.focus()
+    }
+
+    // Conversation Minimap — a sticky strip of dots (one per message) above
+    // the chat. Lets you eyeball conversation shape at a glance, click any dot
+    // to scroll there, and spot where you are in long threads.
+    let _minimapObserver = null
+    function renderConvMinimap() {
+      const strip = document.getElementById('conv-minimap')
+      if (!strip) return
+      if (messages.length < 4) {  // don't clutter for short chats
+        strip.classList.add('conv-minimap-empty')
+        strip.innerHTML = ''
+        return
+      }
+      strip.classList.remove('conv-minimap-empty')
+      const parts = ['<span class="conv-minimap-label">Timeline</span>']
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i]
+        if (m.streaming) continue
+        const cls = m.council ? 'council' : m.role
+        const preview = (m.content || (m.council ? 'Council debate' : '')).slice(0, 80).replace(/"/g, '&quot;').replace(/\n/g, ' ')
+        parts.push(`<span class="conv-dot ${cls}" data-msg-idx="${i}" data-preview="${escapeHtml(preview)}" onclick="scrollToMsg(${i})"></span>`)
+      }
+      strip.innerHTML = parts.join('')
+
+      // Wire up an IntersectionObserver to flag the dot(s) whose message is
+      // currently in the viewport — gives a "you are here" cursor.
+      if (_minimapObserver) _minimapObserver.disconnect()
+      const container = document.getElementById('messages')
+      const msgEls = container.querySelectorAll('.msg')
+      _minimapObserver = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const idx = parseInt(e.target.dataset.msgIdx, 10)
+          const dot = strip.querySelector(`.conv-dot[data-msg-idx="${idx}"]`)
+          if (!dot) continue
+          if (e.isIntersecting) dot.classList.add('in-view')
+          else dot.classList.remove('in-view')
+        }
+      }, { root: container, threshold: 0.3 })
+      msgEls.forEach((el, i) => {
+        el.dataset.msgIdx = String(i)
+        _minimapObserver.observe(el)
+      })
+    }
+    function scrollToMsg(idx) {
+      const container = document.getElementById('messages')
+      const el = container.querySelector(`.msg[data-msg-idx="${idx}"]`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
 
     async function copyMessage(idx, btn) {
@@ -3823,8 +4087,13 @@
       }
       container.innerHTML = list.map(s => {
         const active = s.id === currentSessionId ? 'active' : ''
-        return `<div class="session-item ${active}">
-          <span class="session-item-title" onclick="switchSession(${s.id})">${escapeHtml(s.title)}</span>
+        const isBranch = !!s.parentId
+        const parent = isBranch ? sessions.find(p => p.id === s.parentId) : null
+        const branchCls = isBranch ? 'branch' : ''
+        const parentTip = parent ? ` (fork of "${escapeHtml(parent.title)}")` : ''
+        const forkMark = isBranch ? `<span class="session-item-fork-mark" title="Forked from parent${parentTip}">⎇</span>` : ''
+        return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}">
+          ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})">${escapeHtml(s.title)}</span>
           <button class="session-item-delete" onclick="event.stopPropagation(); if(confirm('Delete this session?')) deleteSession(${s.id})" title="Delete">×</button>
         </div>`
       }).join('')
