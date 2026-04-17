@@ -1572,6 +1572,35 @@
     .translate-result .tr-close:hover { color: var(--text); }
     .translate-result .tr-body { white-space: pre-wrap; word-break: break-word; }
 
+    /* ─── Emoji autocomplete ──────────────────────────────────── */
+    .emoji-pop {
+      position: fixed;
+      z-index: 125;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.32);
+      max-height: 260px;
+      min-width: 220px;
+      overflow-y: auto;
+      display: none;
+    }
+    .emoji-pop.show { display: block; }
+    .emoji-opt {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .emoji-opt:hover, .emoji-opt.active { background: var(--bg-hover); color: var(--green); }
+    .emoji-opt .eo-icon { font-size: 16px; width: 20px; text-align: center; }
+    .emoji-opt .eo-name { color: var(--text-dim); font-family: monospace; font-size: 11px; }
+
     /* ─── Refine popover ──────────────────────────────────────── */
     .refine-popover {
       position: fixed;
@@ -4423,6 +4452,9 @@
     </div>
   </div>
 
+  <!-- Emoji autocomplete popover -->
+  <div class="emoji-pop" id="emoji-pop"></div>
+
   <!-- Inline Translate floating UI -->
   <div class="translate-chip" id="translate-chip"></div>
   <div class="translate-result" id="translate-result"></div>
@@ -5616,6 +5648,128 @@ SUMMARY:`
       try { input.setSelectionRange(0, 0); input.scrollTop = 0 } catch {}
       showRewindToast?.(`↪ Ready to refine with ${modelId}`, false)
     }
+
+    // ── Emoji autocomplete (:name:) ────────────────────────────────
+    // Type ":rocket" in the input → a popover appears with matches.
+    // Tab or Enter inserts the emoji replacing the shortcode; Esc closes.
+    // Curated common list — not exhaustive, but covers the frequently-used.
+    const EMOJI_MAP = {
+      smile: '😊', grin: '😀', laugh: '😂', rofl: '🤣', wink: '😉', cool: '😎',
+      sunglasses: '😎', heart_eyes: '😍', love: '❤️', heart: '❤️', thumbsup: '👍',
+      '+1': '👍', thumbsdown: '👎', '-1': '👎', clap: '👏', pray: '🙏', wave: '👋',
+      ok_hand: '👌', muscle: '💪', handshake: '🤝', point_right: '👉', point_left: '👈',
+      eyes: '👀', brain: '🧠', fire: '🔥', sparkles: '✨', star: '⭐', tada: '🎉',
+      party: '🎉', rocket: '🚀', zap: '⚡', bulb: '💡', warning: '⚠️', boom: '💥',
+      hundred: '💯', check: '✅', check_mark: '✅', x: '❌', cross: '❌', question: '❓',
+      exclamation: '❗', eyes_wide: '👀', cry: '😢', sob: '😭', angry: '😠', rage: '😡',
+      thinking: '🤔', shrug: '🤷', face_palm: '🤦', sigh: '😮‍💨', sleep: '😴',
+      zzz: '💤', coffee: '☕', tea: '🍵', beer: '🍺', cake: '🎂', pizza: '🍕',
+      book: '📚', books: '📚', notebook: '📓', memo: '📝', pencil: '✏️', pen: '🖊️',
+      pushpin: '📌', pin: '📌', paperclip: '📎', bookmark: '🔖', calendar: '📅',
+      clock: '🕐', hourglass: '⏳', stopwatch: '⏱️', timer: '⏲️', alarm: '⏰',
+      computer: '💻', laptop: '💻', desktop: '🖥️', phone: '📱', tv: '📺',
+      camera: '📷', video: '🎥', headphones: '🎧', microphone: '🎤', mic: '🎤',
+      speaker: '🔊', mute: '🔇', bell: '🔔', no_bell: '🔕', globe: '🌍', earth: '🌎',
+      package: '📦', mailbox: '📬', inbox: '📥', outbox: '📤', envelope: '✉️',
+      lock: '🔒', unlock: '🔓', key: '🔑', tools: '🛠️', wrench: '🔧', hammer: '🔨',
+      gear: '⚙️', shield: '🛡️', bug: '🐛', bomb: '💣', construction: '🚧',
+      art: '🎨', palette: '🎨', gift: '🎁', balloon: '🎈', trophy: '🏆', medal: '🏅',
+      dart: '🎯', target: '🎯', flag: '🚩', checkered: '🏁', tent: '⛺',
+      sun: '☀️', moon: '🌙', star2: '🌟', comet: '☄️', cloud: '☁️', rain: '🌧️',
+      snow: '❄️', umbrella: '☔', rainbow: '🌈', seedling: '🌱', tree: '🌳',
+      herb: '🌿', leaves: '🍃', clover: '🍀', flower: '🌸', rose: '🌹',
+      dog: '🐶', cat: '🐱', fox: '🦊', owl: '🦉', butterfly: '🦋', bee: '🐝',
+      whale: '🐳', shark: '🦈', octopus: '🐙', dinosaur: '🦕', robot: '🤖',
+      ghost: '👻', alien: '👽', skull: '💀', poop: '💩', unicorn: '🦄',
+      dragon: '🐉',
+    }
+    let _emojiActiveIdx = 0
+    let _emojiMatches = []
+    let _emojiToken = null // { start, end, query }
+
+    function findEmojiTokenAtCaret() {
+      const val = input.value
+      const caret = input.selectionStart ?? 0
+      // Walk backwards to find a ':' that's preceded by whitespace/start
+      for (let i = caret - 1; i >= Math.max(0, caret - 30); i--) {
+        const ch = val[i]
+        if (ch === ':') {
+          // Must be start-of-input or preceded by whitespace
+          if (i === 0 || /\s/.test(val[i - 1])) {
+            const query = val.slice(i + 1, caret)
+            // Query must be wordy; abort on spaces/newlines
+            if (!/^[a-zA-Z0-9_+\-]*$/.test(query)) return null
+            return { start: i, end: caret, query }
+          }
+          return null
+        }
+        if (/\s/.test(ch)) return null
+      }
+      return null
+    }
+    function hideEmojiPop() {
+      const pop = document.getElementById('emoji-pop')
+      if (pop) pop.classList.remove('show')
+      _emojiMatches = []
+      _emojiToken = null
+      _emojiActiveIdx = 0
+    }
+    function updateEmojiPop() {
+      const token = findEmojiTokenAtCaret()
+      if (!token || !token.query) { hideEmojiPop(); return }
+      const q = token.query.toLowerCase()
+      const matches = Object.entries(EMOJI_MAP)
+        .filter(([name]) => name.startsWith(q))
+        .slice(0, 8)
+      if (!matches.length) { hideEmojiPop(); return }
+      _emojiMatches = matches
+      _emojiToken = token
+      if (_emojiActiveIdx >= matches.length) _emojiActiveIdx = 0
+      const pop = document.getElementById('emoji-pop')
+      if (!pop) return
+      pop.innerHTML = matches.map(([name, emoji], i) => `
+        <div class="emoji-opt ${i === _emojiActiveIdx ? 'active' : ''}" onmouseenter="_emojiActiveIdx=${i}; refreshEmojiActive()" onclick="acceptEmoji(${i})">
+          <span class="eo-icon">${emoji}</span>
+          <span>:${escapeHtml(name)}:</span>
+        </div>`).join('')
+      pop.classList.add('show')
+      // Position above input
+      try {
+        const rect = input.getBoundingClientRect()
+        pop.style.left = Math.min(window.innerWidth - pop.offsetWidth - 10, rect.left + 16) + 'px'
+        pop.style.top = Math.max(8, rect.top - pop.offsetHeight - 6) + 'px'
+      } catch {}
+    }
+    function refreshEmojiActive() {
+      const pop = document.getElementById('emoji-pop')
+      if (!pop) return
+      pop.querySelectorAll('.emoji-opt').forEach((el, i) => el.classList.toggle('active', i === _emojiActiveIdx))
+    }
+    function acceptEmoji(idx) {
+      if (!_emojiToken || !_emojiMatches.length) return
+      const m = _emojiMatches[idx ?? _emojiActiveIdx]
+      if (!m) return
+      const [, emoji] = m
+      const val = input.value
+      const before = val.slice(0, _emojiToken.start)
+      const after = val.slice(_emojiToken.end)
+      input.value = before + emoji + after
+      const newCaret = (before + emoji).length
+      try { input.setSelectionRange(newCaret, newCaret) } catch {}
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      hideEmojiPop()
+    }
+    // Wire emoji popover into existing input events. Uses the same 'input'
+    // listener as the rest — we just piggyback.
+    input.addEventListener('input', updateEmojiPop)
+    input.addEventListener('click', updateEmojiPop)
+    input.addEventListener('keydown', (e) => {
+      if (!document.getElementById('emoji-pop')?.classList.contains('show')) return
+      if (e.key === 'ArrowDown') { e.preventDefault(); _emojiActiveIdx = (_emojiActiveIdx + 1) % _emojiMatches.length; refreshEmojiActive() }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _emojiActiveIdx = (_emojiActiveIdx - 1 + _emojiMatches.length) % _emojiMatches.length; refreshEmojiActive() }
+      else if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); acceptEmoji() }
+      else if (e.key === 'Escape') { e.preventDefault(); hideEmojiPop() }
+    }, true)
 
     // ── Inline Message Notes ────────────────────────────────────────
     // Lightweight personal annotation attached to any message. Stored
