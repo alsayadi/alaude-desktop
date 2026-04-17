@@ -557,6 +557,55 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /* ── Session Tags (#hashtags) ──────────────────────────────────── */
+    .tag-filter-row {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      padding: 0 16px 8px;
+      max-height: 64px;
+      overflow-y: auto;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: 'SF Mono', monospace;
+      letter-spacing: 0.02em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tag-chip:hover { color: var(--green); border-color: var(--green); }
+    .tag-chip.active {
+      color: var(--green);
+      border-color: var(--green);
+      background: color-mix(in srgb, var(--green) 12%, transparent);
+    }
+    .tag-chip-count {
+      font-size: 9px;
+      color: var(--text-faint);
+    }
+    .session-item-tags {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    .session-item-tag {
+      font-size: 9px;
+      color: var(--text-faint);
+      background: var(--bg-hover);
+      padding: 0 5px;
+      border-radius: 3px;
+      font-family: 'SF Mono', monospace;
+    }
+
     /* ── Workspace File Browser ────────────────────────────────────── */
     .sidebar-files {
       border-top: 1px solid var(--border);
@@ -3190,6 +3239,7 @@
       <input id="session-search" class="sidebar-search-input" type="text" placeholder="Search sessions…" oninput="onSessionSearchInput(event)" />
     </div>
     <div class="sidebar-label">Recent</div>
+    <div class="tag-filter-row" id="tag-filter-row" style="display:none"></div>
     <div class="sidebar-sessions" id="sessions"></div>
     <div class="sidebar-files" id="sidebar-files" style="display:none">
       <div class="sidebar-files-header">
@@ -3904,6 +3954,83 @@
     // on a menu item still registers before the menu hides).
     input.addEventListener('blur', () => setTimeout(closeSlashMenu, 150))
 
+    // ── Session Tags (#hashtags) ─────────────────────────────────────
+    // Type "#project-x" in any message and that hashtag is added to the
+    // session's tags. Sidebar grows a filter chip row showing every tag
+    // across sessions; clicking a chip filters the session list.
+    // Manual add: right-click session item (handled via command palette).
+    const TAG_REGEX = /(?:^|\s)#([a-zA-Z][a-zA-Z0-9_-]{0,24})/g
+    let activeTagFilter = null  // string or null
+    function extractTags(text) {
+      if (!text || typeof text !== 'string') return []
+      const out = new Set()
+      let m
+      TAG_REGEX.lastIndex = 0
+      while ((m = TAG_REGEX.exec(text)) !== null) {
+        const t = m[1].toLowerCase()
+        // Skip common anti-patterns (headings, hex colors, etc.)
+        if (/^[0-9a-f]{3,8}$/.test(t)) continue
+        out.add(t)
+      }
+      return [...out]
+    }
+    function addTagsToSession(sessionId, tags) {
+      if (!tags || !tags.length) return
+      const s = sessions.find(x => x.id === sessionId)
+      if (!s) return
+      s.tags = [...new Set([...(s.tags || []), ...tags])]
+    }
+    function removeTagFromSession(sessionId, tag) {
+      const s = sessions.find(x => x.id === sessionId)
+      if (!s || !s.tags) return
+      s.tags = s.tags.filter(t => t !== tag)
+      persistSessions()
+      renderSessions()
+    }
+    function allUniqueTags() {
+      const seen = new Map()
+      for (const s of sessions) {
+        for (const t of (s.tags || [])) {
+          seen.set(t, (seen.get(t) || 0) + 1)
+        }
+      }
+      return [...seen.entries()].sort((a, b) => b[1] - a[1])
+    }
+    function setTagFilter(tag) {
+      activeTagFilter = activeTagFilter === tag ? null : tag
+      renderSessions()
+    }
+    function renderTagFilterRow() {
+      const row = document.getElementById('tag-filter-row')
+      if (!row) return
+      const tags = allUniqueTags()
+      if (!tags.length) {
+        row.style.display = 'none'
+        row.innerHTML = ''
+        return
+      }
+      row.style.display = 'flex'
+      const chips = [
+        `<span class="tag-chip ${activeTagFilter == null ? 'active' : ''}" onclick="setTagFilter(null)">all <span class="tag-chip-count">${sessions.length}</span></span>`,
+        ...tags.map(([t, c]) =>
+          `<span class="tag-chip ${activeTagFilter === t ? 'active' : ''}" onclick="setTagFilter('${t}')">#${escapeHtml(t)} <span class="tag-chip-count">${c}</span></span>`
+        ),
+      ]
+      row.innerHTML = chips.join('')
+    }
+    // Manual add: called from a command-palette action or future button
+    function promptAddTag() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      const existing = (session.tags || []).join(', ')
+      const input = prompt('Tags for this session (comma-separated, no # needed):', existing)
+      if (input == null) return
+      const tags = input.split(',').map(t => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean).filter(t => /^[a-z0-9_-]+$/i.test(t))
+      session.tags = [...new Set(tags)]
+      persistSessions()
+      renderSessions()
+    }
+
     // ── Shared Memory Lens ──────────────────────────────────────────
     // Cross-session memory of facts about the user. On send, we scan the
     // user's latest prompt and pull memories whose keywords overlap with
@@ -4272,6 +4399,7 @@
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
         { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
+        { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
       )
       return items
     }
@@ -4708,6 +4836,12 @@
       const session = sessions.find(s => s.id === currentSessionId)
       if (session && session.title === 'New session') {
         session.title = generateSessionTitle(text)
+        renderSessions()
+      }
+      // Session tags: auto-extract any #hashtags from the user's message.
+      const newTags = extractTags(text)
+      if (newTags.length) {
+        addTagsToSession(currentSessionId, newTags)
         renderSessions()
       }
 
@@ -6135,6 +6269,7 @@ Title:`
       renderSessions()
     }
     function renderSessions() {
+      renderTagFilterRow?.()
       const container = document.getElementById('sessions')
       let list = sessions
       if (sessionSearchQuery) {
@@ -6143,8 +6278,12 @@ Title:`
           return hay.includes(sessionSearchQuery)
         })
       }
+      if (activeTagFilter) {
+        list = list.filter(s => Array.isArray(s.tags) && s.tags.includes(activeTagFilter))
+      }
       if (!list.length) {
-        container.innerHTML = `<div style="color:var(--text-faint);font-size:12px;padding:14px 16px">No sessions match "${escapeHtml(sessionSearchQuery)}"</div>`
+        const reason = activeTagFilter ? `no sessions tagged #${activeTagFilter}` : `No sessions match "${escapeHtml(sessionSearchQuery)}"`
+        container.innerHTML = `<div style="color:var(--text-faint);font-size:12px;padding:14px 16px">${reason}</div>`
         return
       }
       container.innerHTML = list.map(s => {
@@ -6160,9 +6299,18 @@ Title:`
         const costPill = (sc.fromMessages > 0 && (sc.usd > 0 || sc.anyLocal))
           ? `<span class="session-item-cost" title="Session cost estimate">${sc.anyLocal && sc.usd === 0 ? 'free' : formatUsd(sc.usd)}</span>`
           : ''
+        // Tag chips — shown below title when session has tags
+        const tagsHtml = (s.tags && s.tags.length)
+          ? `<div class="session-item-tags">${s.tags.map(t => `<span class="session-item-tag" onclick="event.stopPropagation(); setTagFilter('${escapeHtml(t)}')" title="Filter to #${escapeHtml(t)}">#${escapeHtml(t)}</span>`).join('')}</div>`
+          : ''
         return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}">
-          ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})">${escapeHtml(s.title)}</span>
-          ${costPill}
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:4px;min-width:0">
+              ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${escapeHtml(s.title)}</span>
+              ${costPill}
+            </div>
+            ${tagsHtml}
+          </div>
           <button class="session-item-delete" onclick="event.stopPropagation(); if(confirm('Delete this session?')) deleteSession(${s.id})" title="Delete">×</button>
         </div>`
       }).join('')
