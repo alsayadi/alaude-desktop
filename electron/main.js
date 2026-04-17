@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen } = require('electron')
 const path = require('path')
 const os = require('os')
 const http = require('http')
@@ -34,6 +34,8 @@ function classifyError(err) {
 // ── State ────────────────────────────────────────────────────────────────────
 
 let mainWindow = null
+let quickWindow = null
+let tray = null
 
 // ── Window ───────────────────────────────────────────────────────────────────
 
@@ -349,6 +351,7 @@ function getWorker() {
         // {id, result} still follows.
         if (resp.activity) {
           try { mainWindow?.webContents?.send('tool-activity', resp.activity) } catch {}
+          try { if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) quickWindow.webContents.send('tool-activity', resp.activity) } catch {}
           continue
         }
         const pending = pendingRequests.get(resp.id)
@@ -964,6 +967,107 @@ ipcMain.handle('open-external', async (_, url) => {
   shell.openExternal(url)
 })
 
+// ── Menu Bar Ambient (Tray + Quick Window) ────────────────────────────────
+// A small always-available "⚡ Alaude Quick" panel that lives in the macOS
+// menu bar. Lets the user ask a question and get an answer without
+// switching windows. Same chat IPC as the main app, but a minimal UI.
+
+function createQuickWindow() {
+  if (quickWindow) return quickWindow
+  quickWindow = new BrowserWindow({
+    width: 360,
+    height: 420,
+    frame: false,
+    resizable: false,
+    movable: false,
+    show: false,
+    alwaysOnTop: true,
+    fullscreenable: false,
+    transparent: false,
+    backgroundColor: '#1a1a1a',
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload-quick.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+  quickWindow.loadFile(path.join(__dirname, '..', 'renderer', 'quick.html'))
+  // Hide on blur so clicking elsewhere makes it disappear — standard
+  // menu-bar popover behavior.
+  quickWindow.on('blur', () => {
+    if (quickWindow && quickWindow.isVisible()) quickWindow.hide()
+  })
+  quickWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  return quickWindow
+}
+
+function positionQuickWindow() {
+  if (!quickWindow || !tray) return
+  const trayBounds = tray.getBounds()
+  const winBounds = quickWindow.getBounds()
+  // Center the window beneath the tray icon; clamp to screen.
+  const display = screen.getDisplayMatching(trayBounds)
+  const workArea = display.workArea
+  let x = Math.round(trayBounds.x + (trayBounds.width / 2) - (winBounds.width / 2))
+  x = Math.max(workArea.x + 8, Math.min(x, workArea.x + workArea.width - winBounds.width - 8))
+  const y = process.platform === 'darwin' ? trayBounds.y + trayBounds.height + 4 : trayBounds.y - winBounds.height - 4
+  quickWindow.setPosition(x, Math.max(y, workArea.y + 4), false)
+}
+
+function toggleQuickWindow() {
+  createQuickWindow()
+  if (quickWindow.isVisible()) {
+    quickWindow.hide()
+  } else {
+    positionQuickWindow()
+    quickWindow.show()
+    quickWindow.focus()
+    quickWindow.webContents.send('quick-show')
+  }
+}
+
+function createTray() {
+  if (tray) return
+  // Build a 16×16 template icon so macOS handles dark/light-mode colors.
+  const iconPath = path.join(__dirname, '..', 'build', 'icons', 'icon.png')
+  let icon
+  try {
+    icon = nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 })
+    icon.setTemplateImage(true)  // macOS will auto-tint to match the menu bar
+  } catch (err) {
+    // Fallback: tiny empty image if the icon load fails
+    icon = nativeImage.createEmpty()
+  }
+  tray = new Tray(icon)
+  tray.setToolTip('Alaude Quick — ⌘⇧A to toggle')
+  tray.on('click', () => toggleQuickWindow())
+  tray.on('right-click', () => {
+    const menu = Menu.buildFromTemplate([
+      { label: 'Ask Alaude…', click: () => toggleQuickWindow() },
+      { type: 'separator' },
+      { label: 'Open Alaude (full)', click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+        else mainWindow.show()
+      }},
+      { type: 'separator' },
+      { label: 'Quit Alaude', click: () => app.quit() },
+    ])
+    tray.popUpContextMenu(menu)
+  })
+}
+
+// IPC handlers for the quick window
+ipcMain.handle('quick-hide', () => { if (quickWindow) quickWindow.hide() })
+ipcMain.handle('quick-open-main', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+  else { mainWindow.show(); mainWindow.focus() }
+  if (quickWindow) quickWindow.hide()
+})
+
 // ── Menu ─────────────────────────────────────────────────────────────────────
 
 function buildMenu() {
@@ -1025,9 +1129,20 @@ app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors')
 app.whenReady().then(() => {
   buildMenu()
   createWindow()
+  // Menu-bar ambient: tray + global shortcut ⌘⇧A to toggle the quick window.
+  // Failure to create the tray (e.g. on headless CI) shouldn't crash the app.
+  try { createTray() } catch (err) { console.warn('[tray] create failed:', err.message) }
+  try {
+    const accel = process.platform === 'darwin' ? 'Cmd+Shift+A' : 'Ctrl+Shift+A'
+    globalShortcut.register(accel, toggleQuickWindow)
+  } catch (err) { console.warn('[shortcut] register failed:', err.message) }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('will-quit', () => {
+  try { globalShortcut.unregisterAll() } catch {}
 })
 
 app.on('window-all-closed', () => {

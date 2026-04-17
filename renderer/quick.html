@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Alaude Quick</title>
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --bg-input: #262626;
+      --bg-hover: #2f2f2f;
+      --text: #f0f0f0;
+      --text-dim: #a8a8a8;
+      --text-faint: #6a6a6a;
+      --border: #333;
+      --green: #2ecc71;
+      --green-glow: rgba(46, 204, 113, 0.25);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      width: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .header {
+      padding: 10px 14px 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+    }
+    .title { font-size: 12px; font-weight: 600; color: var(--text); }
+    .model-pick {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      -webkit-app-region: no-drag;
+      outline: none;
+    }
+    .body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    .empty {
+      color: var(--text-faint);
+      text-align: center;
+      padding: 40px 10px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .empty kbd {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 10px;
+      margin: 0 2px;
+    }
+    .q {
+      color: var(--text-dim);
+      font-size: 11px;
+      margin-bottom: 6px;
+      font-style: italic;
+    }
+    .a {
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .a .caret {
+      display: inline-block;
+      width: 7px;
+      height: 13px;
+      background: var(--green);
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 0.9s ease-in-out infinite;
+    }
+    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0.3 } }
+    .input-row {
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      -webkit-app-region: no-drag;
+    }
+    input.msg {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+    input.msg:focus { border-color: var(--green); box-shadow: 0 0 0 2px var(--green-glow); }
+    .send {
+      background: var(--green);
+      color: #0a0a0a;
+      border: 0;
+      padding: 0 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .footer {
+      padding: 6px 12px 8px;
+      font-size: 10px;
+      color: var(--text-faint);
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+    .footer a { color: var(--text-dim); cursor: pointer; text-decoration: underline; }
+    .footer a:hover { color: var(--green); }
+    .spinner {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg) } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <span class="title">⚡ Alaude Quick</span>
+      <select class="model-pick" id="model">
+        <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
+        <option value="gpt-4o">gpt-4o</option>
+        <option value="claude-3-5-haiku-latest">claude-haiku</option>
+        <option value="claude-sonnet-4-5">claude-sonnet</option>
+        <option value="gemini-1.5-flash">gemini-flash</option>
+      </select>
+    </div>
+    <div class="body" id="body">
+      <div class="empty" id="empty">
+        Ask anything — a fast answer without switching apps.<br><br>
+        <kbd>⌘⇧A</kbd> toggles this window from anywhere.<br>
+        <kbd>Esc</kbd> hides it.
+      </div>
+    </div>
+    <div class="input-row">
+      <input class="msg" id="msg" placeholder="Ask Alaude…" autofocus />
+      <button class="send" id="send" disabled>Send</button>
+    </div>
+    <div class="footer">
+      <a onclick="window.alaudeQuick.openMainWindow()">Open full app ↗</a>
+    </div>
+  </div>
+  <script>
+    const msg = document.getElementById('msg')
+    const send = document.getElementById('send')
+    const body = document.getElementById('body')
+    const empty = document.getElementById('empty')
+    const model = document.getElementById('model')
+
+    // Persist last-used model
+    try {
+      const m = localStorage.getItem('alaude:quick:model')
+      if (m) model.value = m
+      model.addEventListener('change', () => localStorage.setItem('alaude:quick:model', model.value))
+    } catch {}
+
+    let busy = false
+    msg.addEventListener('input', () => { send.disabled = !msg.value.trim() || busy })
+    msg.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && msg.value.trim() && !busy) {
+        e.preventDefault()
+        submit()
+      }
+      if (e.key === 'Escape') window.alaudeQuick.hide()
+    })
+    send.addEventListener('click', submit)
+
+    function renderQA(q, answer, streaming) {
+      if (empty) empty.style.display = 'none'
+      body.innerHTML = `
+        <div class="q">${escapeHtml(q)}</div>
+        <div class="a">${escapeHtml(answer)}${streaming ? '<span class="caret"></span>' : ''}</div>
+      `
+      body.scrollTop = body.scrollHeight
+    }
+    function escapeHtml(s) {
+      return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+    }
+
+    // Live token stream — renderer listens for the tool-activity events.
+    let streaming = ''
+    window.alaudeQuick.onToolActivity((a) => {
+      if (!busy) return
+      if (a.phase === 'token' && a.text) {
+        streaming += a.text
+        renderQA(lastQ, streaming, true)
+      }
+    })
+
+    let lastQ = ''
+    async function submit() {
+      const q = msg.value.trim()
+      if (!q) return
+      busy = true
+      send.disabled = true
+      lastQ = q
+      streaming = ''
+      msg.value = ''
+      renderQA(q, '', true)
+      try {
+        const resp = await window.alaudeQuick.chat(
+          [{ role: 'user', content: q }],
+          model.value,
+          null,
+          'general',
+          { messageId: 'quick_' + Date.now().toString(36), sessionId: 'quick_session' }
+        )
+        renderQA(q, typeof resp === 'string' ? resp : JSON.stringify(resp), false)
+      } catch (err) {
+        renderQA(q, 'Error: ' + (err?.message || String(err)), false)
+      } finally {
+        busy = false
+        send.disabled = !msg.value.trim()
+        msg.focus()
+      }
+    }
+
+    // Auto-focus when window shows
+    window.alaudeQuick.onShow(() => {
+      msg.focus()
+      msg.select()
+    })
+  </script>
+</body>
+</html>
