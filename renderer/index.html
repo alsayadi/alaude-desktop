@@ -903,6 +903,15 @@
     .session-item-star.starred { opacity: 1; }
     .session-item-star:hover { color: #f1c40f; }
     .session-item-star.starred { color: #f1c40f; }
+    .session-color-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-right: 2px;
+      border: 1px solid var(--border);
+    }
 
     /* ── Time-Travel: branch tree in sidebar ─────────────────────────── */
     .session-item.branch {
@@ -6984,6 +6993,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '✨', label: 'New session', search: 'new session chat', action: () => { newSession(); closeCmdPalette() } },
         { kind: 'action', icon: '⎘', label: 'Duplicate current session', search: 'duplicate copy clone session fork standalone', action: () => { closeCmdPalette(); duplicateCurrentSession() } },
         { kind: 'action', icon: '★', label: 'Star / unstar current session', search: 'star unstar favorite pin top sidebar bookmark', action: () => { closeCmdPalette(); toggleCurrentSessionStar() } },
+        { kind: 'action', icon: '🎨', label: 'Cycle session color', search: 'color accent dot palette sidebar organize visual', action: () => { closeCmdPalette(); cycleCurrentSessionColor() } },
         ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
@@ -9301,11 +9311,14 @@ Title:`
         const goalPrefix = goalIconForSession?.(s) || ''
         const goalTip = s.goal?.text ? ` — goal: ${escapeHtml(s.goal.text)}` : ''
         const starBtn = `<button class="session-item-star ${s.starred ? 'starred' : ''}" onclick="event.stopPropagation(); toggleSessionStar(${s.id})" title="${s.starred ? 'Unstar' : 'Star — pin to top'}">${s.starred ? '★' : '☆'}</button>`
+        const colorDot = s.color
+          ? `<span class="session-color-dot" onclick="event.stopPropagation(); cycleSessionColor(${s.id})" style="background:${escapeHtml(s.color)};border-color:${escapeHtml(s.color)}" title="Click to cycle color"></span>`
+          : ''
         return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}${goalTip}">
           ${starBtn}
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
             <div style="display:flex;align-items:center;gap:4px;min-width:0">
-              ${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(s.title)}</span>
+              ${colorDot}${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(s.title)}</span>
               ${costPill}
             </div>
             ${tagsHtml}
@@ -9518,6 +9531,34 @@ Title:`
     function toggleCurrentSessionStar() {
       toggleSessionStar(currentSessionId)
     }
+
+    // Session accent color: tiny palette stored at session.color. Shows as
+    // a colored dot before the title in the sidebar. Cycling via command
+    // palette steps through the set (None → 1 → 2 … → back to None).
+    const SESSION_COLORS = [
+      null,
+      '#e74c3c', // red
+      '#e67e22', // orange
+      '#f1c40f', // yellow
+      '#2ecc71', // green
+      '#3498db', // blue
+      '#9b59b6', // purple
+      '#1abc9c', // teal
+      '#95a5a6', // gray
+    ]
+    function cycleSessionColor(id) {
+      const s = sessions.find(s => s.id === id)
+      if (!s) return
+      const cur = s.color || null
+      const idx = SESSION_COLORS.indexOf(cur)
+      const next = SESSION_COLORS[(idx + 1) % SESSION_COLORS.length]
+      if (next == null) delete s.color
+      else s.color = next
+      persistSessions()
+      renderSessions()
+      showRewindToast?.(next ? `🎨 Color set to ${next}` : 'Color cleared', false)
+    }
+    function cycleCurrentSessionColor() { cycleSessionColor(currentSessionId) }
 
     // Duplicate the active session: full deep-copy of messages, plus title
     // (prefixed "Copy of"), tags, goal, and any summary/todos. Unlike Branch
