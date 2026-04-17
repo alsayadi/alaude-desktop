@@ -1620,6 +1620,117 @@
     }
     .icon-btn:hover { color: var(--green); }
     .icon-btn.recording { color: #ff5252; animation: pulse 1s infinite; }
+
+    /* ─── Push-to-Talk overlay ─────────────────────────────────────── */
+    .ptt-overlay {
+      position: fixed;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%) scale(0.92);
+      background: var(--bg-input);
+      border: 2px solid #ff5252;
+      color: var(--text);
+      padding: 14px 28px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 150;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 28px rgba(255, 82, 82, 0.25);
+      pointer-events: none;
+      animation: pttPulse 1.4s ease-in-out infinite;
+    }
+    .ptt-overlay.show { display: flex; }
+    .ptt-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff5252;
+      animation: pulse 0.8s ease-in-out infinite;
+    }
+    @keyframes pttPulse {
+      0%, 100% { box-shadow: 0 8px 28px rgba(255, 82, 82, 0.25); }
+      50%       { box-shadow: 0 8px 32px rgba(255, 82, 82, 0.55); }
+    }
+    .ptt-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      font-weight: normal;
+      margin-left: 8px;
+    }
+
+    /* ─── Memory Lens ──────────────────────────────────────────────── */
+    .memory-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 4px 0 0;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--text-faint);
+      background: color-mix(in srgb, var(--green) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .memory-chip:hover { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--text); }
+    .memory-chip-expanded {
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .memory-chip-expanded .mem-item {
+      padding: 3px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .memory-chip-expanded .mem-item:last-child { border-bottom: 0; }
+
+    /* Remember button: same as other action buttons but with a subtle hover */
+    .memory-remember-btn:hover { border-color: #c084fc !important; color: #c084fc !important; }
+
+    .memory-modal-list {
+      max-height: 50vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .memory-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .memory-row-text {
+      flex: 1;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .memory-row-meta {
+      color: var(--text-faint);
+      font-size: 10px;
+      margin-top: 4px;
+    }
+    .memory-row-source {
+      color: var(--text-faint);
+      font-size: 10px;
+      background: var(--bg-hover);
+      padding: 1px 6px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
     /* Save button on messages */
@@ -2728,6 +2839,7 @@
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
+        <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Alaude remembers across sessions">🧠 Memory</button>
         <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
         <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
@@ -2797,6 +2909,32 @@
         </button>
         <span class="workspace-path" id="folder-path"></span>
         <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Push-to-Talk overlay -->
+  <div class="ptt-overlay" id="ptt-overlay">
+    <span class="ptt-dot"></span>
+    <span id="ptt-text">Listening… release Space to send</span>
+    <span class="ptt-hint">Esc cancels</span>
+  </div>
+
+  <!-- Memory Lens Modal -->
+  <div class="modal-overlay" id="memory-modal">
+    <div class="modal" style="max-width:640px;width:92vw">
+      <h2>
+        🧠 Memory Lens
+        <button class="modal-close" onclick="toggleMemoryModal()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
+        Alaude remembers key facts about you across all sessions. Relevant memories
+        are silently attached to each prompt so responses feel less amnesic.
+      </div>
+      <div class="memory-modal-list" id="memory-modal-list"></div>
+      <div style="display:flex;justify-content:space-between;margin-top:12px;gap:8px">
+        <button class="msg-action-btn" onclick="memoryClearAll()" title="Delete all stored memories">↺ Clear all</button>
+        <button class="msg-action-btn" onclick="memoryAddManual()" style="border-color:var(--green);color:var(--green)">+ Add memory</button>
       </div>
     </div>
   </div>
@@ -3326,6 +3464,187 @@
     // on a menu item still registers before the menu hides).
     input.addEventListener('blur', () => setTimeout(closeSlashMenu, 150))
 
+    // ── Shared Memory Lens ──────────────────────────────────────────
+    // Cross-session memory of facts about the user. On send, we scan the
+    // user's latest prompt and pull memories whose keywords overlap with
+    // the query. Selected memories are prepended to the user message as a
+    // <memory> block so both OpenAI-style and Anthropic APIs see them
+    // (Anthropic's messages[] rejects 'system' role, so we prefix the user
+    // turn instead of injecting a separate system message).
+    //
+    // Extraction is heuristic (regex patterns for "I am / I use / my name
+    // is / I prefer / I work at / I'm building"), plus an explicit
+    // "🧠 Remember" button on user messages.
+    const LS_MEMORY = 'alaude:memory:v1'
+    function loadMemories() {
+      try {
+        const raw = localStorage.getItem(LS_MEMORY)
+        if (!raw) return []
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+      } catch { return [] }
+    }
+    function saveMemories() {
+      try { localStorage.setItem(LS_MEMORY, JSON.stringify(memories)) } catch {}
+    }
+    let memories = loadMemories()
+
+    // Regex-based extraction. Runs on every user message. Very precision-biased
+    // — we'd rather miss facts than hallucinate them. Each pattern captures
+    // the whole claim so the memory reads as the user wrote it.
+    const MEMORY_PATTERNS = [
+      { re: /\b(?:my name is|i(?:'m| am) called|call me)\s+([A-Z][a-zA-Z' -]{1,30})/i, tpl: (m) => `Name: ${m[1].trim()}` },
+      { re: /\bi(?:'m| am)\s+(a|an)\s+([a-z][a-z\s]{2,40}?)(?:[.,]|$| who | and | working | at )/i, tpl: (m) => `Is ${m[1]} ${m[2].trim()}` },
+      { re: /\bi\s+(?:use|work with|code in|write)\s+((?:Python|JavaScript|TypeScript|Rust|Go|Ruby|Java|C\+\+|C#|Swift|Kotlin|PHP|Elixir|Clojure|Haskell|Zig|React|Vue|Svelte|Next\.js|Django|Rails|Flask|Electron|Node\.js|Deno|Bun|Postgres|MySQL|SQLite|Redis)(?:(?:,|\s+and\s+)\s*(?:Python|JavaScript|TypeScript|Rust|Go|Ruby|Java|C\+\+|C#|Swift|Kotlin|PHP|Elixir|Clojure|Haskell|Zig|React|Vue|Svelte|Next\.js|Django|Rails|Flask|Electron|Node\.js|Deno|Bun|Postgres|MySQL|SQLite|Redis)){0,4})/i, tpl: (m) => `Uses ${m[1].trim()}` },
+      { re: /\bi\s+(?:prefer|like|love|favor)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Prefers ${m[1].trim()}` },
+      { re: /\bi(?:'m| am)\s+(?:working on|building|developing|shipping)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Working on ${m[1].trim()}` },
+      { re: /\bi\s+work\s+(?:at|for)\s+([A-Z][a-zA-Z0-9& .'-]{1,40}?)(?:[.,]|$)/i, tpl: (m) => `Works at ${m[1].trim()}` },
+      { re: /\b(?:my|our)\s+(?:team|company|project|stack)\s+(?:is|uses)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Team/project: ${m[1].trim()}` },
+    ]
+    const MEMORY_IMPERATIVE = /^\s*(?:remember(?:\s+that)?|note(?:\s+that)?|keep in mind|fyi)[,:\s]+(.{4,200})$/i
+
+    function memoryExtract(userText) {
+      if (!userText) return []
+      const found = []
+      // Imperative catches "Remember that I like X" — highest priority
+      const imp = userText.match(MEMORY_IMPERATIVE)
+      if (imp) found.push(imp[1].trim().replace(/[.!?]+$/, ''))
+      for (const p of MEMORY_PATTERNS) {
+        const m = userText.match(p.re)
+        if (m) found.push(p.tpl(m))
+      }
+      return found
+    }
+    function memoryAdd(text, source) {
+      const t = String(text || '').trim()
+      if (!t || t.length > 240) return null
+      // De-dupe by normalized text
+      const norm = t.toLowerCase().replace(/\s+/g, ' ')
+      if (memories.some(m => m.text.toLowerCase().replace(/\s+/g, ' ') === norm)) return null
+      const mem = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: t, createdAt: Date.now(), source: source || null }
+      memories.push(mem)
+      // Cap at 200 to avoid unbounded growth; drop the oldest
+      if (memories.length > 200) memories = memories.slice(-200)
+      saveMemories()
+      return mem
+    }
+
+    // Recall: simple keyword-overlap scoring. For each memory, count how
+    // many content words (≥4 chars) appear in the query. Return top N with
+    // non-zero scores.
+    function memoryRecall(queryText, topN = 5) {
+      if (!queryText || !memories.length) return []
+      const stop = new Set(['that','this','with','from','have','will','what','when','where','which','should','could','would','about','there','their','been','does','doesnt','cant','dont','just','like','some','also','been','make','makes','need','needs'])
+      const qWords = new Set(
+        String(queryText).toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || []
+      )
+      if (!qWords.size) return []
+      const scored = memories.map(m => {
+        const mWords = new Set(m.text.toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || [])
+        let s = 0
+        for (const w of qWords) if (mWords.has(w)) s++
+        return { m, s }
+      }).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, topN)
+      return scored.map(x => x.m)
+    }
+
+    function memoryInjectIntoLastUser(cleanMsgs, queryText) {
+      if (!cleanMsgs || !cleanMsgs.length) return { msgs: cleanMsgs, used: [] }
+      const used = memoryRecall(queryText, 5)
+      if (!used.length) return { msgs: cleanMsgs, used: [] }
+      const block = '<memory-context>\n' + used.map(m => `- ${m.text}`).join('\n') + '\n</memory-context>\n\n'
+      const out = cleanMsgs.slice()
+      // Find the last user message to prefix
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].role === 'user') {
+          out[i] = { ...out[i], content: block + out[i].content }
+          break
+        }
+      }
+      return { msgs: out, used }
+    }
+
+    // Explicit capture: adds the selected user message to memory verbatim.
+    function memoryRememberMessage(idx) {
+      const m = messages[idx]
+      if (!m || m.role !== 'user' || !m.content) return
+      // Trim: if it's long, truncate and mark
+      const t = m.content.length > 220 ? m.content.slice(0, 217) + '…' : m.content
+      const added = memoryAdd(t, { sessionId: currentSessionId, msgIdx: idx })
+      if (added) {
+        showRewindToast('🧠 Remembered: "' + added.text.slice(0, 60) + (added.text.length > 60 ? '…' : '') + '"', false)
+      } else {
+        showRewindToast('Already remembered (or empty/too long)', false)
+      }
+    }
+
+    // Memory Manager modal
+    function toggleMemoryModal() {
+      const m = document.getElementById('memory-modal')
+      if (!m) return
+      const isOpen = m.classList.contains('show') || m.style.display === 'flex'
+      if (isOpen) {
+        m.classList.remove('show')
+        m.style.display = 'none'
+        return
+      }
+      renderMemoryModal()
+      m.classList.add('show')
+      m.style.display = 'flex'
+    }
+    function renderMemoryModal() {
+      const list = document.getElementById('memory-modal-list')
+      if (!list) return
+      if (!memories.length) {
+        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, or type "Remember that I prefer X" — Alaude will capture it automatically.</div>`
+        return
+      }
+      // Newest first
+      const ordered = [...memories].sort((a, b) => b.createdAt - a.createdAt)
+      list.innerHTML = ordered.map(m => {
+        const when = new Date(m.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
+        const src = m.source ? 'session' : 'manual'
+        return `<div class="memory-row">
+          <div style="flex:1;min-width:0">
+            <div class="memory-row-text">${escapeHtml(m.text)}</div>
+            <div class="memory-row-meta">${when} · ${src}</div>
+          </div>
+          <button class="msg-action-btn" onclick="memoryEdit('${escapeHtml(m.id)}')">Edit</button>
+          <button class="msg-action-btn" onclick="memoryDelete('${escapeHtml(m.id)}')">×</button>
+        </div>`
+      }).join('')
+    }
+    function memoryEdit(id) {
+      const m = memories.find(x => x.id === id)
+      if (!m) return
+      const edited = prompt('Edit memory:', m.text)
+      if (edited == null) return
+      const t = edited.trim()
+      if (!t) return
+      m.text = t.slice(0, 240)
+      saveMemories()
+      renderMemoryModal()
+    }
+    function memoryDelete(id) {
+      if (!confirm('Delete this memory?')) return
+      memories = memories.filter(x => x.id !== id)
+      saveMemories()
+      renderMemoryModal()
+    }
+    function memoryClearAll() {
+      if (!confirm('Delete ALL memories? This can\'t be undone.')) return
+      memories = []
+      saveMemories()
+      renderMemoryModal()
+    }
+    function memoryAddManual() {
+      const t = prompt('New memory (short fact about you):')
+      if (!t) return
+      const added = memoryAdd(t.trim(), null)
+      if (added) renderMemoryModal()
+      else alert('Already stored (or empty / too long).')
+    }
+
     // ── Focus Mode ──────────────────────────────────────────────────────
     // Zen pass: press F (outside inputs) or use the command palette to
     // collapse the sidebar, topbar, and workspace-bar for distraction-free
@@ -3505,6 +3824,7 @@
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
         { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
+        { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
       )
       return items
     }
@@ -4133,8 +4453,17 @@
       try {
         // Send only role + content, strip UI fields like 'streaming'
         const cleanMsgs = sanitizeHistoryForApi(messages.slice(0, -1))
-        console.log('[callAI] model:', model, 'msgs:', cleanMsgs.length)
-        const response = await window.alaude.chat(cleanMsgs, model, workspacePath, currentSpaceId, uxMeta)
+        // Memory Lens: extract facts from the user's latest message, then
+        // inject any relevant recalled memories as a prefix to that message.
+        const memoryExtracted = memoryExtract(userText)
+        for (const fact of memoryExtracted) memoryAdd(fact, { sessionId: currentSessionId })
+        const { msgs: withMemory, used: memoriesUsed } = memoryInjectIntoLastUser(cleanMsgs, userText)
+        // Tag the assistant streaming slot with the memories used so the chip
+        // can render once the reply lands.
+        const streamingSlot = messages[messages.length - 1]
+        if (streamingSlot && memoriesUsed.length) streamingSlot.memoriesUsed = memoriesUsed.map(m => ({ id: m.id, text: m.text }))
+        console.log('[callAI] model:', model, 'msgs:', withMemory.length, 'memories:', memoriesUsed.length)
+        const response = await window.alaude.chat(withMemory, model, workspacePath, currentSpaceId, uxMeta)
         // Remember which messageId produced this assistant response so save/copy events
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
@@ -4146,6 +4475,7 @@
           model,
           ts: Date.now(),
           fileEdits: prev?.fileEdits,  // preserve file-diff cards from streaming
+          memoriesUsed: prev?.memoriesUsed,
         }
       } catch (err) {
         console.error('[callAI] error:', err)
@@ -4156,6 +4486,7 @@
           model,
           ts: Date.now(),
           fileEdits: prev?.fileEdits,
+          memoriesUsed: prev?.memoriesUsed,
         }
       }
 
@@ -4425,6 +4756,14 @@
         const actionsFull = actions
           ? actions.replace('</div>', regenBtn + '</div>')
           : (isLastAssistant ? `<div class="msg-actions">${regenBtn}</div>` : '')
+        // Memory chip on assistant messages that had recalled memories injected.
+        const memChip = (msg.role === 'assistant' && !msg.streaming && msg.memoriesUsed && msg.memoriesUsed.length)
+          ? `<div><span class="memory-chip" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'" title="Click to expand">🧠 ${msg.memoriesUsed.length} ${msg.memoriesUsed.length === 1 ? 'memory' : 'memories'} used</span><div class="memory-chip-expanded" style="display:none">${msg.memoriesUsed.map(m => `<div class="mem-item">· ${escapeHtml(m.text)}</div>`).join('')}<div style="margin-top:6px"><a onclick="toggleMemoryModal()" style="color:var(--green);cursor:pointer;font-size:11px">Manage memories →</a></div></div></div>`
+          : ''
+        // Remember button on user messages (so user can curate long-term facts).
+        const userRememberBtn = (msg.role === 'user' && (msg.content || '').length > 2)
+          ? `<div class="msg-actions"><button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i})" title="Save this to long-term memory">🧠 Remember</button></div>`
+          : ''
         html += `<div class="msg ${msg.pinned ? 'pinned' : ''}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
@@ -4432,7 +4771,8 @@
             ${timestamp}
           </div>
           <div class="msg-content">${body}</div>
-          ${actionsFull}
+          ${memChip}
+          ${actionsFull || userRememberBtn}
         </div>`
       }
 
@@ -5459,51 +5799,123 @@
     }
 
     // ── Voice Input ──────────────────────────────────────────────────────
+    // Three modes:
+    //  1. Click mic button → toggles normal voice mode (was there before).
+    //  2. Hold Space (outside input, input empty) → push-to-talk. Release
+    //     sends automatically if there's a transcript.
+    //  3. Esc during voice → cancels without sending.
     let recognition = null
     let isRecording = false
+    let isPushToTalk = false
+    let pttCancelled = false
 
-    function toggleVoice() {
-      if (isRecording) {
-        recognition?.stop()
-        return
-      }
+    function makeRecognition() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return null
+      const R = window.SpeechRecognition || window.webkitSpeechRecognition
+      const r = new R()
+      r.continuous = true
+      r.interimResults = true
+      r.lang = 'en-US'
+      return r
+    }
 
-      if (!('webkitSpeechRecognition' in window)) {
-        alert('Voice input not supported in this browser.')
-        return
-      }
+    function showPtt(text) {
+      const el = document.getElementById('ptt-overlay')
+      const t = document.getElementById('ptt-text')
+      if (!el) return
+      if (t && text) t.textContent = text
+      el.classList.add('show')
+    }
+    function hidePtt() {
+      document.getElementById('ptt-overlay')?.classList.remove('show')
+    }
 
-      recognition = new webkitSpeechRecognition()
-      recognition.continuous = true
-      recognition.interimResults = true
-      recognition.lang = 'en-US'
+    function startVoice(opts = {}) {
+      const { pushToTalk = false } = opts
+      const r = makeRecognition()
+      if (!r) { alert('Voice input not supported here.'); return }
+      recognition = r
+      isPushToTalk = pushToTalk
+      pttCancelled = false
 
-      recognition.onstart = () => {
+      r.onstart = () => {
         isRecording = true
-        document.getElementById('mic-btn').classList.add('recording')
+        document.getElementById('mic-btn')?.classList.add('recording')
+        if (pushToTalk) showPtt('Listening… release Space to send')
       }
-
-      recognition.onresult = (event) => {
+      r.onresult = (event) => {
         let transcript = ''
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript
         }
         input.value = transcript
         input.dispatchEvent(new Event('input'))
+        if (pushToTalk && transcript.trim()) {
+          // Live preview right in the PTT overlay so user sees recognition
+          const preview = transcript.trim().slice(-60)
+          showPtt('"' + preview + '"')
+        }
       }
-
-      recognition.onend = () => {
+      r.onend = () => {
         isRecording = false
-        document.getElementById('mic-btn').classList.remove('recording')
+        document.getElementById('mic-btn')?.classList.remove('recording')
+        hidePtt()
+        // Push-to-talk: auto-send the transcript (unless explicitly cancelled).
+        if (isPushToTalk && !pttCancelled && input.value.trim() && !isStreaming) {
+          sendMessage()
+        }
+        isPushToTalk = false
       }
-
-      recognition.onerror = () => {
+      r.onerror = () => {
         isRecording = false
-        document.getElementById('mic-btn').classList.remove('recording')
+        document.getElementById('mic-btn')?.classList.remove('recording')
+        hidePtt()
+        isPushToTalk = false
       }
-
-      recognition.start()
+      try { r.start() } catch (err) { console.warn('[voice] start failed:', err.message); isRecording = false; hidePtt() }
     }
+
+    function stopVoice(cancel = false) {
+      if (!recognition || !isRecording) return
+      pttCancelled = !!cancel
+      if (cancel) {
+        // Clear the input so the accidental transcript doesn't get sent.
+        input.value = ''
+        input.dispatchEvent(new Event('input'))
+      }
+      try { recognition.stop() } catch {}
+    }
+
+    function toggleVoice() {
+      if (isRecording) { stopVoice(false); return }
+      startVoice({ pushToTalk: false })
+    }
+
+    // Push-to-Talk: hold Space when input is empty and unfocused.
+    let spacePressed = false
+    document.addEventListener('keydown', (e) => {
+      if (e.code !== 'Space') return
+      // Only engage PTT when not typing and input is empty
+      const typing = e.target.matches?.('input, textarea, [contenteditable]')
+      if (typing) return
+      if (input.value.trim() !== '') return  // don't interfere with normal typing flow
+      if (spacePressed) return
+      spacePressed = true
+      e.preventDefault()
+      if (!isRecording) startVoice({ pushToTalk: true })
+    })
+    document.addEventListener('keyup', (e) => {
+      if (e.code !== 'Space') return
+      if (!spacePressed) return
+      spacePressed = false
+      if (isRecording && isPushToTalk) stopVoice(false)
+    })
+    // Escape during recording cancels (for both normal voice and PTT).
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isRecording) {
+        stopVoice(true)
+      }
+    })
 
     // ── Workspace ─────────────────────────────────────────────────────────
     let workspacePath = null
