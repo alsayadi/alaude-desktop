@@ -588,11 +588,27 @@
       height: 44px;
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
+      gap: 8px;
+      padding: 0 16px;
       border-bottom: 1px solid var(--border);
       background: var(--bg);
       -webkit-app-region: drag;
       position: relative;
+    }
+    /* Group the model name + version so they stay adjacent, don't grow into
+       the right-side action buttons, and truncate gracefully on narrow windows. */
+    .topbar-leading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      /* Reserve room for the right-side action buttons (they're absolutely
+         positioned). Roughly the width of all action buttons combined plus
+         a safety gap — tuned for the actual set shipped (Council, Map,
+         Memory, theme, Insights, Local Models, API Keys). */
+      max-width: calc(100% - 560px);
+      overflow: hidden;
     }
 
     .topbar-model {
@@ -601,6 +617,10 @@
       padding: 3px 10px;
       border-radius: 4px;
       background: var(--bg-sidebar);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
     }
 
     /* ── Streaming Stats HUD ───────────────────────────────────────── */
@@ -674,10 +694,11 @@
       background: var(--bg-sidebar);
       border: 1px solid var(--border);
       cursor: pointer;
-      margin-left: 8px;
       font-family: 'SF Mono', Monaco, monospace;
       letter-spacing: 0.02em;
       transition: color 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+      -webkit-app-region: no-drag;
     }
     .version-badge:hover { color: var(--green); border-color: var(--green); }
 
@@ -2909,8 +2930,10 @@
   <!-- Main -->
   <div class="main">
     <div class="topbar">
-      <span class="topbar-model" id="topbar-model">GPT-4o</span>
-      <span class="version-badge" id="version-badge" title="Alaude version — click to view release notes">v–</span>
+      <div class="topbar-leading">
+        <span class="topbar-model" id="topbar-model" title="Current model">GPT-4o</span>
+        <span class="version-badge" id="version-badge" title="Alaude version — click to view release notes">v–</span>
+      </div>
       <div class="topbar-actions">
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
           🎭 <span id="council-label">Council</span>
