@@ -1744,6 +1744,64 @@
     }
     .file-chip-remove:hover { opacity: 1; }
 
+    /* ── Image attachments (paste/drop) ───────────────────────────── */
+    .img-chips {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 0 24px;
+    }
+    .img-chip {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .img-chip img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .img-chip-remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      border: 0;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      font-size: 14px;
+      line-height: 18px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .img-chip:hover .img-chip-remove { opacity: 1; }
+    .img-chip-warn {
+      font-size: 11px;
+      color: #e0a010;
+      padding: 4px 24px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .msg-content img.msg-img {
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      margin: 6px 0;
+      cursor: zoom-in;
+      border: 1px solid var(--border);
+    }
+
     /* Icon button (attach, mic) */
     .icon-btn {
       background: none;
@@ -3136,6 +3194,8 @@
     <div class="context-detail" id="context-detail" style="display:none"></div>
 
     <div class="file-chips" id="file-chips"></div>
+    <div class="img-chips" id="img-chips"></div>
+    <div class="img-chip-warn" id="img-chip-warn" style="display:none"></div>
 
     <div class="input-area">
       <div class="input-wrap">
@@ -3824,10 +3884,16 @@
       if (!used.length) return { msgs: cleanMsgs, used: [] }
       const block = '<memory-context>\n' + used.map(m => `- ${m.text}`).join('\n') + '\n</memory-context>\n\n'
       const out = cleanMsgs.slice()
-      // Find the last user message to prefix
+      // Find the last user message to prefix. Handles both plain-string content
+      // and multimodal content arrays (prepend a text part rather than mashing
+      // the string into the array).
       for (let i = out.length - 1; i >= 0; i--) {
         if (out[i].role === 'user') {
-          out[i] = { ...out[i], content: block + out[i].content }
+          if (Array.isArray(out[i].content)) {
+            out[i] = { ...out[i], content: [{ type: 'text', text: block }, ...out[i].content] }
+          } else {
+            out[i] = { ...out[i], content: block + out[i].content }
+          }
           break
         }
       }
@@ -4482,7 +4548,7 @@
     // ── Messages ─────────────────────────────────────────────────────────
     function sendMessage() {
       let text = input.value.trim()
-      if (!text && attachedFiles.length === 0) return
+      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
       if (isStreaming) return
 
       // Prepend attached file contents to the message
@@ -4501,7 +4567,25 @@
         renderFileChips()
       }
 
-      messages.push({ role: 'user', content: text })
+      // Multimodal: if there are pasted/dropped images, produce a content array
+      // (OpenAI shape). The worker reshapes to Anthropic-style content blocks.
+      const images = attachedImages.slice()
+      let userMessage
+      if (images.length > 0) {
+        const parts = []
+        if (text) parts.push({ type: 'text', text })
+        for (const img of images) {
+          parts.push({ type: 'image_url', image_url: { url: img.dataUrl } })
+        }
+        userMessage = { role: 'user', content: parts, images: images.map(i => ({ dataUrl: i.dataUrl, name: i.name })) }
+        attachedImages = []
+        renderImgChips()
+        // Ensure text exists for downstream UX (title generation, hash)
+        if (!text) text = '(image)'
+      } else {
+        userMessage = { role: 'user', content: text }
+      }
+      messages.push(userMessage)
       renderMessages()
       persistSessions()
 
@@ -4708,6 +4792,15 @@
           continue
         }
         const role = m.role === 'assistant' ? 'assistant' : 'user'
+        // Multimodal user messages: keep the content array intact so the
+        // worker can reshape it per-provider. Everything else stays a string.
+        if (Array.isArray(m.content)) {
+          // Drop empty parts, but keep the array shape
+          const clean = m.content.filter(p => p && (p.type === 'text' ? (p.text || '').length > 0 : true))
+          if (!clean.length) continue
+          out.push({ role, content: clean })
+          continue
+        }
         const content = (m.content == null) ? '' : String(m.content)
         if (!content && role === 'user') continue  // nothing to send
         out.push({ role, content })
@@ -5031,7 +5124,24 @@
             body = chips + diffsHtml + `<span${streamAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`
           }
         } else {
-          body = diffsHtml + (msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content))
+          // Multimodal user message: extract text from the content array
+          // (if any) and render any attached images as thumbnails.
+          let displayText = msg.content
+          let imgHtml = ''
+          if (Array.isArray(msg.content)) {
+            const textParts = msg.content.filter(p => p?.type === 'text').map(p => p.text || '')
+            displayText = textParts.join('\n')
+          }
+          if (Array.isArray(msg.images) && msg.images.length) {
+            imgHtml = msg.images.map(img =>
+              `<img class="msg-img" src="${img.dataUrl}" alt="${escapeHtml(img.name || 'attachment')}" onclick="window.alaude?.openExternal?.(this.src)" />`
+            ).join('')
+          } else if (Array.isArray(msg.content)) {
+            // Fallback for older multimodal messages that don't have msg.images
+            const urls = msg.content.filter(p => p?.type === 'image_url').map(p => p.image_url?.url).filter(Boolean)
+            imgHtml = urls.map(u => `<img class="msg-img" src="${u}" alt="attachment" />`).join('')
+          }
+          body = diffsHtml + imgHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
         }
         // Model + timestamp metadata on assistant responses
         const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
@@ -6257,7 +6367,17 @@
     function estimateInputTokensForCall(cleanMsgs) {
       if (!Array.isArray(cleanMsgs)) return 0
       let total = 0
-      for (const m of cleanMsgs) total += estimateTokens(m?.content || '')
+      for (const m of cleanMsgs) {
+        if (Array.isArray(m?.content)) {
+          // Multimodal: sum text parts, add a flat ~1k for each image (rough).
+          for (const part of m.content) {
+            if (part?.type === 'text') total += estimateTokens(part.text || '')
+            else if (part?.type === 'image_url') total += 1000
+          }
+        } else {
+          total += estimateTokens(m?.content || '')
+        }
+      }
       return total
     }
     function computeMessageCost(msg) {
@@ -6494,12 +6614,107 @@
       e.stopPropagation()
       document.getElementById('drop-overlay').classList.remove('show')
       const files = e.dataTransfer?.files
-      if (files) {
-        for (const file of files) {
-          await processFile(file.path)
+      if (!files) return
+      for (const file of files) {
+        // Image drop → go through the multimodal path so vision models see it
+        if (file.type && file.type.startsWith('image/')) {
+          await attachImageFromFile(file)
+          continue
+        }
+        await processFile(file.path)
+      }
+    }
+
+    // ── Image attachments (multimodal) ─────────────────────────────────
+    // Supports image paste (Cmd-V from screenshot/clipboard) and drop.
+    // Images go through a separate pipeline from regular file attachments
+    // because vision models want a content-array shape, not a text prefix.
+    let attachedImages = []  // [{ dataUrl, name, mime, size }]
+    const VISION_MODELS_REGEX = /^(gpt-4o|gpt-4-turbo|gpt-4-vision|o1|o3|o4|claude-3|claude-sonnet-4|claude-opus-4|claude-haiku-4|gemini-1\.5|gemini-2|gemini-2\.5|grok-2-vision|grok-4|llava|llama3\.2-vision|qwen2\.5-vl)/i
+    function modelIsVisionCapable(model) {
+      if (!model) return false
+      // Local Ollama vision models
+      if (/llava|vision|vl/i.test(model)) return true
+      return VISION_MODELS_REGEX.test(model)
+    }
+    function renderImgChips() {
+      const container = document.getElementById('img-chips')
+      const warn = document.getElementById('img-chip-warn')
+      if (!container) return
+      if (!attachedImages.length) {
+        container.innerHTML = ''
+        if (warn) warn.style.display = 'none'
+        return
+      }
+      container.innerHTML = attachedImages.map((img, i) => `
+        <div class="img-chip" title="${escapeHtml(img.name)} · ${Math.round(img.size / 1024)}KB">
+          <img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" />
+          <button class="img-chip-remove" onclick="removeImage(${i})" title="Remove">×</button>
+        </div>`).join('')
+      // Warn if current model isn't vision-capable
+      if (warn) {
+        const model = document.getElementById('model-select')?.value
+        if (!modelIsVisionCapable(model)) {
+          warn.style.display = 'block'
+          warn.textContent = `⚠️ Current model "${model}" may not understand images. Switch to GPT-4o, Claude 3+, Gemini, or a vision model for best results.`
+        } else {
+          warn.style.display = 'none'
         }
       }
     }
+    function removeImage(idx) {
+      attachedImages.splice(idx, 1)
+      renderImgChips()
+    }
+    async function attachImageFromFile(file) {
+      if (!file || !file.type?.startsWith('image/')) return
+      // Cap at ~8 MB to avoid blowing up the JSON payload. OpenAI allows up to
+      // 20 MB but in practice you want smaller for quick roundtrips.
+      if (file.size > 8 * 1024 * 1024) {
+        alert('Image too large (>8 MB). Please use a smaller version.')
+        return
+      }
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(r.result)
+        r.onerror = () => reject(r.error)
+        r.readAsDataURL(file)
+      })
+      attachedImages.push({
+        dataUrl,
+        name: file.name || 'pasted-image.png',
+        mime: file.type,
+        size: file.size,
+      })
+      renderImgChips()
+    }
+
+    // Paste handler on the input — intercepts Cmd-V when clipboard has image
+    input.addEventListener('paste', async (e) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (file) await attachImageFromFile(file)
+        }
+      }
+    })
+    // Also catch drops that happen on the input itself
+    input.addEventListener('drop', async (e) => {
+      const files = e.dataTransfer?.files
+      if (!files || !files.length) return
+      const anyImage = [...files].some(f => f.type?.startsWith('image/'))
+      if (!anyImage) return  // let the default handler deal with non-image drops
+      e.preventDefault()
+      for (const file of files) {
+        if (file.type?.startsWith('image/')) await attachImageFromFile(file)
+      }
+    })
+    input.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault()
+    })
 
     // ── Quick Actions ────────────────────────────────────────────────────
     async function quickAction(action) {

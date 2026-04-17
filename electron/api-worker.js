@@ -519,7 +519,27 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const allAnthTools = [...(workspacePath ? TOOLS : []), ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
-  const chatMsgs = msgs.map(m => ({ role: m.role, content: m.content }))
+  // Multimodal: the renderer produces content in OpenAI shape. Reshape any
+  // array-content messages to Anthropic's content-block format. Image URLs
+  // arrive as data URLs (data:image/png;base64,…) — Anthropic wants the raw
+  // base64 + media_type separately.
+  const reshape = (content) => {
+    if (!Array.isArray(content)) return content
+    return content.map(part => {
+      if (part?.type === 'image_url') {
+        const url = part.image_url?.url || ''
+        const m = /^data:([^;]+);base64,(.+)$/.exec(url)
+        if (m) {
+          return { type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } }
+        }
+        // Remote URL (unlikely from the renderer but handle it)
+        return { type: 'image', source: { type: 'url', url } }
+      }
+      if (part?.type === 'text') return { type: 'text', text: part.text || '' }
+      return part
+    })
+  }
+  const chatMsgs = msgs.map(m => ({ role: m.role, content: reshape(m.content) }))
   let fullText = '', toolLog = ''
 
   for (let i = 0; i < 10; i++) {
