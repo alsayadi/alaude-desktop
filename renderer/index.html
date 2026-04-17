@@ -10227,6 +10227,8 @@ Title:`
       const cards = []
       const codeBlocks = []
       const svgs = []
+      const chips = []
+      const CHIP_TOKEN = '\u241ACHIP'
       const CARD_TOKEN = '\u241ACARD'   // SYMBOL FOR SUBSTITUTE — never appears in real text
       const CODE_TOKEN = '\u241ACODE'
       const SVG_TOKEN  = '\u241ASVG'
@@ -10247,22 +10249,28 @@ Title:`
         })
       }
 
-      // 1c. While streaming, if the content ends mid-fenced-block (no
-      //     closing ``` yet), swap that trailing partial block for a
-      //     compact "Building…" chip so the chat stays tidy until
-      //     the stream completes.
+      // 1c. While streaming, if the content ends mid-fenced-block (odd count
+      //     of ``` means the last one is still open), swap ONLY that trailing
+      //     partial block for a "Building…" chip. Any earlier, fully-closed
+      //     blocks are left alone so they stream-render normally.
       if (isStreaming) {
-        s = s.replace(/```(\w*)\n([\s\S]*)$/, (match, lang, rest) => {
-          // Only intercept if there's no closing fence — otherwise this is a
-          // completed block somewhere in the middle of the content.
-          if (/```\s*$/.test(match.slice(3))) return match
-          const lc = (lang || '').toLowerCase()
-          const lines = rest.split('\n').length
-          const label = RICH_LANG_LABEL[lc] || (lang ? lang.toUpperCase() + ' block' : 'Code block')
-          const icon = RICH_LANG_ICON[lc] || '📝'
-          const chars = rest.length
-          return `<div class="md-building"><span class="mdb-icon">${icon}</span><span class="mdb-label">Building ${escapeHtml(label)}…</span><span class="mdb-meta">${lines} line${lines === 1 ? '' : 's'} · ${chars.toLocaleString()} ch</span><span class="mdb-dot"></span></div>`
-        })
+        // Find all ``` positions. If count is odd, the last one is an opener
+        // with no matching closer yet — that's the range we need to collapse.
+        const fences = []
+        for (let k = 0; k < s.length - 2; k++) {
+          if (s[k] === '`' && s[k+1] === '`' && s[k+2] === '`') { fences.push(k); k += 2 }
+        }
+        if (fences.length % 2 === 1) {
+          const openPos = fences[fences.length - 1]
+          const tail = s.slice(openPos)
+          const headerMatch = tail.match(/^```(\w*)\r?\n?([\s\S]*)$/)
+          if (headerMatch) {
+            const lang = (headerMatch[1] || '').toLowerCase()
+            const rest = headerMatch[2] || ''
+            chips.push({ lang, lines: rest.split('\n').length, chars: rest.length })
+            s = s.slice(0, openPos) + `${CHIP_TOKEN}${chips.length - 1}${CHIP_TOKEN}`
+          }
+        }
       }
 
       // 2. Extract fenced code blocks so they don't get markdown-processed
@@ -10278,10 +10286,8 @@ Title:`
         // tokens of trailing text, and re-parsing partial JSON on every
         // token is both expensive and visually flickery.
         if (isStreaming && RICH_BLOCK_LANGS.has(lc)) {
-          const lines = code.split('\n').length
-          const label = RICH_LANG_LABEL[lc] || lc
-          const icon = RICH_LANG_ICON[lc] || '📝'
-          return `<div class="md-building"><span class="mdb-icon">${icon}</span><span class="mdb-label">Building ${escapeHtml(label)}…</span><span class="mdb-meta">${lines} line${lines === 1 ? '' : 's'}</span><span class="mdb-dot"></span></div>`
+          chips.push({ lang: lc, lines: code.split('\n').length, chars: code.length })
+          return `${CHIP_TOKEN}${chips.length - 1}${CHIP_TOKEN}`
         }
         codeBlocks.push({ lang: lang || '', code })
         return `${CODE_TOKEN}${codeBlocks.length - 1}${CODE_TOKEN}`
@@ -10439,6 +10445,19 @@ Title:`
       // 6b. Re-insert sanitized SVG blocks as their own block element
       s = s.replace(new RegExp(`${SVG_TOKEN}(\\d+)${SVG_TOKEN}`, 'g'), (_m, i) => {
         return `<div class="md-svg">${svgs[+i] || ''}</div>`
+      })
+
+      // 6c. Re-insert "building" chips (streaming-only placeholders) as
+      //     real block elements so the surrounding paragraph-wrap step
+      //     doesn't package them into a <p>. The earlier injection used
+      //     a token placeholder to survive the HTML-escape at step 3.
+      s = s.replace(new RegExp(`${CHIP_TOKEN}(\\d+)${CHIP_TOKEN}`, 'g'), (_m, i) => {
+        const c = chips[+i]
+        if (!c) return ''
+        const label = RICH_LANG_LABEL[c.lang] || (c.lang ? c.lang.toUpperCase() + ' block' : 'Code block')
+        const icon = RICH_LANG_ICON[c.lang] || '📝'
+        const meta = `${c.lines} line${c.lines === 1 ? '' : 's'}${c.chars != null ? ' · ' + c.chars.toLocaleString() + ' ch' : ''}`
+        return `<div class="md-building"><span class="mdb-icon">${icon}</span><span class="mdb-label">Building ${escapeHtml(label)}…</span><span class="mdb-meta">${meta}</span><span class="mdb-dot"></span></div>`
       })
 
       // 7. Paragraphs — wrap runs of non-block content
