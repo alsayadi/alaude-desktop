@@ -220,6 +220,20 @@
       animation: tts-pulse 1.2s ease-in-out infinite;
     }
     @keyframes tts-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.55 } }
+    .compare-btn.active {
+      background: color-mix(in srgb, #f1c40f 18%, transparent);
+      border-color: #f1c40f;
+      color: #f1c40f;
+      animation: tts-pulse 1.2s ease-in-out infinite;
+    }
+    /* Compare modal diff table */
+    .cmp-table td { padding: 2px 6px; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent); }
+    .cmp-table .cmp-num { width: 36px; color: var(--text-faint); text-align: right; user-select: none; }
+    .cmp-table .cmp-left, .cmp-table .cmp-right { width: calc(50% - 36px); white-space: pre-wrap; word-break: break-word; }
+    .cmp-table .cmp-add .cmp-right { background: color-mix(in srgb, var(--green) 16%, transparent); }
+    .cmp-table .cmp-del .cmp-left { background: color-mix(in srgb, #e74c3c 16%, transparent); }
+    .cmp-table .cmp-gap td { background: color-mix(in srgb, var(--border) 30%, transparent); color: var(--text-faint); text-align: center; font-style: italic; padding: 3px 6px; }
+    .cmp-table .cmp-ctx { opacity: 0.82; }
     .reaction-note {
       color: var(--text-faint);
       font-size: 10px;
@@ -3900,6 +3914,17 @@
     </div>
   </div>
 
+  <!-- Message Compare Modal -->
+  <div class="modal-overlay" id="compare-modal">
+    <div class="modal ux-modal" style="max-width:90vw;width:1100px">
+      <h2>
+        ⚖ Compare messages
+        <button class="modal-close" onclick="closeCompareModal()">&times;</button>
+      </h2>
+      <div id="compare-body" class="ux-scroll" style="max-height:70vh"></div>
+    </div>
+  </div>
+
   <!-- Daily Digest Modal -->
   <div class="modal-overlay" id="digest-modal">
     <div class="modal ux-modal">
@@ -4930,6 +4955,114 @@ SUMMARY:`
         // Don't preventDefault — let other Esc handlers run too
       }
     })
+
+    // ── Message Compare ─────────────────────────────────────────────
+    // Two-click interaction: arm one message, click Compare on another,
+    // open a side-by-side diff modal. Reuses the diffLines engine from
+    // the file-diff cards. Scope is the current session only — cross-
+    // session diffing would be a bigger feature.
+    window._compareArmedIdx = null
+    window._compareArmedSession = null
+    function armCompare(idx) {
+      const msg = messages[idx]
+      if (!msg || msg.role !== 'assistant' || msg.streaming) return
+      if (window._compareArmedIdx == null || window._compareArmedSession !== currentSessionId) {
+        window._compareArmedIdx = idx
+        window._compareArmedSession = currentSessionId
+        renderMessages()
+        showRewindToast?.('⚖ Compare armed — pick a second assistant reply', false)
+        return
+      }
+      if (window._compareArmedIdx === idx) {
+        // Same message → cancel arm
+        window._compareArmedIdx = null
+        window._compareArmedSession = null
+        renderMessages()
+        showRewindToast?.('Compare cancelled', false)
+        return
+      }
+      // Two messages selected → open modal
+      openCompareModal(window._compareArmedIdx, idx)
+      window._compareArmedIdx = null
+      window._compareArmedSession = null
+      renderMessages()
+    }
+    function contentStringOf(m) {
+      if (!m) return ''
+      return Array.isArray(m.content)
+        ? m.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+        : String(m.content || '')
+    }
+    function openCompareModal(idxA, idxB) {
+      const a = messages[idxA], b = messages[idxB]
+      if (!a || !b) return
+      const ta = contentStringOf(a), tb = contentStringOf(b)
+      const ops = diffLines(ta, tb)
+      const stats = ops.reduce((s, o) => {
+        if (o.op === 'add') s.add++
+        else if (o.op === 'del') s.del++
+        else if (o.op === 'ctx') s.ctx++
+        return s
+      }, { add: 0, del: 0, ctx: 0 })
+      const leftLabel = `${a.model || 'unknown'} · #${idxA + 1}${a.ts ? ' · ' + formatRelTime(a.ts) : ''}`
+      const rightLabel = `${b.model || 'unknown'} · #${idxB + 1}${b.ts ? ' · ' + formatRelTime(b.ts) : ''}`
+      const rows = ops.map(o => {
+        if (o.op === 'gap') {
+          return `<tr class="cmp-gap"><td colspan="4"><em>… ${o.count} unchanged line${o.count === 1 ? '' : 's'}</em></td></tr>`
+        }
+        const leftNum = o.ai >= 0 ? o.ai + 1 : ''
+        const rightNum = o.bi >= 0 ? o.bi + 1 : ''
+        const leftText = o.op === 'add' ? '' : escapeHtml(o.line || '')
+        const rightText = o.op === 'del' ? '' : escapeHtml(o.line || '')
+        const cls = o.op === 'add' ? 'cmp-add' : o.op === 'del' ? 'cmp-del' : 'cmp-ctx'
+        return `<tr class="${cls}">
+          <td class="cmp-num">${leftNum}</td>
+          <td class="cmp-left">${leftText}</td>
+          <td class="cmp-num">${rightNum}</td>
+          <td class="cmp-right">${rightText}</td>
+        </tr>`
+      })
+      const collapsed = collapseDiffContext(ops, 3)
+      const collapsedRows = collapsed.map(o => {
+        if (o.op === 'gap') return `<tr class="cmp-gap"><td colspan="4"><em>… ${o.count} unchanged line${o.count === 1 ? '' : 's'}</em></td></tr>`
+        const leftNum = o.ai >= 0 ? o.ai + 1 : ''
+        const rightNum = o.bi >= 0 ? o.bi + 1 : ''
+        const leftText = o.op === 'add' ? '' : escapeHtml(o.line || '')
+        const rightText = o.op === 'del' ? '' : escapeHtml(o.line || '')
+        const cls = o.op === 'add' ? 'cmp-add' : o.op === 'del' ? 'cmp-del' : 'cmp-ctx'
+        return `<tr class="${cls}"><td class="cmp-num">${leftNum}</td><td class="cmp-left">${leftText}</td><td class="cmp-num">${rightNum}</td><td class="cmp-right">${rightText}</td></tr>`
+      })
+      const body = document.getElementById('compare-body')
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:11px;color:var(--text-faint);margin-bottom:10px">
+          <div><strong style="color:var(--text-dim);font-family:monospace">${escapeHtml(leftLabel)}</strong></div>
+          <div><strong style="color:var(--text-dim);font-family:monospace">${escapeHtml(rightLabel)}</strong></div>
+        </div>
+        <div style="display:flex;gap:14px;font-size:11px;margin-bottom:10px">
+          <span style="color:var(--green)">+${stats.add}</span>
+          <span style="color:#e74c3c">−${stats.del}</span>
+          <span style="color:var(--text-faint)">${stats.ctx} unchanged</span>
+          <span style="margin-left:auto;color:var(--text-faint)">Click any row to expand full context</span>
+        </div>
+        <table class="cmp-table" style="width:100%;border-collapse:collapse;font-family:monospace;font-size:12px" data-expanded="0">
+          <tbody id="cmp-tbody">${collapsedRows.join('')}</tbody>
+        </table>
+        <div style="margin-top:10px;text-align:center">
+          <button class="msg-action-btn" onclick="expandCompareView()">Show all lines</button>
+        </div>`
+      // Stash the full rows so "Show all" can swap.
+      body.dataset.allRows = rows.join('')
+      document.getElementById('compare-modal').classList.add('show')
+    }
+    function expandCompareView() {
+      const body = document.getElementById('compare-body')
+      const tbody = document.getElementById('cmp-tbody')
+      if (!body || !tbody) return
+      tbody.innerHTML = body.dataset.allRows || tbody.innerHTML
+    }
+    function closeCompareModal() {
+      document.getElementById('compare-modal')?.classList.remove('show')
+    }
 
     // ── Daily Digest ────────────────────────────────────────────────
     // Rolls up a time window's worth of sessions into a single markdown
@@ -7040,11 +7173,15 @@ Title:`
         const downActive = reactionKind === 'down' ? ' active' : ''
         const ttsActive = (window._ttsIdx === i) ? ' active' : ''
         const ttsIcon = (window._ttsIdx === i) ? '⏸' : '🔊'
+        const compareArmedHere = (window._compareArmedIdx === i && window._compareArmedSession === currentSessionId)
+        const compareClass = compareArmedHere ? ' active' : ''
+        const compareLabel = compareArmedHere ? '⚖ Armed…' : '⚖ Compare'
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
               <button class="msg-action-btn reaction-btn${upActive}" data-kind="up" onclick="setReaction(${i}, 'up')" title="Mark as a good response">👍</button>
               <button class="msg-action-btn reaction-btn${downActive}" data-kind="down" onclick="setReaction(${i}, 'down')" title="Mark as a poor response (you'll be asked for a note)">👎</button>
               <button class="msg-action-btn tts-btn${ttsActive}" onclick="toggleReadAloud(${i})" title="Read this reply aloud (Esc to stop)">${ttsIcon}</button>
+              <button class="msg-action-btn compare-btn${compareClass}" onclick="armCompare(${i})" title="Pick two assistant messages to compare side-by-side">${compareLabel}</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
