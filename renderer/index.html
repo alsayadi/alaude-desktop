@@ -3733,6 +3733,24 @@
     </div>
   </div>
 
+  <!-- Model Performance Modal -->
+  <div class="modal-overlay" id="model-perf-modal">
+    <div class="modal ux-modal">
+      <h2>
+        📈 Model Performance
+        <button class="modal-close" onclick="toggleModelPerfModal()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
+        Aggregated across every session you've ever had.
+        Stats are from the streaming telemetry — no network round-trip.
+      </div>
+      <div id="model-perf-body" class="ux-scroll"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button class="msg-action-btn" onclick="exportModelPerfCsv()">📥 Export CSV</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Create Space Modal -->
   <div class="modal-overlay" id="create-space-modal">
     <div class="modal">
@@ -5071,6 +5089,7 @@ JSON:`
         { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
+        { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
       )
       return items
     }
@@ -8480,6 +8499,141 @@ Title:`
           refreshLocalOptgroup()
         }
       } catch {}
+    }
+
+    // ── Model Performance Dashboard ─────────────────────────────────────
+    // Aggregates per-model stats across ALL sessions: call count, avg tok/s,
+    // avg TTFT, total input/output tokens, total estimated cost, and recency.
+    // Uses stats we already capture on each assistant message — no new IPC.
+    function aggregateModelStats() {
+      const byModel = new Map()
+      const allSessions = Array.isArray(sessions) ? sessions : []
+      for (const s of allSessions) {
+        for (const m of (s.messages || [])) {
+          if (m.role !== 'assistant' || !m.model) continue
+          if (m.council) continue // council lanes aggregated below via sub-laneMsg
+          const model = m.model
+          let a = byModel.get(model)
+          if (!a) {
+            a = { model, count: 0, tokens: 0, inputTokens: 0, ttftSum: 0, ttftN: 0, tpsSum: 0, tpsN: 0, usd: 0, hasPricing: false, local: false, lastUsed: 0 }
+            byModel.set(model, a)
+          }
+          a.count++
+          a.lastUsed = Math.max(a.lastUsed, m.ts || 0)
+          const sf = m.statsFinal
+          if (sf) {
+            a.tokens += sf.totalTokens || 0
+            if (sf.ttft != null) { a.ttftSum += sf.ttft; a.ttftN++ }
+            if (sf.avgTps != null) { a.tpsSum += sf.avgTps; a.tpsN++ }
+          }
+          a.inputTokens += m.inputTokens || 0
+          const c = computeMessageCost(m)
+          if (c) {
+            a.usd += c.usd
+            a.hasPricing = true
+            if (c.local) a.local = true
+          }
+        }
+      }
+      return Array.from(byModel.values()).sort((a, b) => b.count - a.count)
+    }
+
+    async function toggleModelPerfModal() {
+      const modal = document.getElementById('model-perf-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        renderModelPerfBody()
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+
+    function renderModelPerfBody() {
+      const body = document.getElementById('model-perf-body')
+      if (!body) return
+      const rows = aggregateModelStats()
+      if (!rows.length) {
+        body.innerHTML = `
+          <div class="ux-empty" style="padding:32px 16px;text-align:center;color:var(--text-faint)">
+            <div style="font-size:36px">📈</div>
+            <div style="margin-top:8px">No model stats yet. Send a few messages and come back.</div>
+          </div>`
+        return
+      }
+      const maxCount = Math.max(...rows.map(r => r.count))
+      const maxTps = Math.max(...rows.map(r => r.tpsN ? r.tpsSum / r.tpsN : 0), 1)
+      const trow = (r) => {
+        const avgTps = r.tpsN ? Math.round(r.tpsSum / r.tpsN) : null
+        const avgTtft = r.ttftN ? Math.round(r.ttftSum / r.ttftN) : null
+        const costLabel = r.local ? 'free' : (r.hasPricing ? formatUsd(r.usd) : '—')
+        const lastLabel = r.lastUsed ? formatRelTime(r.lastUsed) : '—'
+        const tpsBar = avgTps != null
+          ? `<div style="display:inline-block;width:60px;height:4px;background:var(--border);border-radius:2px;vertical-align:middle;margin-right:6px"><div style="width:${Math.min(100, (avgTps/maxTps)*100)}%;height:100%;background:var(--green);border-radius:2px"></div></div>${avgTps}`
+          : '—'
+        const countBar = `<div style="display:inline-block;width:60px;height:4px;background:var(--border);border-radius:2px;vertical-align:middle;margin-right:6px"><div style="width:${(r.count/maxCount)*100}%;height:100%;background:#3498db;border-radius:2px"></div></div>${r.count}`
+        return `
+          <tr>
+            <td style="font-family:monospace;font-size:11px">${r.local ? '🦙 ' : '☁️ '}${escapeHtml(r.model)}</td>
+            <td>${countBar}</td>
+            <td>${tpsBar}</td>
+            <td>${avgTtft != null ? avgTtft + 'ms' : '—'}</td>
+            <td>${formatCompact(r.inputTokens)}</td>
+            <td>${formatCompact(r.tokens)}</td>
+            <td style="color:${r.local ? 'var(--green)' : 'var(--text)'}">${costLabel}</td>
+            <td style="color:var(--text-faint);font-size:11px">${escapeHtml(lastLabel)}</td>
+          </tr>`
+      }
+      const totalCalls = rows.reduce((n, r) => n + r.count, 0)
+      const totalCost = rows.reduce((n, r) => n + (r.hasPricing && !r.local ? r.usd : 0), 0)
+      const totalOut = rows.reduce((n, r) => n + r.tokens, 0)
+      const totalIn = rows.reduce((n, r) => n + r.inputTokens, 0)
+      body.innerHTML = `
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px;flex-wrap:wrap">
+          <span><strong style="color:var(--text)">${rows.length}</strong> model${rows.length === 1 ? '' : 's'}</span>
+          <span><strong style="color:var(--text)">${totalCalls}</strong> calls</span>
+          <span><strong style="color:var(--text)">${formatCompact(totalIn)}</strong> in · <strong style="color:var(--text)">${formatCompact(totalOut)}</strong> out tokens</span>
+          <span><strong style="color:var(--text)">${formatUsd(totalCost)}</strong> estimated spend</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="color:var(--text-faint);text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.08em">
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Model</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Calls</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Avg tok/s</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Avg TTFT</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">In tok</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Out tok</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Cost</th>
+              <th style="padding:6px 8px;border-bottom:1px solid var(--border)">Last used</th>
+            </tr>
+          </thead>
+          <tbody>${rows.map(r => trow(r).replace(/^\s+/, '').replace(/<tr>/, '<tr style="border-bottom:1px dashed var(--border)">')).join('')}</tbody>
+        </table>`
+    }
+
+    function exportModelPerfCsv() {
+      const rows = aggregateModelStats()
+      if (!rows.length) { showRewindToast?.('No data to export yet', true); return }
+      const header = ['model','calls','avg_tokens_per_sec','avg_ttft_ms','input_tokens','output_tokens','estimated_usd','local','last_used_iso']
+      const lines = [header.join(',')]
+      for (const r of rows) {
+        const avgTps = r.tpsN ? Math.round(r.tpsSum / r.tpsN) : ''
+        const avgTtft = r.ttftN ? Math.round(r.ttftSum / r.ttftN) : ''
+        const usd = r.hasPricing && !r.local ? r.usd.toFixed(6) : ''
+        const last = r.lastUsed ? new Date(r.lastUsed).toISOString() : ''
+        const esc = (v) => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v)
+        lines.push([r.model, r.count, avgTps, avgTtft, r.inputTokens, r.tokens, usd, r.local ? 'yes' : 'no', last].map(esc).join(','))
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `alaude-model-perf-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast?.(`📥 Exported ${rows.length} model rows`, false)
     }
 
     // ── UX Insights dashboard ────────────────────────────────────────────
