@@ -379,6 +379,37 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   if (workspacePath) {
     sysPrompt += ` Workspace: ${workspacePath}. Use tools to read/write files, list dirs, run commands. Always explain what you do.`
   }
+  // Rich rendering primer: teach the model about Alaude-specific fenced code
+  // blocks. When the user's intent calls for a chart / diagram / presentation
+  // / document / spreadsheet / interactive demo, the model should pick the
+  // matching format so Alaude can render or export it natively.
+  sysPrompt += `
+
+RICH OUTPUT — Alaude renders these special fenced code blocks. Pick the format that fits the user's intent. No preamble before the block, no commentary inside it.
+
+• \`\`\`chart  — JSON spec → inline SVG chart. Use when the user wants a bar/line/pie/area/donut chart of concrete numbers.
+   Example: \`\`\`chart\\n{"type":"bar","title":"Q1","data":{"labels":["Jan","Feb"],"values":[10,20]}}\\n\`\`\`
+
+• \`\`\`mermaid  — flowcharts, sequence, class, gantt, ER diagrams. Use when the user asks for a process, flow, or relationship diagram.
+
+• \`\`\`svg  — raw <svg> for custom illustrations, icons, or charts you want to hand-draw.
+
+• \`\`\`html (or \`\`\`artifact)  — full standalone HTML + JS + CSS. Renders in a sandboxed iframe. Use for games, interactive widgets, animations, demos, canvas/Web Audio/typing tests. Include everything inline (no relative paths). External scripts from CDN work.
+
+• \`\`\`pptx  — PowerPoint deck spec → downloadable .pptx. Use when the user asks for a "deck", "presentation", "slides".
+   Shape: {"title": "...", "subtitle":"...", "slides":[{"title":"...","bullets":["..."],"body":"...","notes":"speaker notes"}]}
+
+• \`\`\`docx  — Word document spec → downloadable .docx. Use for "document", "report", "write-up", "brief", "memo".
+   Shape: {"title":"...","sections":[{"heading":"...","level":1,"body":"...","bullets":["..."]}]}
+
+• \`\`\`xlsx  — Excel workbook spec → downloadable .xlsx. Use for tables of numeric data, budgets, rosters, any "spreadsheet".
+   Shape: {"title":"...","sheets":[{"name":"...","rows":[["Header1","Header2"],[1,2]]}]}
+
+Rules:
+- Use rich blocks when asked for something visual, structural, or exportable. For plain prose answers, stick with normal markdown.
+- Don't wrap rich blocks with extra commentary like "here's your chart:". A short one-line intro is fine but not required.
+- When in doubt between a ready-to-download file (pptx/docx/xlsx) and inline content, prefer inline (chart/table) unless the user said "export", "give me a file", "download", or named the format.
+- Always emit valid JSON inside the block. Escape strings properly.`
   if (spacePrompt) {
     sysPrompt += '\n\n' + spacePrompt
   }
