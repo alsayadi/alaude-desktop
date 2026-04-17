@@ -1246,6 +1246,77 @@
     .welcome-space-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .welcome-space-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 
+    /* ─── Inline Translate ─────────────────────────────────────── */
+    .translate-chip {
+      position: fixed;
+      z-index: 120;
+      display: none;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px;
+      gap: 2px;
+      font-size: 11px;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+      flex-wrap: wrap;
+      max-width: 360px;
+    }
+    .translate-chip.show { display: inline-flex; }
+    .translate-chip .tc-head {
+      padding: 3px 6px;
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      width: 100%;
+    }
+    .translate-chip .tc-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .translate-chip .tc-btn:hover { border-color: var(--green); color: var(--green); }
+    .translate-result {
+      position: fixed;
+      z-index: 121;
+      display: none;
+      background: var(--bg-card, var(--bg-input));
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 8px;
+      padding: 10px 14px;
+      max-width: 480px;
+      width: 92vw;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.32);
+    }
+    .translate-result.show { display: block; }
+    .translate-result .tr-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .translate-result .tr-close {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .translate-result .tr-close:hover { color: var(--text); }
+    .translate-result .tr-body { white-space: pre-wrap; word-break: break-word; }
+
     /* ─── Activity Heatmap ────────────────────────────────────── */
     .hm-grid {
       display: inline-grid;
@@ -4010,6 +4081,10 @@
     </div>
   </div>
 
+  <!-- Inline Translate floating UI -->
+  <div class="translate-chip" id="translate-chip"></div>
+  <div class="translate-result" id="translate-result"></div>
+
   <!-- Message Compare Modal -->
   <div class="modal-overlay" id="compare-modal">
     <div class="modal ux-modal" style="max-width:90vw;width:1100px">
@@ -5064,6 +5139,136 @@ SUMMARY:`
         stopReadAloud()
         // Don't preventDefault — let other Esc handlers run too
       }
+    })
+
+    // ── Inline Translate ────────────────────────────────────────────
+    // Select text inside any message → a floating chip pops up near the
+    // selection with one-tap target-language buttons. Result shows in a
+    // dismissible panel rendered over the chat. Uses the current model
+    // with a minimal translate prompt, so cost is small.
+    const TRANSLATE_LANGS = [
+      { code: 'EN', name: 'English' },
+      { code: 'ES', name: 'Spanish' },
+      { code: 'FR', name: 'French' },
+      { code: 'DE', name: 'German' },
+      { code: 'AR', name: 'Arabic' },
+      { code: 'ZH', name: 'Chinese' },
+      { code: 'JA', name: 'Japanese' },
+      { code: 'PT', name: 'Portuguese' },
+    ]
+    function hideTranslateChip() {
+      document.getElementById('translate-chip')?.classList.remove('show')
+    }
+    function hideTranslateResult() {
+      const el = document.getElementById('translate-result')
+      if (el) { el.classList.remove('show'); el.innerHTML = '' }
+    }
+    function positionAtSelection(el, rect) {
+      // Clamp to viewport, prefer above the selection
+      const pad = 8
+      const w = el.offsetWidth || 300
+      const h = el.offsetHeight || 40
+      let x = rect.left + rect.width / 2 - w / 2
+      let y = rect.top - h - pad
+      if (y < 8) y = rect.bottom + pad // place below if no room above
+      x = Math.max(8, Math.min(x, window.innerWidth - w - 8))
+      y = Math.max(8, Math.min(y, window.innerHeight - h - 8))
+      el.style.left = x + 'px'
+      el.style.top = y + 'px'
+    }
+    let _translateSelection = ''
+    function onMessageSelectionChange() {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) { hideTranslateChip(); return }
+      const text = sel.toString().trim()
+      if (text.length < 4 || text.length > 3000) { hideTranslateChip(); return }
+      // Selection must be within the messages container (not e.g. input field)
+      const container = document.getElementById('messages')
+      const anchor = sel.anchorNode
+      if (!container || !anchor || !container.contains(anchor)) { hideTranslateChip(); return }
+      _translateSelection = text
+      const chip = document.getElementById('translate-chip')
+      if (!chip) return
+      const head = `<span class="tc-head">🌍 Translate →</span>`
+      const buttons = TRANSLATE_LANGS.map(l =>
+        `<button class="tc-btn" onclick="doTranslate('${l.name}')" title="Translate to ${l.name}">${l.code}</button>`
+      ).join('')
+      const custom = `<button class="tc-btn" onclick="doTranslateCustom()" title="Pick another language">Other…</button>`
+      chip.innerHTML = head + buttons + custom
+      chip.classList.add('show')
+      const rect = sel.getRangeAt(0).getBoundingClientRect()
+      positionAtSelection(chip, rect)
+    }
+    async function doTranslateCustom() {
+      const lang = window.prompt('Translate selection to which language?', 'Italian')
+      if (!lang || !lang.trim()) return
+      doTranslate(lang.trim())
+    }
+    async function doTranslate(lang) {
+      const text = _translateSelection
+      if (!text) return
+      hideTranslateChip()
+      const model = document.getElementById('model-select')?.value
+      if (!model) { showRewindToast?.('Pick a model first', true); return }
+      const result = document.getElementById('translate-result')
+      if (!result) return
+      result.innerHTML = `
+        <div class="tr-head">
+          <span>🌍 Translating to ${escapeHtml(lang)}…</span>
+          <button class="tr-close" onclick="hideTranslateResult()">×</button>
+        </div>
+        <div class="tr-body" style="color:var(--text-faint)"><em>Working…</em></div>`
+      // Center the result panel over the viewport
+      result.style.left = Math.max(8, (window.innerWidth - Math.min(480, window.innerWidth * 0.92)) / 2) + 'px'
+      result.style.top = Math.max(60, window.innerHeight / 2 - 80) + 'px'
+      result.classList.add('show')
+      try {
+        const prompt = [{ role: 'user', content:
+`Translate the following text to ${lang}. Preserve tone, formatting (paragraphs, lists), and any proper nouns or technical terms. Output ONLY the translation — no preface, no commentary, no source re-quoted.
+
+SOURCE:
+${text}
+
+${lang} TRANSLATION:` }]
+        const resp = await window.alaude.chat(
+          prompt, model, workspacePath, 'general',
+          { messageId: 'translate_' + Date.now().toString(36), sessionId: 'translate' }
+        )
+        let out = (typeof resp === 'string' ? resp : '').trim()
+        out = out.replace(/^```[a-z]*\s*/i, '').replace(/\s*```\s*$/,'').trim()
+        if (!out) { showRewindToast?.('Model returned empty translation', true); hideTranslateResult(); return }
+        result.innerHTML = `
+          <div class="tr-head">
+            <span>🌍 ${escapeHtml(lang)} translation · via ${escapeHtml(model)}</span>
+            <button class="tr-close" onclick="hideTranslateResult()">×</button>
+          </div>
+          <div class="tr-body">${escapeHtml(out)}</div>
+          <div style="margin-top:8px;text-align:right">
+            <button class="msg-action-btn" onclick="(async()=>{await navigator.clipboard.writeText(${JSON.stringify(out)});showRewindToast?.('📋 Copied',false)})()">📋 Copy</button>
+          </div>`
+      } catch (err) {
+        result.innerHTML = `
+          <div class="tr-head"><span>🌍 Translation failed</span><button class="tr-close" onclick="hideTranslateResult()">×</button></div>
+          <div class="tr-body" style="color:#e74c3c">${escapeHtml(err?.message || String(err))}</div>`
+      }
+    }
+    // Wire selection listeners — mouseup is more reliable than selectionchange
+    // for "finished selecting" moments. Esc hides both chip and result.
+    document.addEventListener('mouseup', () => setTimeout(onMessageSelectionChange, 10))
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift' || e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+          e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home' || e.key === 'End') {
+        setTimeout(onMessageSelectionChange, 10)
+      }
+      if (e.key === 'Escape') { hideTranslateChip(); hideTranslateResult() }
+    })
+    // Hide chip if user clicks outside a message area
+    document.addEventListener('mousedown', (e) => {
+      const chip = document.getElementById('translate-chip')
+      if (chip?.contains(e.target)) return
+      const res = document.getElementById('translate-result')
+      if (res?.contains(e.target)) return
+      hideTranslateChip()
     })
 
     // ── Message Compare ─────────────────────────────────────────────
