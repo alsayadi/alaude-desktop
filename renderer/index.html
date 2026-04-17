@@ -298,6 +298,58 @@
       padding-left: 6px;
     }
 
+    /* ─── In-session Find bar ──────────────────────────────────── */
+    .findbar {
+      position: fixed;
+      top: 40px;
+      right: 18px;
+      z-index: 40;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.32);
+      max-width: 460px;
+      -webkit-app-region: no-drag;
+    }
+    .findbar.show { display: flex; }
+    .findbar input {
+      background: transparent;
+      border: 0;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      width: 220px;
+      font-family: inherit;
+    }
+    .findbar input::placeholder { color: var(--text-faint); }
+    .findbar .fb-count { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; min-width: 54px; text-align: right; }
+    .findbar .fb-btn {
+      background: transparent;
+      border: 0;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      line-height: 1;
+    }
+    .findbar .fb-btn:hover { color: var(--green); }
+    .findbar .fb-close { color: var(--text-faint); }
+    mark.find-hit {
+      background: color-mix(in srgb, var(--green) 30%, transparent);
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 2px;
+    }
+    mark.find-hit.current {
+      background: var(--green);
+      color: #0a0a0a;
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 40%, transparent);
+    }
+
     /* ─── Living Document Mode ─────────────────────────────────── */
     /* Toggle that flattens the bubble UI into a clean reader view.
        Useful when you're using a long conversation as a working
@@ -3886,6 +3938,14 @@
   <!-- Sidebar -->
   <button class="sidebar-peek" onclick="toggleSidebar()" title="Show sidebar (⌘\)">›</button>
   <button class="ld-badge" onclick="toggleLivingDoc()" title="Exit Living Document mode (⌘⇧D)">📝 Document · exit</button>
+  <div class="findbar" id="findbar">
+    <span style="color:var(--text-faint);font-size:13px">🔍</span>
+    <input id="findbar-input" type="text" placeholder="Find in this session…" autocomplete="off" spellcheck="false" />
+    <span class="fb-count" id="findbar-count">0/0</span>
+    <button class="fb-btn" onclick="findNavigate(-1)" title="Previous match (⇧↵)">↑</button>
+    <button class="fb-btn" onclick="findNavigate(1)" title="Next match (↵)">↓</button>
+    <button class="fb-btn fb-close" onclick="closeFindbar()" title="Close (Esc)">×</button>
+  </div>
   <div class="sidebar">
     <div class="sidebar-header">
       <img class="sidebar-logo" id="logo" />
@@ -4180,6 +4240,7 @@
         <dt>Focus input</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>K</kbd></dd>
         <dt>New session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>N</kbd></dd>
         <dt>Global search (every session)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>F</kbd></dd>
+        <dt>Find in current session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>L</kbd></dd>
         <dt>Thinking Graph (session DAG)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>M</kbd></dd>
         <dt>Menu-bar Quick (from anywhere)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>A</kbd></dd>
         <dt>Close any overlay</dt><dd><kbd>Esc</kbd></dd>
@@ -7221,6 +7282,117 @@ footer a { color: var(--accent); text-decoration: none; }
       showRewindToast?.(on ? '📝 Living Document on — turn-to-prose reader view' : '↩ Living Document off', false)
     }
     applyLivingDocState()
+
+    // ── In-session Find (⌘L) ──────────────────────────────────────
+    // Walks the live message DOM and wraps matches in <mark class="find-hit">.
+    // Navigation cycles through hits, scrolling the current one into view.
+    let _fbHits = []
+    let _fbIdx = -1
+    function openFindbar() {
+      const bar = document.getElementById('findbar')
+      const input = document.getElementById('findbar-input')
+      if (!bar || !input) return
+      bar.classList.add('show')
+      // Seed with current selection if any
+      const sel = window.getSelection?.()?.toString()?.trim() || ''
+      if (sel && sel.length <= 100) input.value = sel
+      input.focus()
+      input.select()
+      updateFindMatches()
+    }
+    function closeFindbar() {
+      document.getElementById('findbar')?.classList.remove('show')
+      clearFindHits()
+    }
+    function clearFindHits() {
+      const marks = document.querySelectorAll('#messages mark.find-hit')
+      for (const m of marks) {
+        const parent = m.parentNode
+        if (!parent) continue
+        // Flatten: replace <mark>…</mark> with its text content
+        parent.replaceChild(document.createTextNode(m.textContent), m)
+        parent.normalize()
+      }
+      _fbHits = []; _fbIdx = -1
+      updateFindCount()
+    }
+    function updateFindMatches() {
+      clearFindHits()
+      const q = document.getElementById('findbar-input')?.value || ''
+      if (!q || q.length < 2) { updateFindCount(); return }
+      const container = document.getElementById('messages')
+      if (!container) return
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+      // Walk text nodes (skip inside <script>, <style>, existing marks)
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => {
+          const p = n.parentElement
+          if (!p) return NodeFilter.FILTER_REJECT
+          if (p.closest('.msg-actions, .msg-header, .stats-badge, .cost-badge, .reaction-note')) return NodeFilter.FILTER_REJECT
+          if (p.nodeName === 'SCRIPT' || p.nodeName === 'STYLE') return NodeFilter.FILTER_REJECT
+          if (p.tagName === 'MARK' && p.classList.contains('find-hit')) return NodeFilter.FILTER_REJECT
+          if (!n.textContent.trim()) return NodeFilter.FILTER_REJECT
+          return NodeFilter.FILTER_ACCEPT
+        }
+      })
+      const toProcess = []
+      let n
+      while ((n = walker.nextNode())) toProcess.push(n)
+      for (const textNode of toProcess) {
+        const text = textNode.textContent
+        if (!re.test(text)) { re.lastIndex = 0; continue }
+        re.lastIndex = 0
+        const frag = document.createDocumentFragment()
+        let last = 0, m
+        while ((m = re.exec(text))) {
+          if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)))
+          const mark = document.createElement('mark')
+          mark.className = 'find-hit'
+          mark.textContent = m[0]
+          frag.appendChild(mark)
+          last = m.index + m[0].length
+          _fbHits.push(mark)
+          if (re.lastIndex === m.index) re.lastIndex++ // avoid empty-match infinite loop
+        }
+        if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)))
+        textNode.parentNode?.replaceChild(frag, textNode)
+      }
+      if (_fbHits.length) { _fbIdx = 0; highlightCurrentHit() }
+      updateFindCount()
+    }
+    function highlightCurrentHit() {
+      for (let i = 0; i < _fbHits.length; i++) {
+        _fbHits[i].classList.toggle('current', i === _fbIdx)
+      }
+      if (_fbIdx >= 0 && _fbHits[_fbIdx]) {
+        _fbHits[_fbIdx].scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+    function findNavigate(dir) {
+      if (!_fbHits.length) return
+      _fbIdx = (_fbIdx + dir + _fbHits.length) % _fbHits.length
+      highlightCurrentHit()
+      updateFindCount()
+    }
+    function updateFindCount() {
+      const el = document.getElementById('findbar-count')
+      if (!el) return
+      el.textContent = _fbHits.length ? `${_fbIdx + 1}/${_fbHits.length}` : '0/0'
+    }
+    // Wire input listeners lazily after DOM exists.
+    setTimeout(() => {
+      const input = document.getElementById('findbar-input')
+      if (!input) return
+      let _fbTimer = null
+      input.addEventListener('input', () => {
+        clearTimeout(_fbTimer)
+        _fbTimer = setTimeout(updateFindMatches, 120)
+      })
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); findNavigate(e.shiftKey ? -1 : 1) }
+        if (e.key === 'Escape') { e.preventDefault(); closeFindbar() }
+      })
+    }, 0)
     // Track system changes when no explicit preference is set
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (!localStorage.getItem(LS_THEME)) applyTheme(null)
@@ -7320,6 +7492,11 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault()
         toggleLivingDoc()
+      }
+      // Cmd/Ctrl+L → open in-session Find (bar floats over messages)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        openFindbar()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
