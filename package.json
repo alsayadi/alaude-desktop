@@ -1,8 +1,16 @@
 {
   "name": "alaude-desktop",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "Alaude — AI coding assistant for your desktop",
   "main": "electron/main.js",
+  "homepage": "https://github.com/alsayadi/alaude-desktop",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alsayadi/alaude-desktop.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alsayadi/alaude-desktop/issues"
+  },
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",

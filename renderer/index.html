@@ -7219,12 +7219,13 @@
     // Paint the version badge ASAP so the user always knows what build they're on.
     ;(function populateVersionBadge() {
       const v = (window.alaude && window.alaude.version) || 'dev'
+      const releasesUrl = (window.alaude && window.alaude.releasesUrl) || 'https://github.com/alsayadi/alaude-desktop/releases'
       const el = document.getElementById('version-badge')
       if (el) {
         el.textContent = 'v' + v
         el.title = `Alaude ${v} — click to view release notes on GitHub`
         el.onclick = () => {
-          try { window.alaude.openExternal('https://github.com/Ahmedalsayadi/alaude-desktop/releases') } catch {}
+          try { window.alaude.openExternal(releasesUrl) } catch {}
         }
       }
       // Also stamp it into the welcome footer hint row so first-time users see it

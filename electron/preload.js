@@ -4,10 +4,17 @@ const { contextBridge, ipcRenderer } = require('electron')
 // round-tripping through IPC. Falls back gracefully if package.json isn't
 // resolvable at runtime.
 let appVersion = 'dev'
-try { appVersion = require('../package.json').version || 'dev' } catch {}
+let appHomepage = 'https://github.com/alsayadi/alaude-desktop'
+try {
+  const pkg = require('../package.json')
+  appVersion = pkg.version || 'dev'
+  if (pkg.homepage) appHomepage = pkg.homepage
+} catch {}
 
 contextBridge.exposeInMainWorld('alaude', {
   version: appVersion,
+  homepage: appHomepage,
+  releasesUrl: appHomepage.replace(/\/$/, '') + '/releases',
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),
