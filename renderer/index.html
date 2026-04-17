@@ -2608,6 +2608,122 @@
       display: inline-block;
     }
 
+    /* ─── Global Search (⌘F) ───────────────────────────────────────── */
+    .gsearch-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      display: none;
+      z-index: 250;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 8vh;
+    }
+    .gsearch-overlay.show { display: flex; }
+    .gsearch {
+      width: 700px;
+      max-width: 92vw;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      max-height: 78vh;
+      overflow: hidden;
+    }
+    .gsearch-input {
+      width: 100%;
+      padding: 14px 18px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      font-family: inherit;
+      border-bottom: 1px solid var(--border);
+    }
+    .gsearch-input::placeholder { color: var(--text-faint); }
+    .gsearch-results {
+      overflow-y: auto;
+      padding: 4px 0;
+      flex: 1;
+    }
+    .gsearch-empty {
+      color: var(--text-faint);
+      padding: 40px 20px;
+      text-align: center;
+      font-size: 13px;
+    }
+    .gsearch-session-header {
+      padding: 8px 16px 4px;
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .gsearch-result {
+      padding: 8px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .gsearch-result:hover,
+    .gsearch-result.active {
+      background: var(--bg-hover);
+      border-left-color: var(--green);
+    }
+    .gsearch-result-role {
+      font-size: 10px;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 3px;
+    }
+    .gsearch-result-snippet {
+      color: var(--text-dim);
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .gsearch-result-snippet mark {
+      background: color-mix(in srgb, var(--green) 30%, transparent);
+      color: var(--text);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .gsearch-footer {
+      border-top: 1px solid var(--border);
+      padding: 6px 14px;
+      font-size: 10px;
+      color: var(--text-faint);
+      display: flex;
+      gap: 14px;
+      justify-content: space-between;
+    }
+    .gsearch-footer kbd {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-right: 3px;
+      font-size: 9px;
+    }
+
+    /* Flash animation: highlight the message we just jumped to */
+    @keyframes jumpFlash {
+      0%   { background: color-mix(in srgb, var(--green) 30%, transparent); }
+      100% { background: transparent; }
+    }
+    .msg.jump-flash { animation: jumpFlash 1.6s ease-out; border-radius: 6px; }
+
     /* ─── Command Palette ────────────────────────────────────────────────── */
     .cmd-palette-overlay {
       position: fixed;
@@ -3180,6 +3296,18 @@
       </div>
     </div>
     <div class="tgraph-canvas" id="tgraph-canvas"></div>
+  </div>
+
+  <!-- Global Search (⌘F / Ctrl+F) — full-text across every session -->
+  <div class="gsearch-overlay" id="gsearch-overlay" onclick="if(event.target===this)closeGlobalSearch()">
+    <div class="gsearch">
+      <input id="gsearch-input" class="gsearch-input" type="text" placeholder="Search everything you've ever chatted about…" autocomplete="off" spellcheck="false" />
+      <div id="gsearch-results" class="gsearch-results"></div>
+      <div class="gsearch-footer">
+        <span><kbd>↑↓</kbd> navigate <kbd>↵</kbd> jump <kbd>esc</kbd> close</span>
+        <span id="gsearch-count"></span>
+      </div>
+    </div>
   </div>
 
   <!-- Command Palette (⌘P / Ctrl+P) -->
@@ -3927,6 +4055,7 @@
         { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
+        { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
       )
       return items
     }
@@ -4232,9 +4361,9 @@
 
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Esc → close any open overlay (modal, command palette, shortcuts, thinking graph)
+      // Esc → close any open overlay (modal, command palette, shortcuts, thinking graph, global search)
       if (e.key === 'Escape') {
-        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show')
+        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show, .gsearch-overlay.show')
         if (open) {
           open.classList.remove('show')
           if (open.style.display === 'flex') open.style.display = 'none'
@@ -4261,6 +4390,11 @@
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault()
         openCmdPalette()
+      }
+      // Cmd/Ctrl+F → global search across every session
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !e.shiftKey) {
+        e.preventDefault()
+        openGlobalSearch()
       }
       // Cmd/Ctrl+Shift+C → toggle Council mode
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
@@ -5316,6 +5450,164 @@
       switchSession(id)
     }
 
+    // ── Global Search (⌘F) ──────────────────────────────────────────
+    // Full-text search across every message in every session. Results are
+    // grouped by session with match highlighting. Arrow-key nav + Enter to
+    // jump to the result's session and scroll to the message.
+    let gsearchResults = []  // flat list of { sessionId, msgIdx, session, msg, snippet }
+    let gsearchActiveIdx = 0
+    function openGlobalSearch() {
+      const overlay = document.getElementById('gsearch-overlay')
+      const inp = document.getElementById('gsearch-input')
+      if (!overlay || !inp) return
+      // Snapshot current session's messages into its session entry so the
+      // search sees up-to-the-second content.
+      const current = sessions.find(s => s.id === currentSessionId)
+      if (current) current.messages = messages
+      inp.value = ''
+      gsearchActiveIdx = 0
+      renderGlobalSearch('')
+      overlay.classList.add('show')
+      requestAnimationFrame(() => inp.focus())
+    }
+    function closeGlobalSearch() {
+      document.getElementById('gsearch-overlay')?.classList.remove('show')
+    }
+    function renderGlobalSearch(query) {
+      const results = document.getElementById('gsearch-results')
+      const count = document.getElementById('gsearch-count')
+      const q = (query || '').trim()
+      gsearchResults = []
+      if (!q) {
+        results.innerHTML = `<div class="gsearch-empty">Type to search every message across all ${sessions.length} session${sessions.length === 1 ? '' : 's'}.</div>`
+        if (count) count.textContent = ''
+        return
+      }
+      const lowerQ = q.toLowerCase()
+      for (const s of sessions) {
+        for (let i = 0; i < (s.messages || []).length; i++) {
+          const m = s.messages[i]
+          if (!m || !m.content || typeof m.content !== 'string') continue
+          const lc = m.content.toLowerCase()
+          const pos = lc.indexOf(lowerQ)
+          if (pos < 0) continue
+          // Build a snippet centered on the match
+          const start = Math.max(0, pos - 30)
+          const end = Math.min(m.content.length, pos + q.length + 60)
+          let snippet = m.content.slice(start, end).replace(/\n+/g, ' ')
+          if (start > 0) snippet = '…' + snippet
+          if (end < m.content.length) snippet = snippet + '…'
+          gsearchResults.push({ sessionId: s.id, msgIdx: i, session: s, msg: m, snippet })
+        }
+      }
+      if (!gsearchResults.length) {
+        results.innerHTML = `<div class="gsearch-empty">No matches for "${escapeHtml(q)}" across ${sessions.length} session${sessions.length === 1 ? '' : 's'}.</div>`
+        if (count) count.textContent = '0 matches'
+        return
+      }
+      // Group results by session
+      const groups = new Map()
+      for (const r of gsearchResults) {
+        if (!groups.has(r.sessionId)) groups.set(r.sessionId, { session: r.session, items: [] })
+        groups.get(r.sessionId).items.push(r)
+      }
+      // Cap total rendered items for perf on very large corpora
+      const MAX_RESULTS = 80
+      let rendered = 0
+      const safeRegex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+      gsearchActiveIdx = Math.min(gsearchActiveIdx, gsearchResults.length - 1)
+      const html = []
+      for (const [sid, grp] of groups) {
+        if (rendered >= MAX_RESULTS) break
+        html.push(`<div class="gsearch-session-header">${escapeHtml(grp.session.title || 'Untitled')}${grp.session.parentId ? ' ⎇' : ''} · ${grp.items.length} match${grp.items.length === 1 ? '' : 'es'}</div>`)
+        for (const r of grp.items) {
+          if (rendered >= MAX_RESULTS) break
+          const flatIdx = gsearchResults.indexOf(r)
+          const isActive = flatIdx === gsearchActiveIdx
+          const roleLabel = r.msg.role === 'user' ? '👤 You' : '✨ Alaude'
+          // Highlight matches in the snippet
+          const highlighted = escapeHtml(r.snippet).replace(safeRegex, m => `<mark>${m}</mark>`)
+          html.push(`<div class="gsearch-result${isActive ? ' active' : ''}" data-flat-idx="${flatIdx}" onclick="globalSearchJump(${flatIdx})">
+            <div class="gsearch-result-role">${roleLabel}</div>
+            <div class="gsearch-result-snippet">${highlighted}</div>
+          </div>`)
+          rendered++
+        }
+      }
+      if (gsearchResults.length > MAX_RESULTS) {
+        html.push(`<div class="gsearch-empty" style="padding:12px;font-size:11px">Showing first ${MAX_RESULTS} of ${gsearchResults.length} matches. Refine your search.</div>`)
+      }
+      results.innerHTML = html.join('')
+      if (count) count.textContent = `${gsearchResults.length} match${gsearchResults.length === 1 ? '' : 'es'}`
+    }
+    function globalSearchMove(dir) {
+      if (!gsearchResults.length) return
+      gsearchActiveIdx = (gsearchActiveIdx + dir + gsearchResults.length) % gsearchResults.length
+      const inp = document.getElementById('gsearch-input')
+      renderGlobalSearch(inp?.value || '')
+      // Scroll active into view
+      document.querySelector('.gsearch-result.active')?.scrollIntoView({ block: 'nearest' })
+    }
+    function globalSearchJump(flatIdx) {
+      const r = gsearchResults[flatIdx]
+      if (!r) return
+      closeGlobalSearch()
+      // Switch sessions if needed
+      if (r.sessionId !== currentSessionId) {
+        switchSession(r.sessionId)
+      }
+      // Scroll to the message and flash it
+      setTimeout(() => {
+        const container = document.getElementById('messages')
+        const el = container?.querySelector(`.msg[data-msg-idx="${r.msgIdx}"]`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.remove('jump-flash')  // restart animation
+          void el.offsetWidth  // reflow
+          el.classList.add('jump-flash')
+        }
+      }, 80)
+    }
+    // Debounced re-render as the user types
+    let _gsearchT = null
+    document.addEventListener('DOMContentLoaded', () => {
+      const inp = document.getElementById('gsearch-input')
+      if (!inp) return
+      inp.addEventListener('input', (e) => {
+        clearTimeout(_gsearchT)
+        _gsearchT = setTimeout(() => {
+          gsearchActiveIdx = 0
+          renderGlobalSearch(e.target.value)
+        }, 80)
+      })
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); globalSearchMove(1) }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); globalSearchMove(-1) }
+        else if (e.key === 'Enter') { e.preventDefault(); globalSearchJump(gsearchActiveIdx) }
+        else if (e.key === 'Escape') { e.preventDefault(); closeGlobalSearch() }
+      })
+    })
+    // In case DOMContentLoaded already fired (the script runs late in the body),
+    // also bind immediately if the input is already there.
+    {
+      const inp = document.getElementById('gsearch-input')
+      if (inp) {
+        inp.addEventListener('input', (e) => {
+          clearTimeout(_gsearchT)
+          _gsearchT = setTimeout(() => {
+            gsearchActiveIdx = 0
+            renderGlobalSearch(e.target.value)
+          }, 80)
+        })
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); globalSearchMove(1) }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); globalSearchMove(-1) }
+          else if (e.key === 'Enter') { e.preventDefault(); globalSearchJump(gsearchActiveIdx) }
+          else if (e.key === 'Escape') { e.preventDefault(); closeGlobalSearch() }
+        })
+      }
+    }
+
     async function copyMessage(idx, btn) {
       const msg = messages[idx]
       if (!msg) return
@@ -5536,12 +5828,18 @@
       persistSessions()
     }
 
-    // Delete a session (used by command palette + sidebar hover)
+    // Delete a session (used by command palette + sidebar hover).
+    // Safe delete: stash the deleted session + the pre-delete state for 4s
+    // so the user can undo if they tapped the X by accident.
+    let _deletedSessionUndo = null
     function deleteSession(id) {
       const idx = sessions.findIndex(s => s.id === id)
       if (idx < 0) return
+      const wasCurrent = id === currentSessionId
+      const savedMessages = wasCurrent ? [...messages] : null
+      const removed = sessions[idx]
       sessions.splice(idx, 1)
-      if (id === currentSessionId) {
+      if (wasCurrent) {
         // Jump to first remaining, or create a new one
         if (sessions.length === 0) {
           currentSessionId = Date.now()
@@ -5555,6 +5853,36 @@
       renderSessions()
       renderMessages()
       persistSessions()
+      _deletedSessionUndo = { removed, idx, prevId: wasCurrent ? id : null, savedMessages }
+      showRewindToast(`🗑️ Deleted "${removed.title || 'session'}"`, true)
+      // Wire the toast's generic undo link to our handler by redirecting
+      // undoRewind for this moment. Cleaner: a dedicated undoDelete.
+      setTimeout(() => { _deletedSessionUndo = null }, 4200)
+    }
+    // Hook: when the user clicks "undo" in the toast, try delete-undo first,
+    // else fall through to the rewind-undo (preserves prior behavior).
+    const _origUndoRewind = (typeof undoRewind === 'function') ? undoRewind : null
+    function undoDelete() {
+      if (!_deletedSessionUndo) return false
+      const { removed, idx, prevId, savedMessages } = _deletedSessionUndo
+      sessions.splice(idx, 0, removed)
+      if (prevId) {
+        currentSessionId = prevId
+        messages = savedMessages || [...removed.messages]
+      }
+      _deletedSessionUndo = null
+      renderSessions()
+      renderMessages()
+      persistSessions()
+      showRewindToast('↷ Session restored', false)
+      return true
+    }
+    // Override the undo flow so delete-undo takes priority if active.
+    if (_origUndoRewind) {
+      window.undoRewind = function() {
+        if (_deletedSessionUndo && undoDelete()) return
+        _origUndoRewind()
+      }
     }
 
     // ── Model ────────────────────────────────────────────────────────────
