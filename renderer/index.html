@@ -3756,6 +3756,7 @@
         <div class="shortcuts-section">Session</div>
         <dt>Export current as Markdown</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>E</kbd></dd>
         <dt>Export full backup (JSON)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>E</kbd></dd>
+        <dt>Export as HTML (share-ready)</dt><dd>command palette → "Export session as HTML"</dd>
         <dt>📝 Summarize this session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></dd>
         <dt>✓ Extract action items (TODOs)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></dd>
         <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
@@ -5329,6 +5330,186 @@ JSON:`
       showRewindToast(`📥 Exported "${filename}"`, false)
     }
 
+    // Export current session as a single self-contained HTML file.
+    // Every asset (CSS, images) inlined — the recipient just double-clicks
+    // the file. Dark/light respected, code blocks styled, multimodal images
+    // rendered as base64 data URLs so attachments travel with the export.
+    function exportSessionHtml() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      const title = session.title || 'Alaude session'
+      const exportedAt = new Date().toLocaleString()
+      const theme = document.documentElement.getAttribute('data-theme') || 'dark'
+
+      // Inline CSS — keep it minimal but styled enough to look like the app.
+      const css = `
+:root {
+  --bg: ${theme === 'light' ? '#fafafa' : '#141414'};
+  --bg-card: ${theme === 'light' ? '#ffffff' : '#1e1e1e'};
+  --bg-code: ${theme === 'light' ? '#f3f3f3' : '#0e0e0e'};
+  --text: ${theme === 'light' ? '#222' : '#eee'};
+  --text-dim: ${theme === 'light' ? '#555' : '#aaa'};
+  --text-faint: ${theme === 'light' ? '#999' : '#6a6a6a'};
+  --border: ${theme === 'light' ? '#e5e5e5' : '#2a2a2a'};
+  --green: #2ecc71;
+  --accent: #3498db;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+  padding: 32px 16px 80px;
+}
+.wrap { max-width: 760px; margin: 0 auto; }
+header { border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
+header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+header .meta { color: var(--text-faint); font-size: 12px; }
+.msg {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.msg.user { border-left: 3px solid var(--accent); }
+.msg.assistant { border-left: 3px solid var(--green); }
+.msg.pinned { box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 30%, transparent); }
+.msg-head {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; color: var(--text-faint);
+  margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.msg-head strong { color: var(--text-dim); letter-spacing: normal; text-transform: none; font-size: 12px; font-weight: 600; }
+.msg-head .pin { color: var(--green); }
+.msg-body { white-space: pre-wrap; word-break: break-word; }
+.msg-body p { margin: 0 0 10px; }
+.msg-body p:last-child { margin-bottom: 0; }
+.msg-body pre, .msg-body code { font-family: "SF Mono", Monaco, Consolas, monospace; font-size: 12.5px; }
+.msg-body pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+  white-space: pre;
+}
+.msg-body :not(pre) > code {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.msg-body a { color: var(--accent); }
+.msg-body img { max-width: 100%; border-radius: 6px; margin: 6px 0; border: 1px solid var(--border); }
+.msg-body table { border-collapse: collapse; margin: 8px 0; }
+.msg-body th, .msg-body td { border: 1px solid var(--border); padding: 4px 10px; }
+.reaction-note {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 12px;
+  border-left: 2px solid #e67e22;
+  padding: 4px 8px;
+  margin-top: 8px;
+}
+.council-lane { margin: 10px 0; padding: 8px 12px; background: var(--bg-code); border-radius: 6px; border: 1px dashed var(--border); }
+.council-lane .lm { font-family: monospace; font-size: 11px; color: var(--text-faint); margin-bottom: 4px; }
+footer { margin-top: 40px; color: var(--text-faint); font-size: 11px; text-align: center; }
+footer a { color: var(--accent); text-decoration: none; }
+`.trim()
+
+      // Reuse the app's renderMarkdown to turn assistant content into HTML.
+      // User messages are plain text -> escapeHtml + line-break.
+      const renderBody = (m) => {
+        if (m.council && Array.isArray(m.lanes)) {
+          return m.lanes.map(lane => `
+            <div class="council-lane">
+              <div class="lm">${escapeHtml(lane.model || 'lane')}</div>
+              <div>${renderMarkdown(lane.content || '')}</div>
+            </div>`).join('')
+        }
+        let txt = m.content
+        if (Array.isArray(m.content)) {
+          txt = m.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+        }
+        let imgHtml = ''
+        if (Array.isArray(m.images) && m.images.length) {
+          imgHtml = m.images.map(img =>
+            `<img src="${escapeHtml(img.dataUrl || '')}" alt="${escapeHtml(img.name || 'attachment')}" />`
+          ).join('')
+        } else if (Array.isArray(m.content)) {
+          imgHtml = m.content.filter(p => p?.type === 'image_url').map(p =>
+            `<img src="${escapeHtml(p.image_url?.url || '')}" alt="attachment" />`
+          ).join('')
+        }
+        return imgHtml + (m.role === 'assistant' ? renderMarkdown(txt || '') : `<p>${escapeHtml(txt || '').replace(/\n/g, '<br>')}</p>`)
+      }
+
+      const msgsHtml = messages
+        .filter(m => !m.streaming)
+        .map(m => {
+          const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Alaude')
+          const modelBadge = m.model ? `<span>${escapeHtml(m.model)}</span>` : ''
+          const ts = m.ts ? `<span>${new Date(m.ts).toLocaleString()}</span>` : ''
+          const pin = m.pinned ? `<span class="pin">📌 Pinned</span>` : ''
+          const reaction = m.reaction?.kind === 'up' ? `<span style="color:var(--green)">👍</span>`
+                         : m.reaction?.kind === 'down' ? `<span style="color:#e67e22">👎</span>` : ''
+          const note = (m.reaction?.kind === 'down' && m.reaction?.note)
+            ? `<div class="reaction-note">${escapeHtml(m.reaction.note)}</div>` : ''
+          return `
+            <div class="msg ${m.role} ${m.pinned ? 'pinned' : ''}">
+              <div class="msg-head">
+                <strong>${who}</strong>
+                ${modelBadge}
+                ${ts}
+                ${pin}
+                ${reaction}
+              </div>
+              <div class="msg-body">${renderBody(m)}</div>
+              ${note}
+            </div>`
+        }).join('\n')
+
+      const version = (window.alaude?.version) || 'dev'
+      const homepage = (window.alaude?.homepage) || 'https://github.com/alsayadi/alaude-desktop'
+      const html = `<!DOCTYPE html>
+<html lang="en" data-theme="${theme}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${escapeHtml(title)} — Alaude</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>${escapeHtml(title)}</h1>
+    <div class="meta">Exported ${escapeHtml(exportedAt)} · ${messages.filter(m => !m.streaming).length} messages</div>
+  </header>
+  ${msgsHtml}
+  <footer>
+    Exported from <a href="${escapeHtml(homepage)}">Alaude v${escapeHtml(version)}</a>
+  </footer>
+</div>
+</body>
+</html>`
+
+      const filename = (session.title || 'alaude-session').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase() + '.html'
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast(`📥 Exported "${filename}"`, false)
+    }
+
     // ── Command Palette ──────────────────────────────────────────────────
     let cmdPaletteItems = []
     let cmdPaletteActiveIdx = 0
@@ -5395,6 +5576,7 @@ JSON:`
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
         { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
+        { kind: 'action', icon: '🌐', label: 'Export session as HTML (share-ready)', search: 'export html share webpage browser standalone', action: () => { closeCmdPalette(); exportSessionHtml() } },
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
         { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
         { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
