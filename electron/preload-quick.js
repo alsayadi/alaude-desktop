@@ -2,7 +2,11 @@
 // enough to run one-shot chats and show/hide the window.
 const { contextBridge, ipcRenderer } = require('electron')
 
+let appVersion = 'dev'
+try { appVersion = require('../package.json').version || 'dev' } catch {}
+
 contextBridge.exposeInMainWorld('alaudeQuick', {
+  version: appVersion,
   chat: (messages, model, workspacePath, spaceId, uxMeta) =>
     ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) =>

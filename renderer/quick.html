@@ -152,7 +152,7 @@
 <body>
   <div class="wrap">
     <div class="header">
-      <span class="title">⚡ Alaude Quick</span>
+      <span class="title">⚡ Alaude Quick <span style="color:var(--text-faint);font-weight:normal;font-size:10px;margin-left:4px" id="qversion"></span></span>
       <select class="model-pick" id="model">
         <option value="gpt-4o-mini" selected>gpt-4o-mini</option>
         <option value="gpt-4o">gpt-4o</option>
@@ -182,6 +182,8 @@
     const body = document.getElementById('body')
     const empty = document.getElementById('empty')
     const model = document.getElementById('model')
+    const qv = document.getElementById('qversion')
+    if (qv && window.alaudeQuick?.version) qv.textContent = 'v' + window.alaudeQuick.version
 
     // Persist last-used model
     try {

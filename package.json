@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Alaude — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "scripts": {

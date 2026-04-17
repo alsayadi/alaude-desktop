@@ -1,6 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+// App version — read at preload time so the renderer can show it without
+// round-tripping through IPC. Falls back gracefully if package.json isn't
+// resolvable at runtime.
+let appVersion = 'dev'
+try { appVersion = require('../package.json').version || 'dev' } catch {}
+
 contextBridge.exposeInMainWorld('alaude', {
+  version: appVersion,
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),

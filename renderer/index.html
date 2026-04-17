@@ -603,6 +603,84 @@
       background: var(--bg-sidebar);
     }
 
+    /* ── Streaming Stats HUD ───────────────────────────────────────── */
+    .stats-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--text-faint);
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 1px 8px;
+      margin-left: 8px;
+      font-family: 'SF Mono', Monaco, monospace;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .stats-badge.live { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+    .stats-badge:hover { color: var(--green); border-color: var(--green); }
+    .stats-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .stats-badge.live .stats-badge-dot { animation: pulse 1s ease-in-out infinite; }
+    .stats-spark-panel {
+      margin-top: 6px;
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .stats-spark-svg {
+      display: block;
+      width: 100%;
+      height: 40px;
+    }
+    .stats-row {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .stats-cell {
+      display: flex;
+      flex-direction: column;
+    }
+    .stats-cell-label {
+      color: var(--text-faint);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .stats-cell-value {
+      color: var(--text);
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+
+    .version-badge {
+      font-size: 10px;
+      color: var(--text-faint);
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      margin-left: 8px;
+      font-family: 'SF Mono', Monaco, monospace;
+      letter-spacing: 0.02em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .version-badge:hover { color: var(--green); border-color: var(--green); }
+
     .topbar-actions {
       position: absolute;
       right: 16px;
@@ -2832,6 +2910,7 @@
   <div class="main">
     <div class="topbar">
       <span class="topbar-model" id="topbar-model">GPT-4o</span>
+      <span class="version-badge" id="version-badge" title="Alaude version — click to view release notes">v–</span>
       <div class="topbar-actions">
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
           🎭 <span id="council-label">Council</span>
@@ -4447,7 +4526,13 @@
       liveActivity = []
 
       // Add typing indicator — tag it with uxMessageId so tokens route correctly
-      messages.push({ role: 'assistant', content: '', streaming: true, uxMessageId: uxMeta?.messageId })
+      messages.push({
+        role: 'assistant', content: '', streaming: true,
+        uxMessageId: uxMeta?.messageId,
+        // Pre-seed streaming stats with the request-start timestamp so TTFT
+        // (time-to-first-token) measures from SEND, not from first token arrival.
+        stats: { startMs: performance.now(), firstTokenMs: null, tokens: 0, samples: [] },
+      })
       renderMessages()
 
       try {
@@ -4469,6 +4554,7 @@
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
         const prev = messages[messages.length - 1]
+        if (prev) finalizeStats(prev)
         messages[messages.length - 1] = {
           role: 'assistant',
           content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)',
@@ -4476,6 +4562,7 @@
           ts: Date.now(),
           fileEdits: prev?.fileEdits,  // preserve file-diff cards from streaming
           memoriesUsed: prev?.memoriesUsed,
+          statsFinal: prev?.statsFinal,
         }
       } catch (err) {
         console.error('[callAI] error:', err)
@@ -4747,6 +4834,17 @@
         const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
           ? `<span class="msg-model-badge">${escapeHtml(msg.model)}</span>`
           : ''
+        // Streaming stats HUD: live badge while streaming, frozen final badge after.
+        let statsBadge = ''
+        if (msg.role === 'assistant') {
+          if (msg.streaming && msg.uxMessageId) {
+            // Live badge — actual contents get filled in by updateStatsBadge on each token
+            statsBadge = `<span class="stats-badge" data-stats-id="${escapeHtml(msg.uxMessageId)}"><span class="stats-badge-dot"></span> waiting…</span>`
+          } else if (msg.statsFinal) {
+            const sf = msg.statsFinal
+            statsBadge = `<span class="stats-badge" onclick="toggleStatsPanel(${i})" title="Click for timeline"><span class="stats-badge-dot" style="background:var(--text-faint);animation:none"></span> ${sf.avgTps} tok/s · ${sf.totalTokens} tok · ${sf.ttft}ms TTFT · ${sf.totalSec.toFixed(1)}s</span>`
+          }
+        }
         const timestamp = (msg.ts && !msg.streaming)
           ? `<span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>`
           : ''
@@ -4764,13 +4862,18 @@
         const userRememberBtn = (msg.role === 'user' && (msg.content || '').length > 2)
           ? `<div class="msg-actions"><button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i})" title="Save this to long-term memory">🧠 Remember</button></div>`
           : ''
+        const statsPanel = (msg.statsFinal && msg.statsPanelOpen)
+          ? renderStatsPanel(msg.statsFinal)
+          : ''
         html += `<div class="msg ${msg.pinned ? 'pinned' : ''}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
             ${modelBadge}
+            ${statsBadge}
             ${timestamp}
           </div>
           <div class="msg-content">${body}</div>
+          ${statsPanel}
           ${memChip}
           ${actionsFull || userRememberBtn}
         </div>`
@@ -5650,6 +5753,90 @@
     }
     const _latestStreamContent = Object.create(null)
 
+    // Compute + render the streaming stats badge in-place. Called on every
+    // token arrival. Finds the badge by data-stats-id so we don't have to
+    // re-render the whole message list just to update a small string.
+    function updateStatsBadge(target) {
+      if (!target || !target.stats) return
+      const s = target.stats
+      if (s.firstTokenMs == null) return  // no tokens yet
+      const now = performance.now()
+      const windowSec = Math.max(0.001, (s.samples.length > 1
+        ? (s.samples[s.samples.length - 1].t - s.samples[0].t) / 1000
+        : (now - s.firstTokenMs) / 1000))
+      const windowTokens = s.samples.reduce((a, b) => a + b.n, 0)
+      const tokPerSec = Math.round(windowTokens / windowSec)
+      const ttft = Math.round(s.firstTokenMs - s.startMs)
+      const badge = document.querySelector(`[data-stats-id="${target.uxMessageId || ''}"]`)
+      if (!badge) return
+      badge.classList.add('live')
+      badge.innerHTML = `<span class="stats-badge-dot"></span> ${tokPerSec} tok/s · ${s.tokens} tok`
+      badge.dataset.ttft = String(ttft)
+      badge.dataset.totalTok = String(s.tokens)
+      badge.dataset.tps = String(tokPerSec)
+    }
+    // Toggle the expanded stats panel (sparkline + breakdown) for a message.
+    function toggleStatsPanel(idx) {
+      const m = messages[idx]
+      if (!m) return
+      m.statsPanelOpen = !m.statsPanelOpen
+      renderMessages()
+    }
+    // Render a tiny SVG sparkline showing tok/s over the lifetime of the
+    // stream. Values are bucketed into ~30 cells so the line stays smooth.
+    function renderStatsPanel(sf) {
+      if (!sf || !sf.timeline || !sf.timeline.length) return ''
+      const BUCKETS = 30
+      const totalMs = Math.max(1, sf.timeline[sf.timeline.length - 1].t)
+      const bucketMs = totalMs / BUCKETS
+      const buckets = new Array(BUCKETS).fill(0)
+      for (const pt of sf.timeline) {
+        const i = Math.min(BUCKETS - 1, Math.floor(pt.t / bucketMs))
+        buckets[i] += pt.n
+      }
+      // Convert to tok/s per bucket
+      const tps = buckets.map(n => n / (bucketMs / 1000))
+      const maxTps = Math.max(...tps, 1)
+      const W = 100, H = 40
+      const pts = tps.map((v, i) => {
+        const x = (i / (BUCKETS - 1)) * W
+        const y = H - (v / maxTps) * (H - 4) - 2
+        return `${x.toFixed(1)},${y.toFixed(1)}`
+      }).join(' ')
+      return `<div class="stats-spark-panel">
+        <div class="stats-row">
+          <div class="stats-cell"><span class="stats-cell-label">Avg</span><span class="stats-cell-value">${sf.avgTps} tok/s</span></div>
+          <div class="stats-cell"><span class="stats-cell-label">Peak</span><span class="stats-cell-value">${Math.round(maxTps)} tok/s</span></div>
+          <div class="stats-cell"><span class="stats-cell-label">TTFT</span><span class="stats-cell-value">${sf.ttft}ms</span></div>
+          <div class="stats-cell"><span class="stats-cell-label">Duration</span><span class="stats-cell-value">${sf.totalSec.toFixed(2)}s</span></div>
+          <div class="stats-cell"><span class="stats-cell-label">Tokens</span><span class="stats-cell-value">${sf.totalTokens}</span></div>
+        </div>
+        <svg class="stats-spark-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+          <polyline fill="none" stroke="var(--green)" stroke-width="1.4" points="${pts}"/>
+        </svg>
+        <div style="color:var(--text-faint);font-size:9px;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">tok/sec over stream lifetime</div>
+      </div>`
+    }
+
+    // Freeze stats into a final form when streaming ends. Called from
+    // callAI's finalisation path via freezeStatsFor(msg).
+    function finalizeStats(msg) {
+      if (!msg || !msg.stats) return
+      const s = msg.stats
+      if (s.firstTokenMs == null || !s.tokens) { delete msg.stats; return }
+      const totalSec = Math.max(0.001, (performance.now() - s.startMs) / 1000)
+      const streamSec = Math.max(0.001, (performance.now() - s.firstTokenMs) / 1000)
+      msg.statsFinal = {
+        ttft: Math.round(s.firstTokenMs - s.startMs),
+        totalTokens: s.tokens,
+        totalSec,
+        // Average tok/s measured from first token to end, not including TTFT
+        avgTps: Math.round(s.tokens / streamSec),
+        timeline: s.samples.map(x => ({ t: x.t - s.firstTokenMs, n: x.n })),
+      }
+      delete msg.stats  // drop the live running state from persistence
+    }
+
     // Find the right streaming target for an incoming activity event.
     // Council mode: each lane is a separate streaming message keyed by uxMessageId.
     // Single-lane mode: just the last streaming message.
@@ -5679,8 +5866,26 @@
       if (activity.phase === 'token') {
         const target = findStreamingTargetFor(activity)
         if (target) {
+          // ── Streaming Stats: capture TTFT + per-sec token velocity ──
+          // We approximate tokens by word count (roughly 1.3x for
+          // English) — good enough for a live responsiveness gauge
+          // without a real tokenizer.
+          const chunkTokens = Math.max(1, Math.ceil((activity.text || '').length / 4))
+          const now = performance.now()
+          if (!target.stats) {
+            target.stats = { startMs: now, firstTokenMs: now, tokens: 0, samples: [] }
+          }
+          // Mark first-token arrival the first time we see one.
+          if (target.stats.firstTokenMs == null) target.stats.firstTokenMs = now
+          target.stats.tokens += chunkTokens
+          // Rolling window: keep the last ~2s of token arrivals so the
+          // live tok/s estimate reacts without jittering wildly.
+          target.stats.samples.push({ t: now, n: chunkTokens })
+          const cutoff = now - 2000
+          while (target.stats.samples.length && target.stats.samples[0].t < cutoff) target.stats.samples.shift()
           target.content = (target.content || '') + (activity.text || '')
           scheduleStreamUpdate(target.uxMessageId, target.content)
+          updateStatsBadge(target)
         }
         return
       }
@@ -6482,6 +6687,29 @@
     }
 
     // ── Init ─────────────────────────────────────────────────────────────
+    // Paint the version badge ASAP so the user always knows what build they're on.
+    ;(function populateVersionBadge() {
+      const v = (window.alaude && window.alaude.version) || 'dev'
+      const el = document.getElementById('version-badge')
+      if (el) {
+        el.textContent = 'v' + v
+        el.title = `Alaude ${v} — click to view release notes on GitHub`
+        el.onclick = () => {
+          try { window.alaude.openExternal('https://github.com/Ahmedalsayadi/alaude-desktop/releases') } catch {}
+        }
+      }
+      // Also stamp it into the welcome footer hint row so first-time users see it
+      try {
+        const hints = document.querySelector('.welcome-hints')
+        if (hints && !hints.querySelector('.welcome-version')) {
+          const s = document.createElement('span')
+          s.className = 'welcome-version'
+          s.style.color = 'var(--text-faint)'
+          s.textContent = 'v' + v
+          hints.appendChild(s)
+        }
+      } catch {}
+    })()
     checkLoginStatus()
     loadSpaces()
     renderSessions()
