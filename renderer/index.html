@@ -4353,6 +4353,353 @@
     ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #bbb; }
   </style>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       v0.2.66 · Design refresh from alaude-design.zip
+       Layers new color tokens + type system + composer/sidebar styles
+       on top of the existing markup. Legacy styles above still apply
+       where we haven't opinionated; these rules take precedence where
+       they touch.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ───── Design tokens (OKLCH-based, from alaude-design) ───── */
+    :root {
+      --accent-h: 155;
+      --accent-c: 0.13;
+      --accent-l: 0.62;
+      --accent-oklch: oklch(var(--accent-l) var(--accent-c) var(--accent-h));
+      --accent-soft: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.14);
+      --accent-faint: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06);
+      --accent-ink: oklch(0.98 0.01 var(--accent-h));
+
+      --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      --serif: "Instrument Serif", ui-serif, Georgia, serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    :root[data-theme="dark"],
+    :root:not([data-theme]) {
+      --bg: #131416;
+      --bg-sidebar: #0f1011;
+      --bg-input: #0f1011;
+      --bg-hover: #202327;
+      --bg-msg-user: #1f2226;
+      --border: #25282c;
+      --border-soft: #1d1f22;
+      --bg-raised: #1c1e21;
+      --bg-panel: #17181b;
+      --code-bg: #0c0d0f;
+
+      --text: #e9eaec;
+      --text-dim: #a0a4aa;
+      --text-faint: #6a6e74;
+      --text-ghost: #3e4147;
+
+      --green: var(--accent-oklch);
+      --green-dim: var(--accent-soft);
+      --green-glow: var(--accent-faint);
+    }
+    :root[data-theme="light"] {
+      --bg: #fbfaf7;
+      --bg-sidebar: #f2f0ea;
+      --bg-input: #ffffff;
+      --bg-hover: #ecebe4;
+      --bg-msg-user: #ecebe3;
+      --border: #e2dfd6;
+      --border-soft: #ebe9e1;
+      --bg-raised: #ffffff;
+      --bg-panel: #fbfaf7;
+      --code-bg: #f5f3ec;
+
+      --text: #1a1a18;
+      --text-dim: #56564f;
+      --text-faint: #8a8a82;
+      --text-ghost: #bcbcb3;
+
+      --green: oklch(0.58 0.13 155);
+      --green-dim: oklch(0.58 0.13 155 / 0.15);
+      --green-glow: oklch(0.58 0.13 155 / 0.08);
+    }
+
+    /* ───── Typography baseline ───── */
+    body {
+      font-family: var(--sans);
+      font-feature-settings: "ss01", "cv11";
+      letter-spacing: -0.005em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ───── Sidebar refresh ───── */
+    .sidebar {
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-soft);
+    }
+    .sidebar-header .app-title {
+      font-family: var(--serif);
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      font-weight: 400;
+    }
+    .version-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-faint);
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+    }
+    .version-badge:hover { color: var(--green); }
+    .new-session-btn, .sidebar-header button, #new-session-btn {
+      font-family: var(--sans);
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      border-radius: 8px;
+    }
+    .session-item {
+      border-radius: 6px;
+      font-weight: 450;
+      font-size: 12.5px;
+      color: var(--text-dim);
+    }
+    .session-item:hover { color: var(--text); }
+    .session-item.active {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+    .session-item-cost {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-faint);
+    }
+
+    /* ───── Topbar refresh ───── */
+    .topbar {
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .topbar-model {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+    }
+    .topbar-keys-btn {
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      color: var(--text-dim);
+      font-family: var(--sans);
+      font-weight: 500;
+      font-size: 12px;
+      background: transparent;
+    }
+    .topbar-keys-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    /* ───── Model-slot chips in topbar ───── */
+    .model-slot {
+      border-radius: 6px;
+      font-family: var(--sans);
+    }
+    .model-slot .ms-key {
+      font-family: var(--mono);
+      font-size: 9px;
+    }
+
+    /* ───── Messages refresh ───── */
+    .messages { background: transparent; }
+    .msg {
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+      margin: 28px auto !important;
+      max-width: 760px;
+      box-shadow: none !important;
+      display: flex;
+      gap: 14px;
+    }
+    .msg .msg-header {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text-faint);
+    }
+    .msg-role {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+    }
+    .msg-role.user { color: var(--text-dim); }
+    .msg-role.assistant { color: var(--text); }
+    .msg-model-badge {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text-dim);
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+    }
+    .msg-timestamp {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-ghost);
+    }
+    .msg-content {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    .msg-content p { margin: 0 0 10px; }
+    .msg-content strong { color: var(--text); font-weight: 600; }
+
+    /* ───── Code blocks refresh ───── */
+    .msg-content .md-pre,
+    .md-pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .md-pre code {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.7;
+    }
+    .md-pre .md-pre-lang {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .msg-content code.md-code,
+    .md-code {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      background: var(--code-bg);
+      border: 1px solid var(--border-soft);
+    }
+
+    /* ───── Input / composer refresh ───── */
+    .input-area {
+      background: transparent;
+      border-top: 0;
+      padding-bottom: 24px;
+    }
+    .input-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px color-mix(in oklch, var(--bg) 50%, transparent);
+      padding: 4px;
+      display: flex;
+      align-items: flex-end;
+    }
+    .input-wrap:focus-within {
+      border-color: color-mix(in oklch, var(--green) 40%, var(--border));
+    }
+    .input-wrap .input-field {
+      font-family: var(--sans);
+      font-size: 14.5px;
+      font-weight: 450;
+      line-height: 1.55;
+      background: transparent;
+      border: 0;
+      padding: 12px 10px;
+      color: var(--text);
+    }
+    .input-wrap .input-field::placeholder { color: var(--text-faint); }
+    .send-btn {
+      background: var(--green);
+      color: var(--accent-ink);
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      border: 0;
+      margin: 6px;
+    }
+    .send-btn:disabled { background: var(--bg-hover); color: var(--text-ghost); }
+    .icon-btn {
+      color: var(--text-faint);
+      border: 0;
+      background: transparent;
+      border-radius: 6px;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--bg-hover); }
+
+    /* ───── Cards (summary / todos / goal / office / building) ───── */
+    .session-summary,
+    .session-todos,
+    .session-goal,
+    .md-office,
+    .md-chart,
+    .md-artifact,
+    .md-building {
+      max-width: 760px;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+    }
+    .session-summary { border-left-color: #f39c12; }
+    .session-todos { border-left-color: oklch(0.65 0.14 240); }
+    .session-goal { border-left-color: oklch(0.58 0.12 290); }
+
+    /* ───── Welcome screen serif ───── */
+    .welcome-title {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 42px;
+      letter-spacing: -0.01em;
+      line-height: 1.05;
+    }
+    .welcome-gradient {
+      background: none;
+      -webkit-background-clip: initial;
+      -webkit-text-fill-color: initial;
+      color: var(--text);
+      font-style: italic;
+    }
+    .welcome-sub {
+      font-family: var(--sans);
+      font-size: 14px;
+      color: var(--text-dim);
+      font-weight: 450;
+    }
+    .template-card {
+      border-radius: 10px;
+      background: var(--bg-panel);
+    }
+    .template-name { font-family: var(--sans); font-weight: 500; }
+
+    /* ───── Buttons across the app ───── */
+    button.key-save-btn,
+    button.msg-action-btn {
+      font-family: var(--sans);
+      font-weight: 500;
+      letter-spacing: -0.005em;
+    }
+
+    /* ───── Session accent dots get the new soft-ring look ───── */
+    .session-color-dot {
+      box-shadow: 0 0 0 2px color-mix(in oklch, var(--text-faint) 15%, transparent);
+    }
+
+    /* ───── Scrollbars, subtle ───── */
+    ::-webkit-scrollbar-thumb { background: var(--border) !important; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-faint) !important; }
+
+    /* ───── Quality of life: soft radial space tint in main ───── */
+    .main {
+      background:
+        radial-gradient(ellipse 55% 45% at 100% 0%, var(--green-glow), transparent 55%),
+        radial-gradient(ellipse 40% 30% at 0% 100%, var(--green-glow), transparent 60%),
+        var(--bg) !important;
+    }
+  </style>
 </head>
 <body>
 
