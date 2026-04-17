@@ -370,7 +370,7 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   let provider = detectProvider(model)
   if (!model) {
     if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
-    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-5-20250514' }
+    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-5' }
     else throw new Error('No API key configured')
   }
   process.stderr.write(`[worker] resolved provider="${provider}" model="${model}"\n`)

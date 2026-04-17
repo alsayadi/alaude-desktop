@@ -529,7 +529,7 @@ async function chatAnthropic(messagesRaw, model, workspacePath) {
 
   for (let i = 0; i < 10; i++) {
     const response = await client.messages.create({
-      model: model || 'claude-sonnet-4-5-20250514',
+      model: model || 'claude-sonnet-4-5',
       max_tokens: 4096,
       system: systemPrompt,
       messages,
