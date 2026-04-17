@@ -10419,7 +10419,12 @@ Title:`
         }
       }
       const text = e.clipboardData?.getData('text') || ''
-      if (text.length < 80) return // too short to be meaningfully JSON/stacktrace
+      // URLs can be short; JSON/stacktrace need 80+ chars to avoid noise.
+      const trimmed = text.trim()
+      if (!trimmed) return
+      const urlKind = detectUrlPaste(trimmed)
+      if (urlKind) { showSmartPasteChip('url', trimmed); return }
+      if (text.length < 80) return
       const kind = detectPasteKind(text)
       if (kind) showSmartPasteChip(kind)
     })
@@ -10427,6 +10432,20 @@ Title:`
     input.addEventListener('input', () => {
       if (!input.value.trim()) hideSmartPasteChip()
     })
+
+    // URL detection: just one or a couple of URLs in the paste, nothing else.
+    // The user typed nothing else in — we keep this narrow so normal
+    // URL-embedded-in-text pastes don't trigger the chip.
+    const URL_REGEX = /\bhttps?:\/\/[^\s<>"')]+/gi
+    function detectUrlPaste(trimmed) {
+      if (trimmed.length > 600) return null
+      const matches = trimmed.match(URL_REGEX) || []
+      if (!matches.length) return null
+      // Paste is "just URL(s)" if every non-URL token is whitespace/punctuation.
+      const stripped = trimmed.replace(URL_REGEX, '').trim()
+      if (stripped.length > 20) return null
+      return 'url'
+    }
 
     // Classify a pasted string. Cheap heuristics — false positives are fine
     // (the chip is just a suggestion the user can dismiss).
@@ -10453,35 +10472,66 @@ Title:`
       return null
     }
 
-    function showSmartPasteChip(kind) {
+    function showSmartPasteChip(kind, payload) {
       const chip = document.getElementById('smart-paste-chip')
       if (!chip) return
+      chip.dataset.kind = kind
+      if (kind === 'url') {
+        const url = (payload || '').match(URL_REGEX)?.[0] || payload || ''
+        chip.dataset.url = url
+        const short = url.length > 50 ? url.slice(0, 50) + '…' : url
+        chip.innerHTML = `
+          <span class="spc-icon">🔗</span>
+          <span class="spc-msg">Looks like a link — <code style="font-size:11px;opacity:0.8">${escapeHtml(short)}</code></span>
+          <button class="spc-btn" onclick="applySmartPasteUrl('open')">Open</button>
+          <button class="spc-btn" onclick="applySmartPasteUrl('describe')" style="background:transparent;border:1px solid var(--border);color:var(--text-dim)">Describe</button>
+          <button class="spc-dismiss" onclick="hideSmartPasteChip()" title="Dismiss">×</button>`
+        chip.classList.add('show')
+        clearTimeout(window._spcDismissTimer)
+        window._spcDismissTimer = setTimeout(hideSmartPasteChip, 30000)
+        return
+      }
       const configs = {
         json: {
           icon: '{ }',
           msg: 'Looks like JSON — want me to format & explain it?',
           btn: 'Format JSON',
-          wrap: (t) => 'Format this JSON with proper indentation and briefly describe its structure:\n\n```json\n' + t + '\n```',
         },
         stacktrace: {
           icon: '🐛',
           msg: 'Looks like a stack trace — want me to root-cause it?',
           btn: 'Debug this',
-          wrap: (t) => 'Help me root-cause this stack trace. List the top 3 most likely causes in order of probability, with a one-line fix for each:\n\n```\n' + t + '\n```',
         },
       }
       const cfg = configs[kind]
       if (!cfg) return
-      chip.dataset.kind = kind
       chip.innerHTML = `
         <span class="spc-icon">${cfg.icon}</span>
         <span class="spc-msg">${cfg.msg}</span>
         <button class="spc-btn" onclick="applySmartPaste()">${cfg.btn}</button>
         <button class="spc-dismiss" onclick="hideSmartPasteChip()" title="Dismiss">×</button>`
       chip.classList.add('show')
-      // Auto-dismiss after 30s so it doesn't linger forever.
       clearTimeout(window._spcDismissTimer)
       window._spcDismissTimer = setTimeout(hideSmartPasteChip, 30000)
+    }
+    function applySmartPasteUrl(mode) {
+      const chip = document.getElementById('smart-paste-chip')
+      const url = chip?.dataset.url
+      if (!url) return
+      if (mode === 'open') {
+        try { window.alaude?.openExternal?.(url) } catch {}
+        hideSmartPasteChip()
+        return
+      }
+      // 'describe' — wrap the URL in a prompt asking the model to analyze it
+      // based on what it can infer. (Most models won't browse; they'll use the
+      // URL itself + prior knowledge to guess what the page covers.)
+      const raw = input.value
+      input.value = `Describe what this page is about based on its URL and anything you already know. If you're unsure, say so clearly rather than guessing.\n\n${raw}`
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.focus()
+      input.setSelectionRange(input.value.length, input.value.length)
+      hideSmartPasteChip()
     }
     function hideSmartPasteChip() {
       const chip = document.getElementById('smart-paste-chip')
@@ -10489,6 +10539,7 @@ Title:`
       chip.classList.remove('show')
       chip.innerHTML = ''
       delete chip.dataset.kind
+      delete chip.dataset.url
       clearTimeout(window._spcDismissTimer)
     }
     function applySmartPaste() {
