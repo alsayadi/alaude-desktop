@@ -355,6 +355,27 @@
     .sg-btn:hover { border-color: #9b59b6; color: #9b59b6; }
     .sg-btn.primary { border-color: var(--green); color: var(--green); }
     .sg-btn.primary:hover { background: color-mix(in srgb, var(--green) 15%, transparent); }
+    .sg-timer {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: color-mix(in srgb, #e74c3c 12%, transparent);
+      border: 1px solid #e74c3c;
+      border-radius: 10px;
+      color: #e74c3c;
+      font-size: 11px;
+      font-family: monospace;
+      font-variant-numeric: tabular-nums;
+      margin-right: 4px;
+    }
+    .sg-timer.soft { background: transparent; border-color: var(--border); color: var(--text-dim); }
+    .sg-timer .sgt-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+      animation: sgt-blink 1s ease-in-out infinite;
+    }
+    @keyframes sgt-blink { 0%,60% { opacity: 1 } 70%,100% { opacity: 0.3 } }
 
     /* ─── Session TODO Checklist ─────────────────────────────────── */
     .session-todos {
@@ -5274,9 +5295,12 @@ SUMMARY:`
       const icon = goal.status === 'achieved' ? '✅'
                  : goal.status === 'abandoned' ? '✗'
                  : '🎯'
+      // Pomodoro timer: active if goal.focus.endsAt > now
+      const timerHtml = renderGoalTimer(goal)
       const actions = goal.status === 'active'
         ? `<button class="sg-btn primary" onclick="setGoalStatus('achieved')" title="Mark this goal as achieved">✓ Done</button>
            <button class="sg-btn" onclick="setGoalStatus('abandoned')" title="Abandon this goal">✗ Abandon</button>
+           <button class="sg-btn" onclick="togglePomodoro()" title="Start/stop a 25-minute focused block for this goal">${goal.focus?.endsAt > Date.now() ? '⏹' : '🍅'}</button>
            <button class="sg-btn" onclick="promptSetGoal()" title="Edit the goal text">✎ Edit</button>
            <button class="sg-btn" onclick="clearGoal()" title="Clear the goal entirely">×</button>`
         : `<button class="sg-btn" onclick="setGoalStatus('active')" title="Reactivate this goal">↺ Reopen</button>
@@ -5284,7 +5308,98 @@ SUMMARY:`
       chip.innerHTML = `
         <span class="sg-icon">${icon}</span>
         <span class="sg-text"><strong style="color:var(--text-faint);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;margin-right:6px">Goal</strong>${escapeHtml(goal.text)}</span>
+        ${timerHtml}
         <span class="sg-actions">${actions}</span>`
+    }
+    function renderGoalTimer(goal) {
+      if (!goal?.focus?.endsAt) return ''
+      const remaining = goal.focus.endsAt - Date.now()
+      if (remaining <= 0) return ''
+      const mins = Math.floor(remaining / 60000)
+      const secs = Math.floor((remaining % 60000) / 1000)
+      const pad = (n) => String(n).padStart(2, '0')
+      return `<span class="sg-timer" title="Focus block in progress — click 🍅 to stop"><span class="sgt-dot"></span>${pad(mins)}:${pad(secs)}</span>`
+    }
+
+    // Pomodoro lifecycle. 25-minute default. Interval updates the chip
+    // every second. On natural completion, a desktop notification (best-
+    // effort) + toast prompt asks how the block went.
+    let _pomoTick = null
+    function togglePomodoro(durationMin = 25) {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s?.goal) { showRewindToast?.('Set a goal first (⌘⇧G)', true); return }
+      if (s.goal.focus?.endsAt > Date.now()) {
+        // Stop mid-block
+        delete s.goal.focus
+        if (_pomoTick) { clearInterval(_pomoTick); _pomoTick = null }
+        persistSessions()
+        renderGoalCard()
+        showRewindToast?.('⏹ Focus block stopped', false)
+        return
+      }
+      const endsAt = Date.now() + durationMin * 60000
+      s.goal.focus = { startedAt: Date.now(), endsAt, durationMin }
+      persistSessions()
+      renderGoalCard()
+      startPomoTick()
+      showRewindToast?.(`🍅 Focus on "${s.goal.text.slice(0, 40)}" for ${durationMin}m`, false)
+      // Best-effort permission prompt for the completion notification
+      if ('Notification' in window && Notification.permission === 'default') {
+        try { Notification.requestPermission() } catch {}
+      }
+    }
+    function startPomoTick() {
+      if (_pomoTick) clearInterval(_pomoTick)
+      _pomoTick = setInterval(() => {
+        const s = sessions.find(s => s.id === currentSessionId)
+        if (!s?.goal?.focus?.endsAt) { clearInterval(_pomoTick); _pomoTick = null; return }
+        const remaining = s.goal.focus.endsAt - Date.now()
+        if (remaining <= 0) {
+          // Completed
+          const goalText = s.goal.text
+          delete s.goal.focus
+          persistSessions()
+          clearInterval(_pomoTick); _pomoTick = null
+          renderGoalCard()
+          firePomodoroCompletion(goalText)
+          return
+        }
+        // Lightweight refresh: only the timer chip, not the whole card
+        const chip = document.getElementById('session-goal')?.querySelector('.sg-timer')
+        if (chip) {
+          const mins = Math.floor(remaining / 60000)
+          const secs = Math.floor((remaining % 60000) / 1000)
+          const pad = (n) => String(n).padStart(2, '0')
+          chip.innerHTML = `<span class="sgt-dot"></span>${pad(mins)}:${pad(secs)}`
+        } else {
+          // Lost the chip somehow — full re-render
+          renderGoalCard()
+        }
+      }, 1000)
+    }
+    function firePomodoroCompletion(goalText) {
+      // Desktop notification first (best-effort)
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('🍅 Focus block complete', {
+            body: `How did you do on: ${goalText.slice(0, 80)}`,
+            silent: false,
+          })
+        }
+      } catch {}
+      // In-app toast asking the question
+      showRewindToast?.(`🍅 Focus block complete — ⌘⇧G done, or keep going`, false)
+    }
+    // Resume a pomodoro tick on session switch if there's an active focus block
+    const _origRenderGoalCardForPomo = renderGoalCard
+    renderGoalCard = function() {
+      _origRenderGoalCardForPomo.apply(this, arguments)
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (s?.goal?.focus?.endsAt > Date.now() && !_pomoTick) {
+        startPomoTick()
+      } else if ((!s?.goal?.focus?.endsAt || s.goal.focus.endsAt <= Date.now()) && _pomoTick) {
+        clearInterval(_pomoTick); _pomoTick = null
+      }
     }
     function promptSetGoal() {
       const s = sessions.find(s => s.id === currentSessionId)
@@ -6092,6 +6207,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
         { kind: 'action', icon: '🎯', label: 'Set / edit session goal', search: 'goal objective target focus intention set edit', action: () => { closeCmdPalette(); promptSetGoal() } },
         { kind: 'action', icon: '✅', label: 'Mark goal achieved', search: 'goal done achieved complete mark finish', action: () => { closeCmdPalette(); setGoalStatus('achieved') } },
+        { kind: 'action', icon: '🍅', label: 'Start 25-minute focus block (Pomodoro)', search: 'pomodoro focus timer 25 minutes tomato block deep work', action: () => { closeCmdPalette(); togglePomodoro() } },
         { kind: 'action', icon: '📈', label: 'Model Performance Dashboard', search: 'model performance stats dashboard latency tokens tps speed cost benchmark', action: () => { closeCmdPalette(); toggleModelPerfModal() } },
         { kind: 'action', icon: '📒', label: 'Feedback Journal (👍/👎 history)', search: 'feedback journal reactions thumbs up down rating quality', action: () => { closeCmdPalette(); toggleFeedbackModal() } },
         { kind: 'action', icon: '📅', label: 'Daily Digest (today + last week)', search: 'digest daily recap summary standup today week activity rollup', action: () => { closeCmdPalette(); toggleDigestModal() } },
