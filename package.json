@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Alaude — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "scripts": {
@@ -20,6 +20,9 @@
       "electron/**/*",
       "renderer/**/*",
       "build/**/*"
+    ],
+    "asarUnpack": [
+      "electron/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

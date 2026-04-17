@@ -300,27 +300,38 @@ const pendingRequests = new Map()
 function getWorker() {
   if (apiWorker && !apiWorker.killed) return apiWorker
 
-  // Use system Node.js for the worker — Electron's ELECTRON_RUN_AS_NODE network
-  // stack can fail with "Connection error." on some systems.
+  // Binary selection:
+  //   Packaged app → always use Electron-as-Node (process.execPath +
+  //     ELECTRON_RUN_AS_NODE=1). Guaranteed present inside the .app bundle.
+  //     System `node` doesn't exist on every Mac, and even when it does it
+  //     can't read files packaged inside app.asar — which is where main.js
+  //     lives at runtime.
+  //   Dev mode → prefer a real system `node` (slightly snappier startup,
+  //     and the original reason we introduced the split). Fall back to
+  //     Electron-as-Node if no system node is found.
   const nodeBin = (() => {
-    const fs = require('fs')
+    if (app.isPackaged) return process.execPath
+    const fsMod = require('fs')
     const candidates = [
       '/usr/local/bin/node',
       '/opt/homebrew/bin/node',
       path.join(os.homedir(), '.nvm/versions/node', 'current', 'bin', 'node'),
     ]
-    for (const c of candidates) { if (fs.existsSync(c)) return c }
-    // Fallback: use Electron as Node
+    for (const c of candidates) { if (fsMod.existsSync(c)) return c }
     return process.execPath
   })()
   const workerEnv = { ...process.env }
   if (nodeBin === process.execPath) workerEnv.ELECTRON_RUN_AS_NODE = '1'
 
-  console.log('[worker] spawning with binary:', nodeBin)
+  console.log('[worker] spawning with binary:', nodeBin, '(packaged:', app.isPackaged, ')')
   apiWorker = spawnChild(nodeBin, [path.join(__dirname, 'api-worker.js')], {
     stdio: ['pipe', 'pipe', 'inherit'],
     env: workerEnv,
   })
+
+  // Surface worker-side crashes so "Worker crashed" is actionable, not silent
+  apiWorker.on('error', (err) => console.error('[worker] spawn error:', err))
+  apiWorker.stderr?.on('data', (chunk) => process.stderr.write(`[worker stderr] ${chunk}`))
 
   let buf = ''
   apiWorker.stdout.setEncoding('utf8')
