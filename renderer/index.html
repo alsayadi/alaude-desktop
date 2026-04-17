@@ -255,6 +255,95 @@
     .summary-body li { margin: 2px 0; }
     .summary-meta { color: var(--text-faint); font-size: 10px; margin-top: 6px; font-style: italic; }
 
+    /* ─── Session TODO Checklist ─────────────────────────────────── */
+    .session-todos {
+      margin: 6px auto 0;
+      max-width: 720px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-left: 3px solid #3498db;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-dim);
+      display: none;
+    }
+    .session-todos.show { display: block; }
+    .session-todos.loading { border-left-color: var(--text-faint); opacity: 0.7; }
+    .todos-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .todos-label {
+      color: var(--text-faint);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .todos-actions { display: flex; gap: 4px; }
+    .todos-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .todos-btn:hover { border-color: #3498db; color: #3498db; }
+    .todo-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .todo-row:last-child { border-bottom: 0; }
+    .todo-row input[type="checkbox"] {
+      margin-top: 3px;
+      accent-color: #3498db;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .todo-text { flex: 1; color: var(--text); word-break: break-word; }
+    .todo-row.done .todo-text { color: var(--text-faint); text-decoration: line-through; }
+    .todo-remove {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 4px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .todo-row:hover .todo-remove { opacity: 0.7; }
+    .todo-remove:hover { color: #e74c3c; opacity: 1 !important; }
+    .todo-add-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .todo-add-row input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+    }
+    .todo-add-row input:focus { border-color: #3498db; }
+    .todo-meta { color: var(--text-faint); font-size: 10px; margin-top: 6px; font-style: italic; }
+
     /* ─── Sidebar ───────────────────────────────────────────────────────── */
     .sidebar {
       width: var(--sidebar-w);
@@ -3352,6 +3441,7 @@
     <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
     <div class="pin-tray" id="pin-tray"></div>
     <div class="session-summary" id="session-summary"></div>
+    <div class="session-todos" id="session-todos"></div>
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
@@ -3575,6 +3665,7 @@
         <dt>Export current as Markdown</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>E</kbd></dd>
         <dt>Export full backup (JSON)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>E</kbd></dd>
         <dt>📝 Summarize this session</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></dd>
+        <dt>✓ Extract action items (TODOs)</dt><dd><kbd class="kbd-mod-mirror">⌘</kbd><kbd>⇧</kbd><kbd>T</kbd></dd>
         <dt>Toggle Focus Mode</dt><dd><kbd>F</kbd> (outside inputs)</dd>
         <dt>Rewind / Branch</dt><dd>buttons on any assistant reply</dd>
         <dt>Pin a message</dt><dd>📌 button on any reply</dd>
@@ -4555,6 +4646,197 @@ SUMMARY:`
       }
     }
 
+    // ── Session TODO extraction ─────────────────────────────────────
+    // Scans the conversation with the current model and pulls out action
+    // items as a persistent checklist per session. Items can also be added
+    // manually. State (text + done) is stored on the session.
+    function getSessionTodos() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      return s?.todos || null
+    }
+    function renderTodosCard() {
+      const card = document.getElementById('session-todos')
+      if (!card) return
+      const s = sessions.find(s => s.id === currentSessionId)
+      const todos = s?.todos
+      if (todos && todos.loading) {
+        card.classList.add('show', 'loading')
+        card.innerHTML = `
+          <div class="todos-head">
+            <span class="todos-label">✓ Extracting action items…</span>
+          </div>
+          <div style="font-size:12px">Scanning the conversation for concrete next steps…</div>`
+        return
+      }
+      card.classList.remove('loading')
+      if (!todos || !Array.isArray(todos.items) || todos.items.length === 0) {
+        card.classList.remove('show')
+        card.innerHTML = ''
+        return
+      }
+      const openCount = todos.items.filter(t => !t.done).length
+      const totalCount = todos.items.length
+      const label = `✓ Action items · ${totalCount - openCount}/${totalCount}`
+      const rows = todos.items.map((t, idx) => `
+        <div class="todo-row ${t.done ? 'done' : ''}">
+          <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${escapeHtml(t.id)}')" />
+          <span class="todo-text">${escapeHtml(t.text)}</span>
+          <button class="todo-remove" onclick="removeTodo('${escapeHtml(t.id)}')" title="Remove">×</button>
+        </div>
+      `).join('')
+      const when = todos.generatedAt ? new Date(todos.generatedAt).toLocaleString() : ''
+      card.classList.add('show')
+      card.innerHTML = `
+        <div class="todos-head">
+          <span class="todos-label">${label}</span>
+          <span class="todos-actions">
+            <button class="todos-btn" onclick="extractSessionTodos()" title="Re-extract with current model">↻ Refresh</button>
+            <button class="todos-btn" onclick="dismissTodos()" title="Hide this checklist">× Dismiss</button>
+          </span>
+        </div>
+        <div>${rows}</div>
+        <div class="todo-add-row">
+          <input id="todo-add-input" placeholder="Add item + press Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoFromInput();}" />
+          <button class="todos-btn" onclick="addTodoFromInput()">+ Add</button>
+        </div>
+        ${todos.generatedAt ? `<div class="todo-meta">via ${escapeHtml(todos.model || 'manual')} · ${escapeHtml(when)}</div>` : ''}`
+    }
+    function toggleTodo(id) {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s?.todos?.items) return
+      const item = s.todos.items.find(t => t.id === id)
+      if (!item) return
+      item.done = !item.done
+      persistSessions()
+      renderTodosCard()
+    }
+    function removeTodo(id) {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s?.todos?.items) return
+      s.todos.items = s.todos.items.filter(t => t.id !== id)
+      if (!s.todos.items.length) delete s.todos
+      persistSessions()
+      renderTodosCard()
+    }
+    function addTodoFromInput() {
+      const el = document.getElementById('todo-add-input')
+      if (!el) return
+      const text = (el.value || '').trim()
+      if (!text) return
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      if (!s.todos) s.todos = { items: [], generatedAt: null, model: null }
+      s.todos.items.push({ id: 'td_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6), text, done: false, createdAt: Date.now() })
+      persistSessions()
+      renderTodosCard()
+    }
+    function dismissTodos() {
+      const s = sessions.find(s => s.id === currentSessionId)
+      if (!s) return
+      delete s.todos
+      persistSessions()
+      renderTodosCard()
+    }
+    async function extractSessionTodos() {
+      const session = sessions.find(s => s.id === currentSessionId)
+      if (!session) return
+      const modelSelect = document.getElementById('model-select')
+      const model = modelSelect?.value
+      if (!model) { showRewindToast?.('Pick a model first', true); return }
+      const turns = messages.filter(m => !m.streaming && (m.role === 'user' || m.role === 'assistant'))
+      if (turns.length < 2) {
+        showRewindToast?.('Nothing to extract yet — have a short chat first', true)
+        return
+      }
+      // Preserve existing items' done-state on a refresh
+      const priorItems = Array.isArray(session.todos?.items) ? session.todos.items : []
+      session.todos = { ...(session.todos || { items: [] }), loading: true }
+      renderTodosCard()
+      const strOf = (m) => {
+        const raw = Array.isArray(m.content)
+          ? m.content.filter(p => p?.type === 'text').map(p => p.text).join(' ')
+          : String(m.content || '')
+        return raw.slice(0, 1500)
+      }
+      const transcript = turns.slice(-30)
+        .map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${strOf(m)}`)
+        .join('\n\n')
+      const prompt = [
+        { role: 'user', content:
+`Scan this conversation for concrete action items — things the user said they'd do, things they were advised to try, open next-steps.
+
+Output ONLY a JSON array of short action-item strings. No preamble, no trailing commentary, no code fences.
+Each item should be under 80 characters, imperative, and something you could check off.
+If there are no clear action items, output [].
+
+Example: ["Reply to Sarah's email by Friday", "Benchmark the new pricing on 1k requests", "Read the linked arXiv paper on RWKV"]
+
+CONVERSATION:
+${transcript}
+
+JSON:`
+        },
+      ]
+      try {
+        const resp = await window.alaude.chat(
+          prompt, model, workspacePath, 'general',
+          { messageId: 'todos_' + Date.now().toString(36), sessionId: 'todos_' + session.id }
+        )
+        let text = (typeof resp === 'string' ? resp : '').trim()
+        text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'').trim()
+        // Some models wrap in {"todos":[...]} — tolerate both.
+        let arr
+        try {
+          const parsed = JSON.parse(text)
+          arr = Array.isArray(parsed) ? parsed
+            : Array.isArray(parsed?.todos) ? parsed.todos
+            : Array.isArray(parsed?.items) ? parsed.items
+            : null
+        } catch {
+          // Try to extract the first [...] block manually.
+          const m = text.match(/\[[\s\S]*\]/)
+          if (m) { try { arr = JSON.parse(m[0]) } catch {} }
+        }
+        if (!Array.isArray(arr)) {
+          showRewindToast?.('Could not parse action items from model response', true)
+          session.todos = priorItems.length ? { items: priorItems } : undefined
+          if (!session.todos) delete session.todos
+          renderTodosCard()
+          return
+        }
+        // Normalise: strings → {text}, objects → {text}. Preserve done-state by matching text.
+        const priorByText = new Map(priorItems.map(t => [t.text.toLowerCase().trim(), t]))
+        const items = arr
+          .map(item => typeof item === 'string' ? item : (item?.text || item?.title || ''))
+          .map(s => String(s || '').trim())
+          .filter(s => s && s.length <= 200)
+          .slice(0, 20)
+          .map(text => {
+            const prior = priorByText.get(text.toLowerCase())
+            return prior
+              ? { ...prior, text }
+              : { id: 'td_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6), text, done: false, createdAt: Date.now() }
+          })
+        if (!items.length) {
+          showRewindToast?.('No action items found — looks like a pure discussion', false)
+          if (priorItems.length) session.todos = { items: priorItems }
+          else delete session.todos
+          renderTodosCard()
+          return
+        }
+        session.todos = { items, model, generatedAt: Date.now() }
+        persistSessions()
+        renderTodosCard()
+        showRewindToast?.(`✓ Extracted ${items.length} action item${items.length === 1 ? '' : 's'}`, false)
+      } catch (err) {
+        console.warn('[todos] failed:', err?.message || err)
+        showRewindToast?.('Extract failed: ' + (err?.message || 'unknown'), true)
+        if (priorItems.length) session.todos = { items: priorItems }
+        else delete session.todos
+        renderTodosCard()
+      }
+    }
+
     // ── Full backup export/import ───────────────────────────────────
     // Writes ALL local state to a single JSON file: sessions (with branches,
     // tags, message history), memories, prompt snippets, and metadata.
@@ -4788,6 +5070,7 @@ SUMMARY:`
         { kind: 'action', icon: '📦', label: 'Export full backup (JSON)', search: 'backup export all json sessions memories snippets', action: () => { closeCmdPalette(); exportFullBackup() } },
         { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
+        { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
       )
       return items
     }
@@ -5152,6 +5435,11 @@ SUMMARY:`
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault()
         generateSummary()
+      }
+      // Cmd/Ctrl+Shift+T → extract/refresh session action-items checklist
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault()
+        extractSessionTodos()
       }
       // F → toggle Focus Mode (only when NOT typing)
       if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey && !(e.target.matches?.('input, textarea, [contenteditable]'))) {
@@ -5949,6 +6237,7 @@ Title:`
       renderConvMinimap?.()
       renderPinTray?.()
       renderSummaryCard?.()
+      renderTodosCard?.()
       updateSessionCostDisplay?.()
     }
 
@@ -6760,6 +7049,7 @@ Title:`
       renderMessages()
       renderPinTray?.()
       renderSummaryCard?.()
+      renderTodosCard?.()
       resetPromptHistory?.()
       persistSessions()
     }
