@@ -3000,6 +3000,17 @@
       white-space: pre-wrap;
       text-align: left;
     }
+    .msg-content .md-svg {
+      display: flex;
+      justify-content: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      overflow-x: auto;
+    }
+    .msg-content .md-svg > svg { max-width: 100%; height: auto; }
     .msg-content .md-pre-lang {
       position: absolute;
       top: 6px;
@@ -9441,6 +9452,42 @@ Title:`
      * inline code, links. Pre-extracts health cards and fenced code so
      * neither gets mangled by the escape pass.
      */
+    // SVG sanitizer: strip script, event handlers, and any JavaScript-carrying
+    // attribute / URL scheme so rendered SVGs are safe. Uses DOMParser for
+    // correctness instead of regex-only parsing.
+    function sanitizeSvg(raw) {
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(raw, 'image/svg+xml')
+        const root = doc.documentElement
+        if (!root || root.nodeName.toLowerCase() !== 'svg') return ''
+        // Remove anything that can execute code or escape the SVG sandbox
+        const banned = ['script', 'foreignObject', 'iframe', 'object', 'embed']
+        for (const tag of banned) {
+          root.querySelectorAll(tag).forEach(n => n.remove())
+        }
+        const walk = (node) => {
+          if (node.nodeType !== 1) return
+          // Drop on* event handler attributes and anything starting with javascript:
+          for (const attr of Array.from(node.attributes || [])) {
+            const name = attr.name.toLowerCase()
+            const val = (attr.value || '').trim().toLowerCase()
+            if (name.startsWith('on')) node.removeAttribute(attr.name)
+            else if (val.startsWith('javascript:')) node.removeAttribute(attr.name)
+            else if ((name === 'href' || name === 'xlink:href') && val.startsWith('javascript:')) node.removeAttribute(attr.name)
+          }
+          for (const child of Array.from(node.childNodes)) walk(child)
+        }
+        walk(root)
+        // Clamp overall size if width/height missing (avoids huge SVGs)
+        if (!root.getAttribute('width') && !root.getAttribute('height') && !root.getAttribute('viewBox')) {
+          root.setAttribute('width', '320')
+          root.setAttribute('height', '240')
+        }
+        return new XMLSerializer().serializeToString(root)
+      } catch { return '' }
+    }
+
     // Mermaid loader: lazily fetch the library from a CDN the first time a
     // diagram is detected. If the fetch fails (offline, firewalled), the
     // placeholder falls back to a normal code block.
@@ -9500,8 +9547,10 @@ Title:`
       if (str == null) return ''
       const cards = []
       const codeBlocks = []
+      const svgs = []
       const CARD_TOKEN = '\u241ACARD'   // SYMBOL FOR SUBSTITUTE — never appears in real text
       const CODE_TOKEN = '\u241ACODE'
+      const SVG_TOKEN  = '\u241ASVG'
 
       // 1. Extract pre-formatted health cards (they're already HTML)
       let s = str.replace(/<!--HEALTH_CARD-->[\s\S]*?<!--\/HEALTH_CARD-->/g, (m) => {
@@ -9509,8 +9558,20 @@ Title:`
         return `${CARD_TOKEN}${cards.length - 1}${CARD_TOKEN}`
       })
 
+      // 1b. Extract raw <svg>…</svg> blocks BEFORE escaping, sanitize, and
+      //     stash. This lets the model hand-draw an SVG and have it render.
+      s = s.replace(/<svg\b[\s\S]*?<\/svg>/gi, (m) => {
+        svgs.push(sanitizeSvg(m))
+        return `${SVG_TOKEN}${svgs.length - 1}${SVG_TOKEN}`
+      })
+
       // 2. Extract fenced code blocks so they don't get markdown-processed
       s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
+        // ```svg fenced block → route to the SVG bucket as well (sanitized)
+        if (lang.toLowerCase() === 'svg' && /<svg\b/i.test(code)) {
+          svgs.push(sanitizeSvg(code))
+          return `${SVG_TOKEN}${svgs.length - 1}${SVG_TOKEN}`
+        }
         codeBlocks.push({ lang: lang || '', code })
         return `${CODE_TOKEN}${codeBlocks.length - 1}${CODE_TOKEN}`
       })
@@ -9630,12 +9691,17 @@ Title:`
         return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<span class="md-pre-actions"><button class="md-pre-btn md-pre-ask" title="Ask a follow-up about this code">💬 Ask</button><button class="md-pre-btn md-pre-insert" title="Insert this code into the input">↘ Insert</button><button class="md-pre-btn md-pre-copy-v2" title="Copy code">📋 Copy</button></span><code>${escCode}</code></pre>`
       })
 
+      // 6b. Re-insert sanitized SVG blocks as their own block element
+      s = s.replace(new RegExp(`${SVG_TOKEN}(\\d+)${SVG_TOKEN}`, 'g'), (_m, i) => {
+        return `<div class="md-svg">${svgs[+i] || ''}</div>`
+      })
+
       // 7. Paragraphs — wrap runs of non-block content
       const blocks = s.split(/\n\n+/)
       s = blocks.map(b => {
         const trimmed = b.trim()
         if (!trimmed) return ''
-        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-mermaid)/i.test(trimmed)) return trimmed
+        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg))/i.test(trimmed)) return trimmed
         return `<p class="md-p">${trimmed.replace(/\n/g, '<br>')}</p>`
       }).join('\n')
 
