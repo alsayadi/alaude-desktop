@@ -4438,6 +4438,20 @@
     </div>
   </div>
 
+  <!-- What's in Alaude — feature tour / changelog -->
+  <div class="modal-overlay" id="whats-in-modal">
+    <div class="modal ux-modal" style="max-width:720px;width:94vw">
+      <h2>
+        🎉 What's in Alaude
+        <button class="modal-close" onclick="toggleWhatsInAlaude()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
+        Every feature shipped in the v0.2 line. Click <em>Try it</em> to jump straight in.
+      </div>
+      <div id="whats-in-body" class="ux-scroll" style="max-height:70vh"></div>
+    </div>
+  </div>
+
   <!-- Cross-session Task Board -->
   <div class="modal-overlay" id="taskboard-modal">
     <div class="modal ux-modal" style="max-width:760px;width:94vw">
@@ -6994,6 +7008,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '⎘', label: 'Duplicate current session', search: 'duplicate copy clone session fork standalone', action: () => { closeCmdPalette(); duplicateCurrentSession() } },
         { kind: 'action', icon: '★', label: 'Star / unstar current session', search: 'star unstar favorite pin top sidebar bookmark', action: () => { closeCmdPalette(); toggleCurrentSessionStar() } },
         { kind: 'action', icon: '🎨', label: 'Cycle session color', search: 'color accent dot palette sidebar organize visual', action: () => { closeCmdPalette(); cycleCurrentSessionColor() } },
+        { kind: 'action', icon: '🎉', label: "What's in Alaude (feature tour)", search: 'whats new tour changelog features release notes help intro', action: () => { closeCmdPalette(); toggleWhatsInAlaude() } },
         ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
@@ -11209,6 +11224,107 @@ Title:`
           refreshLocalOptgroup()
         }
       } catch {}
+    }
+
+    // ── What's in Alaude (feature tour / changelog) ─────────────────
+    // Hand-curated manifest of everything shipped in the v0.2 line. The
+    // 50th release is a milestone — a single place to discover (or
+    // rediscover) features that otherwise live behind command-palette
+    // search. Each entry optionally carries a `try` function that jumps
+    // straight into the feature.
+    const FEATURE_TIMELINE = [
+      { v: '0.2.2',  icon: '⏪', name: 'Rewind & Branch',                desc: 'Time-travel any conversation; forks become branches in the sidebar.' },
+      { v: '0.2.3',  icon: '🌳', name: 'Thinking Graph',                 desc: 'Visual DAG of every session + its branches.', try: () => toggleThinkingGraph?.() },
+      { v: '0.2.4',  icon: '✨', name: 'Prompt Snippets',                desc: 'Slash-menu prompt compiler with {{variable}} placeholders.', try: () => toggleSnippetModal?.() },
+      { v: '0.2.5',  icon: '🧘', name: 'Zen pass',                       desc: 'Focus mode + Pinned messages + Markdown export.' },
+      { v: '0.2.6',  icon: '🧠', name: 'Memory Lens + PTT',              desc: 'Cross-session memory of facts + push-to-talk voice input.', try: () => toggleMemoryModal?.() },
+      { v: '0.2.7',  icon: '⚡', name: 'Menu Bar Quick',                 desc: 'Alaude lives in your macOS menu bar; ⌘⇧A toggles from anywhere.' },
+      { v: '0.2.8',  icon: '🔥', name: 'Streaming Stats HUD',            desc: 'Live tok/s + TTFT badge on every assistant reply.' },
+      { v: '0.2.9',  icon: '🧹', name: 'Topbar polish',                  desc: 'Model name + version + action buttons no longer overlap.' },
+      { v: '0.2.10', icon: '🔎', name: 'Global Search (⌘F)',             desc: 'Full-text search across every session + undo session delete.', try: () => openGlobalSearch?.() },
+      { v: '0.2.11', icon: '💰', name: 'Cost Estimator',                 desc: 'Per-message and per-session $ tracking.' },
+      { v: '0.2.12', icon: '🔗', name: 'Releases URL fix',               desc: 'Version badge now points at the real GitHub releases page.' },
+      { v: '0.2.13', icon: '🖼️', name: 'Multimodal paste/drop',          desc: 'Paste or drop images for vision models.' },
+      { v: '0.2.14', icon: '🧷', name: 'Auto-title + code actions',      desc: 'AI-generated session titles + per-code-block action bar.' },
+      { v: '0.2.15', icon: '📁', name: 'Workspace File Browser',         desc: 'Sidebar tree of your picked folder with one-click attach.' },
+      { v: '0.2.16', icon: '📚', name: 'Shortcuts overlay + whatsnew',   desc: 'Refreshed ? overlay + toast on version change.' },
+      { v: '0.2.17', icon: '🏷️', name: 'Session Tags (#hashtags)',       desc: 'Tag sessions, filter the sidebar by chip.' },
+      { v: '0.2.18', icon: '☁️', name: 'Opus 4.6 + 4.7',                 desc: 'Added the latest Claude Opus variants to the model selector.' },
+      { v: '0.2.19', icon: '📦', name: 'Full Backup export/import',      desc: 'One JSON file with sessions + memories + snippets + prefs.', try: () => exportFullBackup?.() },
+      { v: '0.2.20', icon: '📝', name: 'Session Summary Card',           desc: 'Model-generated recap of the current session (⌘⇧S).', try: () => generateSummary?.() },
+      { v: '0.2.21', icon: '↑↓', name: 'Prompt History',                desc: '↑/↓ in empty input recalls past user prompts.' },
+      { v: '0.2.22', icon: '✨', name: 'Save as Snippet',                desc: '"Save as snippet" button on any user message.' },
+      { v: '0.2.23', icon: '✓',  name: 'Chat → Action Items (⌘⇧T)',     desc: 'Extract TODOs from the session as a checklist.', try: () => extractSessionTodos?.() },
+      { v: '0.2.24', icon: '📈', name: 'Model Performance Dashboard',   desc: 'Aggregated tok/s, TTFT, tokens, cost per model.', try: () => toggleModelPerfModal?.() },
+      { v: '0.2.25', icon: '👍', name: 'Reactions + Feedback Journal',  desc: '👍/👎 on any reply + JSONL export across all sessions.', try: () => toggleFeedbackModal?.() },
+      { v: '0.2.26', icon: '🔊', name: 'Read-aloud (TTS)',               desc: 'OS-voice playback of any reply.' },
+      { v: '0.2.27', icon: '{}', name: 'Smart Paste',                   desc: 'Auto-detect JSON / stack traces on paste and offer a targeted wrapper.' },
+      { v: '0.2.28', icon: '🌐', name: 'Share-ready HTML export',       desc: 'Single self-contained HTML file with inline CSS + images.', try: () => exportSessionHtml?.() },
+      { v: '0.2.29', icon: '✂️', name: 'Prune Context',                 desc: 'Trim old turns when the context radar gets full; ⌘Z undo.' },
+      { v: '0.2.30', icon: '🎯', name: 'Session Goal Tracker (⌘⇧G)',    desc: 'One-line objective per session; sidebar shows 🎯/✅.', try: () => promptSetGoal?.() },
+      { v: '0.2.31', icon: '📅', name: 'Daily Digest',                  desc: 'Today / week / month recap across every session.', try: () => toggleDigestModal?.() },
+      { v: '0.2.32', icon: '🧩', name: 'Session Templates',              desc: 'Six curated starters on the welcome screen.' },
+      { v: '0.2.33', icon: '⚖', name: 'Message Compare',                desc: 'Side-by-side diff of any two assistant replies.' },
+      { v: '0.2.34', icon: '⌘N', name: 'Model Hotkey Slots (⌘1..⌘6)',   desc: 'Pin favorite models to number keys for one-tap switching.' },
+      { v: '0.2.35', icon: '🍅', name: 'Goal Pomodoro timer',            desc: '25-minute focus blocks tied to the current goal.' },
+      { v: '0.2.36', icon: '📊', name: 'Activity Heatmap',               desc: 'GitHub-style 365-day contribution grid + streaks.', try: () => toggleHeatmapModal?.() },
+      { v: '0.2.37', icon: '🌍', name: 'Inline Translate',              desc: 'Select any text in a message to translate with one tap.' },
+      { v: '0.2.38', icon: '◧',  name: 'Sidebar collapse (⌘\\)',         desc: 'Hide the sidebar for a wider writing pane.' },
+      { v: '0.2.39', icon: '📝', name: 'Living Document mode (⌘⇧D)',    desc: 'Flatten the chat into a flowing reader view.', try: () => toggleLivingDoc?.() },
+      { v: '0.2.40', icon: '🏷️', name: 'Smart tag autosuggest',          desc: 'One-click tag candidates for long sessions.' },
+      { v: '0.2.41', icon: '📝', name: 'Inline Message Notes',          desc: 'Attach a personal sticky to any message.' },
+      { v: '0.2.42', icon: '✓',  name: 'Cross-session Task Board',       desc: 'Every TODO from every session in one checklist.', try: () => toggleTaskBoard?.() },
+      { v: '0.2.43', icon: '🔍', name: 'Find in session (⌘L)',           desc: 'Inline find bar with live highlighting + match navigation.', try: () => openFindbar?.() },
+      { v: '0.2.44', icon: '↪',  name: 'Refine with another model',      desc: 'Send any reply through a pinned Hotkey Slot for refinement.' },
+      { v: '0.2.45', icon: '⭐', name: 'Save session as Template',       desc: 'Promote a successful session into a reusable starter.', try: () => saveCurrentSessionAsTemplate?.() },
+      { v: '0.2.46', icon: '⎘',  name: 'Duplicate session',              desc: 'One-click standalone full copy — no parent/child genealogy.', try: () => duplicateCurrentSession?.() },
+      { v: '0.2.47', icon: '★',  name: 'Star sessions',                  desc: 'Pin favorite sessions to the top of the sidebar.' },
+      { v: '0.2.48', icon: '🕘', name: 'Command Palette recents',        desc: 'Last 8 executed actions pinned to the top of ⌘P.' },
+      { v: '0.2.49', icon: '🎨', name: 'Session accent colors',          desc: '8-color palette per session; a dot before the sidebar title.' },
+      { v: '0.2.50', icon: '🎉', name: 'What\'s in Alaude',              desc: 'This feature tour. Every capability shipped in the v0.2 line.' },
+    ]
+    function toggleWhatsInAlaude() {
+      const modal = document.getElementById('whats-in-modal')
+      if (!modal) return
+      const opening = !modal.classList.contains('show')
+      if (opening) {
+        renderWhatsInAlaude()
+        modal.classList.add('show')
+      } else {
+        modal.classList.remove('show')
+      }
+    }
+    function renderWhatsInAlaude() {
+      const body = document.getElementById('whats-in-body')
+      if (!body) return
+      // Reverse chronological so the newest (this release) shows at the top
+      const entries = [...FEATURE_TIMELINE].reverse()
+      const rows = entries.map((e, idx) => {
+        const canTry = typeof e.try === 'function'
+        const tryBtn = canTry
+          ? `<button class="msg-action-btn" onclick="closeWhatsInModal(); FEATURE_TIMELINE[${FEATURE_TIMELINE.length - 1 - idx}].try()">Try it →</button>`
+          : ''
+        return `
+          <div style="display:grid;grid-template-columns:56px 1fr auto;gap:12px;padding:10px 4px;border-bottom:1px dashed var(--border);align-items:flex-start">
+            <div style="font-family:monospace;font-size:11px;color:var(--text-faint);padding-top:2px">v${escapeHtml(e.v)}</div>
+            <div>
+              <div style="font-size:13px;color:var(--text);margin-bottom:2px">
+                <span style="font-size:16px;margin-right:4px">${e.icon}</span>
+                <strong>${escapeHtml(e.name)}</strong>
+              </div>
+              <div style="color:var(--text-faint);font-size:11px;line-height:1.45">${escapeHtml(e.desc)}</div>
+            </div>
+            <div>${tryBtn}</div>
+          </div>`
+      }).join('')
+      body.innerHTML = `
+        <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
+          <strong style="color:var(--text)">${FEATURE_TIMELINE.length}</strong> features across <strong style="color:var(--text)">${FEATURE_TIMELINE.length}</strong> releases.
+        </div>
+        ${rows}`
+    }
+    function closeWhatsInModal() {
+      document.getElementById('whats-in-modal')?.classList.remove('show')
     }
 
     // ── Cross-session Task Board ────────────────────────────────────
