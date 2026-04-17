@@ -3070,6 +3070,82 @@
     .md-artifact.tall .md-artifact-frame,
     .md-artifact.tall .md-artifact-src { height: 560px; max-height: 560px; }
 
+    /* ─── Office file blocks (pptx / docx / xlsx) ───────────── */
+    .md-office {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-input);
+      overflow: hidden;
+    }
+    .md-office-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .md-office-head .off-icon { font-size: 22px; flex-shrink: 0; }
+    .md-office-head .off-body { flex: 1; min-width: 0; }
+    .md-office-head .off-title { font-size: 13px; font-weight: 600; color: var(--text); }
+    .md-office-head .off-sub { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+    .md-office-head button {
+      background: var(--green);
+      color: #0a0a0a;
+      border: 0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .md-office-head button:hover { filter: brightness(1.1); }
+    .md-office-head .off-src-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-weight: normal;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+    .md-office-head .off-src-btn:hover { border-color: var(--green); color: var(--green); }
+    .md-office-preview {
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-dim);
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    .md-office-preview .off-slide,
+    .md-office-preview .off-section {
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--border);
+    }
+    .md-office-preview .off-slide:last-child,
+    .md-office-preview .off-section:last-child { border-bottom: 0; }
+    .md-office-preview .off-head { font-weight: 600; color: var(--text); font-size: 12px; margin-bottom: 3px; }
+    .md-office-preview ul { margin: 2px 0 0 16px; padding: 0; }
+    .md-office-preview li { margin: 1px 0; }
+    .md-office-preview table { border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+    .md-office-preview table th, .md-office-preview table td { border: 1px solid var(--border); padding: 2px 8px; }
+    .md-office-preview table th { background: color-mix(in srgb, var(--border) 40%, transparent); font-weight: 600; color: var(--text); }
+    .md-office-src {
+      display: none;
+      padding: 10px 14px;
+      background: var(--bg);
+      font-family: "SF Mono", Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 280px;
+    }
+    .md-office.show-source .md-office-preview { display: none; }
+    .md-office.show-source .md-office-src { display: block; }
+    .md-office-error { padding: 10px 14px; font-size: 11px; color: #e74c3c; font-family: monospace; white-space: pre-wrap; }
+
     /* ─── Native chart blocks (```chart JSON) ────────────────── */
     .md-chart {
       margin: 10px 0;
@@ -9666,6 +9742,240 @@ Title:`
       }
     }
 
+    // ── Office file blocks (pptx / docx / xlsx) ────────────────────
+    // Model emits a JSON spec inside ```pptx / ```docx / ```xlsx. We render
+    // a preview card with title + compact summary of slides/sections/sheets,
+    // plus a "💾 Save as .X" button. On click, lazy-load the right library
+    // (pptxgenjs / docx / xlsx) and build the file client-side, then
+    // trigger a browser download.
+    window._officeSpecs = window._officeSpecs || {}
+    function renderOfficeBlock(kind, rawJson) {
+      let spec
+      try { spec = JSON.parse(rawJson) }
+      catch (e) {
+        return `<div class="md-office"><div class="md-office-error">Invalid ${kind} JSON: ${escapeHtml(e.message)}</div></div>`
+      }
+      const id = 'off_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
+      window._officeSpecs[id] = { kind, spec, raw: rawJson }
+      const meta = officeSummary(kind, spec)
+      const icon = kind === 'pptx' ? '📊' : kind === 'docx' ? '📄' : '📗'
+      const typeLabel = kind === 'pptx' ? 'PowerPoint · .pptx'
+                      : kind === 'docx' ? 'Word · .docx'
+                      : 'Excel · .xlsx'
+      const preview = officePreviewHtml(kind, spec)
+      const srcPretty = escapeHtml(JSON.stringify(spec, null, 2))
+      return `
+        <div class="md-office" id="${id}">
+          <div class="md-office-head">
+            <span class="off-icon">${icon}</span>
+            <div class="off-body">
+              <div class="off-title">${escapeHtml(meta.title || typeLabel)}</div>
+              <div class="off-sub">${escapeHtml(typeLabel)} · ${escapeHtml(meta.sub)}</div>
+            </div>
+            <button class="off-src-btn" onclick="officeToggleSource('${id}')">&lt;&gt; Source</button>
+            <button onclick="officeSave('${id}')">💾 Save</button>
+          </div>
+          <div class="md-office-preview">${preview}</div>
+          <pre class="md-office-src">${srcPretty}</pre>
+        </div>`
+    }
+
+    function officeSummary(kind, spec) {
+      if (kind === 'pptx') {
+        const n = (spec.slides || []).length
+        return { title: spec.title || 'Presentation', sub: `${n} slide${n === 1 ? '' : 's'}` }
+      }
+      if (kind === 'docx') {
+        const n = (spec.sections || []).length
+        return { title: spec.title || 'Document', sub: `${n} section${n === 1 ? '' : 's'}` }
+      }
+      if (kind === 'xlsx') {
+        const sheets = spec.sheets || []
+        const rows = sheets.reduce((t, s) => t + (s.rows?.length || 0), 0)
+        return { title: spec.title || 'Spreadsheet', sub: `${sheets.length} sheet${sheets.length === 1 ? '' : 's'} · ${rows} row${rows === 1 ? '' : 's'}` }
+      }
+      return { title: '', sub: '' }
+    }
+
+    function officePreviewHtml(kind, spec) {
+      if (kind === 'pptx') {
+        const slides = (spec.slides || []).slice(0, 12)
+        return slides.map((s, i) => {
+          const bullets = (s.bullets || []).slice(0, 6).map(b => `<li>${escapeHtml(b)}</li>`).join('')
+          return `<div class="off-slide">
+            <div class="off-head">${i + 1}. ${escapeHtml(s.title || 'Untitled slide')}</div>
+            ${s.body ? `<div style="color:var(--text-faint)">${escapeHtml(s.body)}</div>` : ''}
+            ${bullets ? `<ul>${bullets}</ul>` : ''}
+          </div>`
+        }).join('')
+      }
+      if (kind === 'docx') {
+        const sections = (spec.sections || []).slice(0, 12)
+        return sections.map(s => {
+          const bullets = (s.bullets || []).slice(0, 6).map(b => `<li>${escapeHtml(b)}</li>`).join('')
+          return `<div class="off-section">
+            <div class="off-head">${escapeHtml(s.heading || 'Untitled section')}</div>
+            ${s.body ? `<div>${escapeHtml(s.body).slice(0, 400)}${s.body.length > 400 ? '…' : ''}</div>` : ''}
+            ${bullets ? `<ul>${bullets}</ul>` : ''}
+          </div>`
+        }).join('')
+      }
+      if (kind === 'xlsx') {
+        const sheets = (spec.sheets || []).slice(0, 3)
+        return sheets.map(sh => {
+          const rows = (sh.rows || []).slice(0, 8)
+          const tbl = rows.map((row, i) =>
+            `<tr>${(row || []).slice(0, 8).map(c => i === 0 ? `<th>${escapeHtml(String(c ?? ''))}</th>` : `<td>${escapeHtml(String(c ?? ''))}</td>`).join('')}</tr>`
+          ).join('')
+          const more = (sh.rows?.length || 0) > 8 ? `<div style="color:var(--text-faint);font-size:10px;margin-top:4px">+ ${(sh.rows.length - 8)} more row${(sh.rows.length - 8) === 1 ? '' : 's'}</div>` : ''
+          return `<div class="off-section">
+            <div class="off-head">📄 ${escapeHtml(sh.name || 'Sheet')}</div>
+            <table>${tbl}</table>
+            ${more}
+          </div>`
+        }).join('')
+      }
+      return ''
+    }
+
+    function officeToggleSource(id) {
+      document.getElementById(id)?.classList.toggle('show-source')
+    }
+
+    // Lazy-loader for the three libs. Resolves to the library's global symbol
+    // (PptxGenJS / docx / XLSX). Caches the load promise so we only fetch once.
+    const _officeLoaders = {
+      pptx: {
+        url: 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+        global: 'PptxGenJS',
+      },
+      docx: {
+        url: 'https://cdn.jsdelivr.net/npm/docx@9.0.2/build/index.umd.js',
+        global: 'docx',
+      },
+      xlsx: {
+        url: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+        global: 'XLSX',
+      },
+    }
+    const _officeLibPromises = {}
+    function loadOfficeLib(kind) {
+      if (_officeLibPromises[kind]) return _officeLibPromises[kind]
+      const cfg = _officeLoaders[kind]
+      if (!cfg) return Promise.reject(new Error('unknown office kind: ' + kind))
+      _officeLibPromises[kind] = new Promise((resolve, reject) => {
+        if (window[cfg.global]) return resolve(window[cfg.global])
+        const s = document.createElement('script')
+        s.src = cfg.url
+        s.onload = () => {
+          if (window[cfg.global]) resolve(window[cfg.global])
+          else reject(new Error('lib loaded but global ' + cfg.global + ' missing'))
+        }
+        s.onerror = () => reject(new Error('Failed to load ' + kind + ' library (offline?)'))
+        document.head.appendChild(s)
+      })
+      return _officeLibPromises[kind]
+    }
+
+    async function officeSave(id) {
+      const entry = window._officeSpecs[id]
+      if (!entry) return
+      const { kind, spec } = entry
+      const safeTitle = ((spec.title || 'alaude-' + kind) + '').replace(/[^a-z0-9_\- ]+/gi, '').trim().slice(0, 80) || ('alaude-' + kind)
+      try {
+        if (kind === 'pptx') {
+          const P = await loadOfficeLib('pptx')
+          const pptx = new P()
+          if (spec.title) pptx.title = spec.title
+          if (spec.author) pptx.author = spec.author
+          pptx.layout = 'LAYOUT_WIDE'
+          // Title slide (optional)
+          if (spec.title && (spec.subtitle || (spec.slides || []).length > 0 && (spec.slides[0].title !== spec.title))) {
+            const s = pptx.addSlide()
+            s.background = { color: '1a1a1a' }
+            s.addText(spec.title, { x: 0.6, y: 2.2, w: 12.1, h: 1.4, fontSize: 40, bold: true, color: 'FFFFFF', align: 'left' })
+            if (spec.subtitle) s.addText(spec.subtitle, { x: 0.6, y: 3.6, w: 12.1, h: 0.6, fontSize: 20, color: 'CCCCCC' })
+          }
+          for (const slide of (spec.slides || [])) {
+            const s = pptx.addSlide()
+            if (slide.title) s.addText(slide.title, { x: 0.5, y: 0.35, w: 12.3, h: 0.9, fontSize: 28, bold: true, color: '202020' })
+            let y = 1.35
+            if (slide.body) {
+              s.addText(slide.body, { x: 0.6, y, w: 12.1, h: 1.2, fontSize: 16, color: '404040' })
+              y += 1.3
+            }
+            if (Array.isArray(slide.bullets) && slide.bullets.length) {
+              s.addText(slide.bullets.map(b => ({ text: b, options: { bullet: true } })), {
+                x: 0.6, y, w: 12.1, h: 5, fontSize: 18, color: '303030', paraSpaceAfter: 6,
+              })
+            }
+            if (slide.notes) s.addNotes(slide.notes)
+          }
+          await pptx.writeFile({ fileName: safeTitle + '.pptx' })
+          showRewindToast?.(`💾 Saved ${safeTitle}.pptx`, false)
+          return
+        }
+        if (kind === 'docx') {
+          const d = await loadOfficeLib('docx')
+          const { Document, Packer, Paragraph, HeadingLevel, TextRun, AlignmentType } = d
+          const children = []
+          if (spec.title) {
+            children.push(new Paragraph({ children: [new TextRun({ text: spec.title, bold: true, size: 40 })], heading: HeadingLevel.TITLE, alignment: AlignmentType.CENTER }))
+          }
+          for (const sec of (spec.sections || [])) {
+            if (sec.heading) {
+              const lvl = Math.min(3, Math.max(1, sec.level || 1))
+              const headingLevel = lvl === 1 ? HeadingLevel.HEADING_1 : lvl === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3
+              children.push(new Paragraph({ text: sec.heading, heading: headingLevel }))
+            }
+            if (sec.body) {
+              for (const line of String(sec.body).split(/\n{2,}/)) {
+                children.push(new Paragraph({ text: line }))
+              }
+            }
+            for (const b of (sec.bullets || [])) {
+              children.push(new Paragraph({ text: b, bullet: { level: 0 } }))
+            }
+          }
+          const doc = new Document({ sections: [{ properties: {}, children }] })
+          const blob = await Packer.toBlob(doc)
+          triggerDownload(blob, safeTitle + '.docx')
+          showRewindToast?.(`💾 Saved ${safeTitle}.docx`, false)
+          return
+        }
+        if (kind === 'xlsx') {
+          const XLSX = await loadOfficeLib('xlsx')
+          const wb = XLSX.utils.book_new()
+          const sheets = spec.sheets || []
+          for (const sh of sheets) {
+            const rows = sh.rows || []
+            const ws = XLSX.utils.aoa_to_sheet(rows)
+            XLSX.utils.book_append_sheet(wb, ws, (sh.name || 'Sheet').slice(0, 31))
+          }
+          if (!sheets.length) {
+            const ws = XLSX.utils.aoa_to_sheet([['(empty)']])
+            XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+          }
+          const arr = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+          const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+          triggerDownload(blob, safeTitle + '.xlsx')
+          showRewindToast?.(`💾 Saved ${safeTitle}.xlsx`, false)
+          return
+        }
+      } catch (err) {
+        console.error('[office] save failed:', err)
+        showRewindToast?.('Save failed: ' + (err?.message || 'unknown'), true)
+      }
+    }
+    function triggerDownload(blob, name) {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = name
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+
     // HTML Artifact toggles: the rendered iframe or the source view.
     function mdaToggleSource(btn, showSource) {
       const root = btn.closest('.md-artifact')
@@ -9929,6 +10239,12 @@ Title:`
         if (lc === 'chart') {
           return renderChartBlock(code)
         }
+        // Office file blocks: ```pptx / ```docx / ```xlsx with a JSON spec.
+        // Renders a preview card with a "💾 Save as .pptx/.docx/.xlsx" button.
+        // The file is built lazily on the user's click (libs load from CDN).
+        if (lc === 'pptx' || lc === 'docx' || lc === 'xlsx') {
+          return renderOfficeBlock(lc, code)
+        }
         // HTML Artifacts: ```html or ```artifact → sandboxed iframe. The model
         // can now ship small games, interactive demos, canvas animations,
         // etc. Iframe has allow-scripts but NOT allow-same-origin, so the
@@ -9966,7 +10282,7 @@ Title:`
       s = blocks.map(b => {
         const trimmed = b.trim()
         if (!trimmed) return ''
-        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg|artifact|chart))/i.test(trimmed)) return trimmed
+        if (/^<(h\d|ul|ol|pre|blockquote|table|div class="md-(mermaid|svg|artifact|chart|office))/i.test(trimmed)) return trimmed
         return `<p class="md-p">${trimmed.replace(/\n/g, '<br>')}</p>`
       }).join('\n')
 
