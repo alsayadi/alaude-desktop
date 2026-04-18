@@ -2050,18 +2050,32 @@
       :root:not([data-theme]) .msg-content [style*="color:#999"] { color: var(--text-faint) !important; }
     }
 
-    /* ─── Permission mode pill (v0.4.0) ────────────────────────────────────── */
-    /* The pill lives alongside other top-bar buttons; color-coded per mode so
-       the user knows at a glance whether the model can touch their disk. */
-    .topbar-keys-btn.perm-mode-btn {
-      gap: 4px;
-      padding-left: 10px;
-      padding-right: 10px;
+    /* ─── Permission mode dropdown (v0.4.0) ────────────────────────────────── */
+    /* Sits in the workspace bar next to the folder chooser. Color-coded per
+       mode so the user knows at a glance whether the model can touch their
+       disk without asking. */
+    .workspace-perm-select {
+      appearance: none;
+      -webkit-appearance: none;
+      padding: 5px 26px 5px 9px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: var(--bg-input);
+      color: var(--text-dim);
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='currentColor' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: border-color 0.15s, background-color 0.15s;
     }
-    .topbar-keys-btn.perm-mode-btn[data-mode="observe"]   { border-color: #e0994a; color: #e0994a; background: color-mix(in oklch, #e0994a 10%, var(--bg-input)); }
-    .topbar-keys-btn.perm-mode-btn[data-mode="careful"]   { border-color: #3b82f6; color: #3b82f6; background: color-mix(in oklch, #3b82f6 10%, var(--bg-input)); }
-    .topbar-keys-btn.perm-mode-btn[data-mode="flow"]      { border-color: #14b8a6; color: #14b8a6; background: color-mix(in oklch, #14b8a6 10%, var(--bg-input)); }
-    .topbar-keys-btn.perm-mode-btn[data-mode="autopilot"] { border-color: var(--text-faint); color: var(--text-dim); }
+    .workspace-perm-select:hover { border-color: var(--text-faint); }
+    .workspace-perm-select[data-mode="observe"]   { border-color: #e0994a; color: #e0994a; background-color: color-mix(in oklch, #e0994a 10%, var(--bg-input)); }
+    .workspace-perm-select[data-mode="careful"]   { border-color: #3b82f6; color: #3b82f6; background-color: color-mix(in oklch, #3b82f6 10%, var(--bg-input)); }
+    .workspace-perm-select[data-mode="flow"]      { border-color: #14b8a6; color: #14b8a6; background-color: color-mix(in oklch, #14b8a6 10%, var(--bg-input)); }
+    .workspace-perm-select[data-mode="autopilot"] { border-color: var(--border); color: var(--text-dim); }
 
     /* ─── Council mode ────────────────────────────────────────────────────── */
     .topbar-keys-btn.council-toggle.on {
@@ -4990,11 +5004,6 @@
         <span class="model-slots" id="model-slots"></span>
       </div>
       <div class="topbar-actions">
-        <!-- Permission mode pill — v0.4.0 ships Observe + Autopilot only; Careful/Flow arrive when the approval dialog lands. Shift+Tab cycles. -->
-        <button class="topbar-keys-btn perm-mode-btn" id="perm-mode-btn" onclick="cyclePermMode()" title="Permission mode — click to cycle (⇧⇥). Observe = read-only, Autopilot = run everything.">
-          <span id="perm-mode-icon">🚀</span>
-          <span id="perm-mode-label">Autopilot</span>
-        </button>
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
           🎭 <span id="council-label">Council</span>
         </button>
@@ -5119,6 +5128,14 @@
           <span id="folder-label">Choose folder</span>
         </button>
         <span class="workspace-path" id="folder-path"></span>
+        <!-- Permission mode dropdown — sits beside the folder chooser because
+             the two together define "what Alaude is allowed to touch". ⌘⇧A still cycles. -->
+        <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Alaude is allowed to do without asking. ⌘⇧A to cycle.">
+          <option value="observe">👁️ Observe · read-only</option>
+          <option value="careful">🛡️ Careful · ask for writes &amp; commands</option>
+          <option value="flow">🌊 Flow · auto-edit, ask dangerous</option>
+          <option value="autopilot" selected>🚀 Autopilot · run everything</option>
+        </select>
         <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
       </div>
     </div>
@@ -8303,22 +8320,30 @@ footer a { color: var(--accent); text-decoration: none; }
       renderCouncilSlots()
     }
 
-    // ── Permission mode pill (v0.4.0) ─────────────────────────────────────
+    // ── Permission mode dropdown (v0.4.0) ─────────────────────────────────
     // Thin renderer glue — the real policy lives in electron/permissions.js.
-    // This pill lets users toggle between read-only Observe and
-    // full-autonomy Autopilot. Intermediate modes ship in v0.4.1/.2.
+    // Dropdown sits beside the folder chooser. ⌘⇧A still cycles.
     let _permMode = 'autopilot'
     async function refreshPermModeUi() {
       try {
         const { mode, meta } = await window.alaude.permGetMode(workspacePath || null)
         _permMode = mode
-        const btn = document.getElementById('perm-mode-btn')
-        if (!btn) return
-        btn.dataset.mode = mode
-        document.getElementById('perm-mode-icon').textContent = meta?.icon || '🚀'
-        document.getElementById('perm-mode-label').textContent = meta?.label || mode
-        btn.title = (meta?.hint || '') + '  (click or ⇧⇥ to cycle)'
+        const sel = document.getElementById('perm-mode-select')
+        if (!sel) return
+        sel.value = mode
+        sel.dataset.mode = mode
+        sel.title = (meta?.hint || '') + '  (⌘⇧A to cycle)'
       } catch (err) { console.warn('[perm] refresh failed:', err.message) }
+    }
+    async function setPermMode(mode) {
+      try {
+        await window.alaude.permSetMode(workspacePath || null, mode)
+        _permMode = mode
+        await refreshPermModeUi()
+        const sel = document.getElementById('perm-mode-select')
+        const label = sel?.options[sel.selectedIndex]?.text || mode
+        showRewindToast?.(label, false)
+      } catch (err) { console.warn('[perm] set failed:', err.message) }
     }
     async function cyclePermMode() {
       try {
