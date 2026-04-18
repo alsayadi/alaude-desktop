@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Alaude — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "homepage": "https://github.com/alsayadi/alaude-desktop",
@@ -38,6 +38,15 @@
       "identity": null,
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
+      "extendInfo": {
+        "CFBundleName": "Alaude",
+        "CFBundleDisplayName": "Alaude",
+        "CFBundleExecutable": "Alaude",
+        "NSMicrophoneUsageDescription": "Alaude uses the microphone for voice input so you can dictate messages.",
+        "NSScreenCaptureUsageDescription": "Alaude uses screen recording so you can send screenshots to any vision-capable model directly from the composer (Screen Vision).",
+        "NSCameraUsageDescription": "Alaude uses the camera when you attach a photo from a connected webcam.",
+        "NSAppleEventsUsageDescription": "Alaude uses Apple Events to open files in their default apps when you click an Open button."
+      },
       "target": [
         { "target": "dmg", "arch": ["arm64", "x64"] },
         { "target": "zip", "arch": ["arm64", "x64"] }

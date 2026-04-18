@@ -6892,6 +6892,41 @@ SUMMARY:`
       }
     })
 
+    // ── Image lightbox (fixes the "can't open data: URLs" click) ─────────
+    // Previously every image in chat opened via shell.openExternal, which
+    // fails hard on data:image/… URLs since macOS has no handler for them.
+    // Instead we render a full-screen overlay with the original image,
+    // click-to-dismiss and Esc-to-dismiss.
+    function openImageLightbox(src) {
+      try {
+        if (!src) return
+        // Remove any prior lightbox first.
+        document.getElementById('alaude-lightbox')?.remove()
+        const bg = document.createElement('div')
+        bg.id = 'alaude-lightbox'
+        bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;animation:fadeIn 0.15s ease-out'
+        bg.onclick = () => bg.remove()
+        const img = document.createElement('img')
+        img.src = src
+        img.style.cssText = 'max-width:94vw;max-height:94vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,0.5)'
+        img.onclick = (e) => e.stopPropagation()  // click-on-img doesn't dismiss
+        const hint = document.createElement('div')
+        hint.style.cssText = 'position:fixed;bottom:20px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.6);font-size:12px;pointer-events:none'
+        hint.textContent = 'Click anywhere or press Esc to close'
+        bg.appendChild(img)
+        bg.appendChild(hint)
+        document.body.appendChild(bg)
+        // Esc to dismiss.
+        const onKey = (e) => {
+          if (e.key === 'Escape') {
+            bg.remove()
+            document.removeEventListener('keydown', onKey)
+          }
+        }
+        document.addEventListener('keydown', onKey)
+      } catch (err) { console.warn('[lightbox]', err) }
+    }
+
     // ── v0.5.4 Scheduled Skills ──────────────────────────────────────────
     // Cron-driven prompts. UI modal mirrors Keys/Memory — list current
     // skills, add new ones with { name, prompt, cron, model }, toggle
@@ -9904,7 +9939,7 @@ Title:`
           }
           if (Array.isArray(msg.images) && msg.images.length) {
             imgHtml = msg.images.map(img =>
-              `<img class="msg-img" src="${img.dataUrl}" alt="${escapeHtml(img.name || 'attachment')}" onclick="window.alaude?.openExternal?.(this.src)" />`
+              `<img class="msg-img" src="${img.dataUrl}" alt="${escapeHtml(img.name || 'attachment')}" onclick="openImageLightbox(this.src)" />`
             ).join('')
           } else if (Array.isArray(msg.content)) {
             // Fallback for older multimodal messages that don't have msg.images
@@ -11396,7 +11431,7 @@ Title:`
       s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, url) => {
         const safe = /^(https?:\/\/|data:image\/|\/|\.\/|[a-z0-9_\-.]+\.(png|jpe?g|gif|webp|svg|bmp))/i.test(url)
         if (!safe) return alt || ''
-        return `<img class="md-img" src="${url}" alt="${alt || 'image'}" loading="lazy" onclick="window.alaude?.openExternal?.(this.src)" title="${alt || ''}" />`
+        return `<img class="md-img" src="${url}" alt="${alt || 'image'}" loading="lazy" onclick="openImageLightbox(this.src)" title="${alt || ''}" />`
       })
       s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
 

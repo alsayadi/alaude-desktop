@@ -1,8 +1,21 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences } = require('electron')
 const path = require('path')
 const os = require('os')
 const http = require('http')
 const crypto = require('crypto')
+
+// Identify as "Alaude" EVERYWHERE macOS might label us — menu bar, About
+// panel, notification sender, dock badge, user-data-dir. Happens during
+// dev runs (`npm start`), where the Electron binary would otherwise call
+// itself "Electron" and the parent process might leak its own name (e.g.
+// "Claude" when launching via the Claude CLI) into permission dialogs.
+// The packaged DMG already has the right name baked into Info.plist, so
+// this is a belt-and-braces measure.
+app.setName('Alaude')
+try { app.setAboutPanelOptions({ applicationName: 'Alaude', credits: 'https://alaude.ai' }) } catch {}
+// NB: we do NOT reset userData path here — existing users keep their
+// sessions, keys, permissions.json at the current location. A future
+// migration can clean this up if we want a branded directory.
 const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
