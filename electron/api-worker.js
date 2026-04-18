@@ -560,8 +560,25 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
   const OpenAI = require('openai').default || require('openai')
   // Ollama runs locally; keep a shorter timeout for external providers, longer for local generation.
-  const timeout = provider === 'ollama' ? 300000 : 60000
-  const client = new OpenAI({ apiKey: getApiKey(provider), ...(getBaseURL(provider) ? { baseURL: getBaseURL(provider) } : {}), timeout, fetch: globalThis.fetch })
+  const timeout = provider === 'ollama' ? 300000 : 45000
+  // DashScope / Zhipu / Moonshot occasionally leave HTTPS connections in a
+  // half-open state. Reusing one via keep-alive makes the NEXT chat hang for
+  // the full timeout × retry count (observed: 6 DNS hits in 2 min on a turn
+  // that completes in 1s when tested fresh). Force a fresh connection per
+  // request and cap the SDK's own retry budget so we fail fast instead of
+  // retrying against the same dead socket.
+  const wrappedFetch = async (url, init = {}) => {
+    const headers = new Headers(init.headers || {})
+    headers.set('Connection', 'close')
+    return globalThis.fetch(url, { ...init, headers })
+  }
+  const client = new OpenAI({
+    apiKey: getApiKey(provider),
+    ...(getBaseURL(provider) ? { baseURL: getBaseURL(provider) } : {}),
+    timeout,
+    maxRetries: 1,  // default is 2; one hung socket would otherwise eat ~3× timeout
+    fetch: wrappedFetch,
+  })
 
   const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({ role: m.role, content: m.content }))]
   // Tool budget: workspace tools only if a folder is picked; health tools
