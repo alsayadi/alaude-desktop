@@ -837,6 +837,22 @@ ipcMain.handle('ollama-available', async () => ollama.isAvailable())
 
 ipcMain.handle('ollama-list', async () => ollama.listInstalled())
 
+// v0.5.0: in-app Ollama installer. No website trip. Progress streams back
+// to renderer via `ollama-install-progress` events.
+ipcMain.handle('ollama-install', async (event) => {
+  try {
+    const result = await ollama.installOllama({
+      onProgress: (p) => {
+        try { event.sender.send('ollama-install-progress', p) } catch {}
+      },
+    })
+    return result
+  } catch (err) {
+    try { event.sender.send('ollama-install-progress', { phase: 'error', pct: null, message: err.message || String(err) }) } catch {}
+    throw err
+  }
+})
+
 ipcMain.handle('ollama-catalog', async () => modelCatalog)
 
 ipcMain.handle('ollama-pull', async (event, model) => {

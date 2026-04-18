@@ -5220,13 +5220,24 @@
       <!-- Not-installed state -->
       <div id="lm-not-installed" class="lm-empty" style="display:none">
         <div class="lm-empty-icon">🦙</div>
-        <div class="lm-empty-title">Ollama isn't running</div>
+        <div class="lm-empty-title">Local models in 60 seconds</div>
         <div class="lm-empty-sub">
-          Alaude runs local models through Ollama — free, open-source, and private.
-          Install it, then come back.
+          Alaude uses Ollama to run models on your own hardware — free, private, offline.
+          Click below and we'll install and launch it for you.
         </div>
-        <button class="key-save-btn" onclick="window.alaude.openExternal('https://ollama.com/download')">Download Ollama</button>
-        <button class="key-save-btn lm-empty-recheck" onclick="refreshLocalModels()">I've installed it — recheck</button>
+        <button class="key-save-btn" id="lm-install-btn" onclick="installOllamaInApp()">🦙 Install Ollama</button>
+        <!-- Live progress surface — hidden until install starts -->
+        <div id="lm-install-progress" class="lm-progress" style="display:none; margin-top:16px">
+          <div class="lm-progress-head">
+            <span id="lm-install-msg" class="lm-progress-name">Starting…</span>
+            <span id="lm-install-pct" class="lm-progress-pct"></span>
+          </div>
+          <div class="lm-progress-bar"><div class="lm-progress-fill" id="lm-install-bar" style="width:0%"></div></div>
+        </div>
+        <!-- Manual link as a last-resort escape hatch. -->
+        <div style="margin-top:12px; font-size:11px; color:var(--text-faint)">
+          Prefer to install it yourself? <a href="#" onclick="window.alaude.openExternal('https://ollama.com/download'); return false" style="color:var(--green); text-decoration:none">Download from ollama.com</a> · <a href="#" onclick="refreshLocalModels(); return false" style="color:var(--text-dim); text-decoration:none">Recheck</a>
+        </div>
       </div>
 
       <!-- Connected state -->
@@ -13367,6 +13378,46 @@ Title:`
       const opening = modal.style.display !== 'flex'
       modal.style.display = opening ? 'flex' : 'none'
       if (opening) refreshLocalModels()
+    }
+
+    // v0.5.0: In-app Ollama installer. No browser trip to ollama.com.
+    // Shows live download+install progress, then once Ollama is serving
+    // on :11434 we flip to the connected state so the user can pick a model.
+    async function installOllamaInApp() {
+      const btn = document.getElementById('lm-install-btn')
+      const box = document.getElementById('lm-install-progress')
+      const msg = document.getElementById('lm-install-msg')
+      const pctEl = document.getElementById('lm-install-pct')
+      const bar = document.getElementById('lm-install-bar')
+      if (!btn || btn.disabled) return
+      btn.disabled = true
+      btn.textContent = 'Installing…'
+      box.style.display = 'block'
+      const unsub = window.alaude.onOllamaInstallProgress((p) => {
+        if (!p) return
+        if (p.message) msg.textContent = p.message
+        if (typeof p.pct === 'number') {
+          pctEl.textContent = p.pct + '%'
+          bar.style.width = p.pct + '%'
+        } else {
+          pctEl.textContent = ''
+        }
+        if (p.phase === 'error') {
+          msg.textContent = '❌ ' + (p.message || 'Install failed')
+          bar.style.background = 'var(--red, #e07070)'
+        }
+      })
+      try {
+        await window.alaude.ollamaInstall()
+        // Success path — re-check and flip the modal into connected state.
+        await refreshLocalModels()
+      } catch (err) {
+        msg.textContent = '❌ ' + (err.message || 'Install failed')
+        btn.disabled = false
+        btn.textContent = '🦙 Try again'
+      } finally {
+        try { unsub?.() } catch {}
+      }
     }
 
     async function refreshLocalModels() {

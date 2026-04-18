@@ -68,6 +68,13 @@ contextBridge.exposeInMainWorld('alaude', {
 
   // Ollama local runtime
   ollamaAvailable: () => ipcRenderer.invoke('ollama-available'),
+  // v0.5.0: in-app installer — no browser trip to ollama.com
+  ollamaInstall: () => ipcRenderer.invoke('ollama-install'),
+  onOllamaInstallProgress: (callback) => {
+    const handler = (_e, data) => callback(data)
+    ipcRenderer.on('ollama-install-progress', handler)
+    return () => ipcRenderer.removeListener('ollama-install-progress', handler)
+  },
   ollamaList: () => ipcRenderer.invoke('ollama-list'),
   ollamaCatalog: () => ipcRenderer.invoke('ollama-catalog'),
   ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
