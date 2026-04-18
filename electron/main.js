@@ -7,6 +7,7 @@ const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
 const permissions = require('./permissions')
+const skills = require('./skills')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
 // Stored in ~/.alaude/permissions.json so it survives reinstalls. This
@@ -795,6 +796,16 @@ ipcMain.handle('perm-get-state', () => {
   return permState
 })
 
+// ── IPC: Cron Skills (v0.5.4) ─────────────────────────────────────────────
+// Scheduled background chats. Read/write/list/toggle skills; the actual
+// firing happens inside the scheduler started at app-ready, which pipes
+// through the same `chat` IPC so skill runs share provider creds, memory,
+// and the api-worker's tool pipeline.
+ipcMain.handle('skills-list', () => skills.list())
+ipcMain.handle('skills-upsert', (_e, skill) => skills.upsert(skill))
+ipcMain.handle('skills-remove', (_e, id) => { skills.remove(id); return true })
+ipcMain.handle('skills-set-enabled', (_e, id, enabled) => skills.setEnabled(id, enabled))
+
 // ── IPC: Key management ─────────────────────────────────────────────────────
 
 ipcMain.handle('get-key-statuses', async () => {
@@ -1422,6 +1433,48 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+  // v0.5.4: kick off the cron-skills scheduler. Fires due skills by running
+  // a silent chat turn through the existing worker pipeline and notifying
+  // the renderer so it can append the result into a dedicated skills session.
+  try {
+    skills.startScheduler(async (skill) => {
+      const worker = getWorker()
+      const id = ++requestId
+      const messageId = `skill_${skill.id}_${Date.now()}`
+      return new Promise((resolve) => {
+        pendingRequests.set(id, {
+          sender: mainWindow?.webContents,  // route any activity to main window
+          resolve: (result) => {
+            const preview = (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 400)
+            skills.recordRun(skill.id, { status: 'ok', resultPreview: preview })
+            try { mainWindow?.webContents?.send('skill-ran', { skill, success: true, result }) } catch {}
+            resolve()
+          },
+          reject: (err) => {
+            skills.recordRun(skill.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
+            try { mainWindow?.webContents?.send('skill-ran', { skill, success: false, error: String(err?.message || err) }) } catch {}
+            resolve()
+          },
+        })
+        const messagesRaw = [{ role: 'user', content: skill.prompt }]
+        const mode = getCurrentMode(null) // skills run with global default mode
+        const req = JSON.stringify({ id, messageId, messages: messagesRaw, model: skill.model || '', workspacePath: '', spacePrompt: '', mode }) + '\n'
+        try { worker.stdin.write(req, 'utf8') } catch (err) {
+          pendingRequests.delete(id)
+          resolve()
+        }
+        // Shorter cap for skill runs — don't let a stuck skill block the queue.
+        setTimeout(() => {
+          if (pendingRequests.has(id)) {
+            pendingRequests.delete(id)
+            skills.recordRun(skill.id, { status: 'timeout', resultPreview: 'Skill timed out after 5 min' })
+            try { mainWindow?.webContents?.send('skill-ran', { skill, success: false, error: 'Timed out' }) } catch {}
+            resolve()
+          }
+        }, 5 * 60 * 1000)
+      })
+    })
+  } catch (err) { console.warn('[skills] start failed:', err.message) }
 })
 
 app.on('will-quit', () => {

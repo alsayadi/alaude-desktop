@@ -5015,6 +5015,7 @@
         <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Alaude remembers across sessions">🧠 Memory</button>
         <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
+        <button class="topbar-keys-btn" onclick="toggleSkillsModal()" title="Scheduled skills — run prompts on a cron">⏰ Skills</button>
         <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
         <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
       </div>
@@ -5429,6 +5430,33 @@
         Every feature shipped in the v0.2 line. Click <em>Try it</em> to jump straight in.
       </div>
       <div id="whats-in-body" class="ux-scroll" style="max-height:70vh"></div>
+    </div>
+  </div>
+
+  <!-- v0.5.4 Cron Skills modal: create, list, enable/disable scheduled prompts -->
+  <div class="modal-overlay" id="skills-modal">
+    <div class="modal" style="max-width:760px;width:94vw">
+      <h2>
+        ⏰ Scheduled Skills
+        <button class="modal-close" onclick="toggleSkillsModal()">&times;</button>
+      </h2>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+        Alaude runs a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
+      </div>
+      <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a skill</div>
+        <input id="skill-name" type="text" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
+        <textarea id="skill-prompt" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center">
+          <input id="skill-cron" type="text" placeholder="Cron — e.g. 0 8 * * *" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace)" />
+          <select id="skill-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px"></select>
+          <button class="key-save-btn" onclick="addSkill()">Add</button>
+        </div>
+        <div style="font-size:10.5px;color:var(--text-faint);margin-top:6px;line-height:1.5">
+          Cron examples: <code>0 8 * * *</code> daily 8am · <code>*/15 * * * *</code> every 15 min · <code>0 9 * * 1-5</code> weekday 9am · <code>0 */2 * * *</code> every 2 hours
+        </div>
+      </div>
+      <div id="skills-list"></div>
     </div>
   </div>
 
@@ -6863,6 +6891,107 @@ SUMMARY:`
         // Don't preventDefault — let other Esc handlers run too
       }
     })
+
+    // ── v0.5.4 Scheduled Skills ──────────────────────────────────────────
+    // Cron-driven prompts. UI modal mirrors Keys/Memory — list current
+    // skills, add new ones with { name, prompt, cron, model }, toggle
+    // enabled state. Firing happens in main.js; we just display.
+    function toggleSkillsModal() {
+      const m = document.getElementById('skills-modal')
+      const opening = !m.classList.contains('show')
+      if (opening) {
+        refreshSkillsList()
+        populateSkillModelSelect()
+        m.classList.add('show')
+      } else {
+        m.classList.remove('show')
+      }
+    }
+    function populateSkillModelSelect() {
+      const sel = document.getElementById('skill-model')
+      const live = document.getElementById('model-select')
+      if (!sel || !live) return
+      sel.innerHTML = '<option value="">Current model</option>' +
+        Array.from(live.options)
+          .filter(o => o.value && o.dataset?.connected === '1')
+          .map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.text)}</option>`)
+          .join('')
+    }
+    async function refreshSkillsList() {
+      const listEl = document.getElementById('skills-list')
+      if (!listEl) return
+      const skills = await window.alaude.skillsList()
+      if (!Array.isArray(skills) || skills.length === 0) {
+        listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:13px">No scheduled skills yet. Add one above.</div>'
+        return
+      }
+      listEl.innerHTML = skills.map(s => {
+        const nextFire = s.nextFireAt ? new Date(s.nextFireAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
+        const lastRun = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'never'
+        const statusColor = s.lastStatus === 'ok' ? 'var(--green)' : (s.lastStatus === 'error' || s.lastStatus === 'timeout') ? '#e07070' : 'var(--text-faint)'
+        return `
+          <div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--bg-input)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(s.name)}</div>
+                <div style="font-family:var(--mono,ui-monospace,monospace);font-size:11px;color:var(--text-dim)">${escapeHtml(s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
+                <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSkillEnabled('${s.id}', this.checked)" />
+                ${s.enabled ? 'On' : 'Off'}
+              </label>
+              <button class="msg-action-btn" onclick="deleteSkill('${s.id}')" style="color:#e07070">×</button>
+            </div>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.4;white-space:pre-wrap;max-height:60px;overflow:hidden">${escapeHtml(s.prompt.slice(0, 200))}${s.prompt.length > 200 ? '…' : ''}</div>
+            <div style="display:flex;gap:14px;font-size:10.5px;color:var(--text-faint);margin-top:8px">
+              <span>Next: <span style="color:var(--text-dim)">${nextFire}</span></span>
+              <span>Last: <span style="color:${statusColor}">${lastRun}${s.lastStatus ? ' · ' + s.lastStatus : ''}</span></span>
+            </div>
+          </div>
+        `
+      }).join('')
+    }
+    async function addSkill() {
+      const name = document.getElementById('skill-name').value.trim()
+      const prompt = document.getElementById('skill-prompt').value.trim()
+      const cron = document.getElementById('skill-cron').value.trim()
+      const model = document.getElementById('skill-model').value
+      if (!name || !prompt || !cron) {
+        showRewindToast?.('Fill name, prompt, and cron', true)
+        return
+      }
+      await window.alaude.skillsUpsert({ name, prompt, cron, model })
+      document.getElementById('skill-name').value = ''
+      document.getElementById('skill-prompt').value = ''
+      document.getElementById('skill-cron').value = ''
+      document.getElementById('skill-model').value = ''
+      await refreshSkillsList()
+      showRewindToast?.(`⏰ Skill "${name}" scheduled`, false)
+    }
+    async function toggleSkillEnabled(id, enabled) {
+      await window.alaude.skillsSetEnabled(id, enabled)
+      refreshSkillsList()
+    }
+    async function deleteSkill(id) {
+      if (!confirm('Delete this scheduled skill?')) return
+      await window.alaude.skillsRemove(id)
+      refreshSkillsList()
+    }
+    // Surface skill runs as toasts so the user knows something fired.
+    try {
+      window.alaude.onSkillRan?.((payload) => {
+        if (!payload) return
+        const name = payload.skill?.name || 'skill'
+        if (payload.success) {
+          const preview = typeof payload.result === 'string' ? payload.result.slice(0, 120) : ''
+          showRewindToast?.(`⏰ ${name} — ${preview}`, false)
+        } else {
+          showRewindToast?.(`⏰ ${name} — failed: ${(payload.error || 'unknown').slice(0, 80)}`, true)
+        }
+        // Refresh the list if the modal is open so stats update live.
+        if (document.getElementById('skills-modal')?.classList.contains('show')) refreshSkillsList()
+      })
+    } catch {}
 
     // ── v0.5.3 Voice conversation mode ───────────────────────────────────
     // When enabled: every completed assistant reply auto-reads via TTS, and

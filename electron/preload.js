@@ -63,6 +63,17 @@ contextBridge.exposeInMainWorld('alaude', {
   // Session events from menu
   onNewSession: (callback) => ipcRenderer.on('new-session', () => callback()),
 
+  // Cron Skills (v0.5.4)
+  skillsList: () => ipcRenderer.invoke('skills-list'),
+  skillsUpsert: (skill) => ipcRenderer.invoke('skills-upsert', skill),
+  skillsRemove: (id) => ipcRenderer.invoke('skills-remove', id),
+  skillsSetEnabled: (id, enabled) => ipcRenderer.invoke('skills-set-enabled', id, enabled),
+  onSkillRan: (callback) => {
+    const h = (_e, payload) => callback(payload)
+    ipcRenderer.on('skill-ran', h)
+    return () => ipcRenderer.removeListener('skill-ran', h)
+  },
+
   // Permission mode (v0.4.0 — Observe + Autopilot; Careful/Flow arrive later)
   permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),
   permSetMode: (workspacePath, mode) => ipcRenderer.invoke('perm-set-mode', workspacePath, mode),
