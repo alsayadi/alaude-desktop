@@ -890,6 +890,13 @@ ipcMain.handle('read-file-for-chat', async (_, filePath) => {
   const stats = fs.statSync(filePath)
   const sizeMB = (stats.size / 1024 / 1024).toFixed(1)
 
+  // Hard cap — anything bigger freezes the main process while pdf-parse /
+  // mammoth / XLSX load the entire buffer.
+  const MAX_BYTES = 20 * 1024 * 1024
+  if (stats.size > MAX_BYTES) {
+    return { type: 'error', name, error: `File too large (${sizeMB} MB > 20 MB limit)` }
+  }
+
   try {
     // Images → base64
     if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext)) {

@@ -4467,7 +4467,7 @@
     .session-item:hover { color: var(--text); }
     .session-item.active {
       background: var(--bg-hover);
-      color: var(--text);
+      color: var(--green);  /* keep the green highlight the refresh block was wiping out */
     }
     .session-item-cost {
       font-family: var(--mono);
@@ -4672,6 +4672,19 @@
     /* Quality of life: the legacy --space-tint radial in .main already
        gives us ambient color — we don't need to override it. Leaving
        the existing rule alone. */
+
+    /* ───── Focus ring ─────
+       Many per-element rules `outline: none` without a fallback. Keyboard
+       users (or screen-reader presenters) got lost. Give every interactive
+       element a visible :focus-visible ring so Tab-nav works during demos.
+       Uses `:focus-visible` so mouse-clicks don't flash rings. */
+    :focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+    /* Don't double-up on elements that already provide a focus treatment. */
+    textarea:focus-visible, input:focus-visible { outline-offset: 0; }
   </style>
 </head>
 <body>
@@ -4822,7 +4835,7 @@
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
-        <img class="welcome-logo" id="welcome-logo" />
+        <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Alaude" />
         <div class="welcome-title">What can I help you with?</div>
         <div class="welcome-sub">Drop files here, or try one of these:</div>
         <div class="quick-actions" id="quick-actions"></div>
@@ -9837,16 +9850,21 @@ Title:`
       for (const s of sessions) {
         for (let i = 0; i < (s.messages || []).length; i++) {
           const m = s.messages[i]
-          if (!m || !m.content || typeof m.content !== 'string') continue
-          const lc = m.content.toLowerCase()
+          if (!m) continue
+          // Flatten multimodal (image+text) messages — searching was skipping them entirely.
+          const body = Array.isArray(m.content)
+            ? m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+            : (typeof m.content === 'string' ? m.content : '')
+          if (!body) continue
+          const lc = body.toLowerCase()
           const pos = lc.indexOf(lowerQ)
           if (pos < 0) continue
           // Build a snippet centered on the match
           const start = Math.max(0, pos - 30)
-          const end = Math.min(m.content.length, pos + q.length + 60)
-          let snippet = m.content.slice(start, end).replace(/\n+/g, ' ')
+          const end = Math.min(body.length, pos + q.length + 60)
+          let snippet = body.slice(start, end).replace(/\n+/g, ' ')
           if (start > 0) snippet = '…' + snippet
-          if (end < m.content.length) snippet = snippet + '…'
+          if (end < body.length) snippet = snippet + '…'
           gsearchResults.push({ sessionId: s.id, msgIdx: i, session: s, msg: m, snippet })
         }
       }
@@ -11530,6 +11548,23 @@ Title:`
       if (e.target === e.currentTarget) toggleKeysModal()
     })
 
+    // Generic backdrop-click close for EVERY `.modal-overlay` that doesn't
+    // already have its own `if (event.target===this)` inline handler. Users
+    // expect a click outside the modal body to dismiss it; most modals weren't
+    // wired for that, so they felt sticky.
+    document.querySelectorAll('.modal-overlay').forEach((m) => {
+      if (m.id === 'keys-modal') return  // already wired above
+      // Skip modals already using inline `if (event.target===this)`
+      const inline = m.getAttribute('onclick') || ''
+      if (inline.includes('event.target')) return
+      m.addEventListener('click', (e) => {
+        if (e.target !== e.currentTarget) return
+        // Close by hiding — matches the pattern used by toggle helpers.
+        if (m.classList.contains('show')) m.classList.remove('show')
+        else m.style.display = 'none'
+      })
+    })
+
     // ── Login ────────────────────────────────────────────────────────────
 
     async function checkLoginStatus() {
@@ -12016,7 +12051,15 @@ Title:`
           await attachImageFromFile(file)
           continue
         }
-        await processFile(file.path)
+        // Electron 32+ killed File.path; use the webUtils bridge instead.
+        const fp = (file.path && file.path.length)
+          ? file.path
+          : (window.alaude?.getPathForFile ? window.alaude.getPathForFile(file) : '')
+        if (!fp) {
+          showRewindToast?.(`⚠️ Could not read "${file.name}" — drop via "Attach file" button`, true)
+          continue
+        }
+        await processFile(fp)
       }
     }
 
@@ -12094,7 +12137,16 @@ Title:`
           if (item.kind === 'file' && item.type.startsWith('image/')) {
             e.preventDefault()
             const file = item.getAsFile()
-            if (file) await attachImageFromFile(file)
+            if (file) {
+              // WebKit hardcodes clipboard-image name to "image.png" — give each paste
+              // a unique, timestamped name so chips are distinguishable.
+              if (!file.name || file.name === 'image.png') {
+                const ext = (file.type.split('/')[1] || 'png').toLowerCase()
+                const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+                try { Object.defineProperty(file, 'name', { value: `pasted-${stamp}.${ext}`, configurable: true }) } catch {}
+              }
+              await attachImageFromFile(file)
+            }
             return
           }
         }
@@ -12352,11 +12404,17 @@ Title:`
         }
         isPushToTalk = false
       }
-      r.onerror = () => {
+      r.onerror = (e) => {
         isRecording = false
         document.getElementById('mic-btn')?.classList.remove('recording')
         hidePtt()
         isPushToTalk = false
+        // Surface the reason — "silent mic flicker" was baffling users.
+        const msg = e?.error === 'not-allowed' ? '🎤 Microphone blocked — enable it in System Settings › Privacy › Microphone'
+          : e?.error === 'no-speech' ? '🎤 No speech detected'
+          : e?.error === 'network' ? '🎤 Voice needs internet (Web Speech API)'
+          : `🎤 Voice: ${e?.error || 'failed'}`
+        showRewindToast?.(msg, e?.error !== 'no-speech')
       }
       try { r.start() } catch (err) { console.warn('[voice] start failed:', err.message); isRecording = false; hidePtt() }
     }

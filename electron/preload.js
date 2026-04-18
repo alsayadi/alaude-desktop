@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 // App version — read at preload time so the renderer can show it without
 // round-tripping through IPC. Falls back gracefully if package.json isn't
@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('alaude', {
   workspaceList: (path) => ipcRenderer.invoke('workspace-list', path),
 
   // File handling
+  // Electron 32+ removed File.path with contextIsolation on — webUtils is the
+  // replacement for recovering the real on-disk path of a dropped/picked File.
+  getPathForFile: (file) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
   readFileForChat: (filePath) => ipcRenderer.invoke('read-file-for-chat', filePath),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   saveFile: (content, defaultName) => ipcRenderer.invoke('save-file', content, defaultName),
