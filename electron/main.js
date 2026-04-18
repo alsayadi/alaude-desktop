@@ -465,6 +465,28 @@ function getWorker() {
           } catch {}
           continue
         }
+        // v0.5.5: Browser Agent tool request from the worker. We run the
+        // actual Electron BrowserWindow API here in main (the worker can't
+        // touch BrowserWindow) and write the result back to its stdin.
+        if (resp.type === 'browser-tool') {
+          const bA = require('./browser-agent')
+          ;(async () => {
+            let result
+            try {
+              const a = resp.args || {}
+              if (resp.name === 'browser_navigate') result = await bA.navigate(a.url)
+              else if (resp.name === 'browser_get_text') result = await bA.getText(a.selector)
+              else if (resp.name === 'browser_click') result = await bA.click(a.selector)
+              else if (resp.name === 'browser_fill') result = await bA.fill(a.selector, a.text)
+              else if (resp.name === 'browser_screenshot') result = await bA.screenshot()
+              else result = { error: `unknown browser tool: ${resp.name}` }
+            } catch (err) {
+              result = { error: String(err?.message || err) }
+            }
+            try { apiWorker?.stdin.write(JSON.stringify({ type: 'browser-tool-response', id: resp.id, result }) + '\n') } catch {}
+          })()
+          continue
+        }
         const pending = pendingRequests.get(resp.id)
         if (pending) {
           pendingRequests.delete(resp.id)

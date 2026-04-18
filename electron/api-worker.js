@@ -252,6 +252,19 @@ const TOOLS = [
   { type: 'function', function: { name: 'start_dev_server', description: 'Start a dev server in the background (npm run dev, python -m http.server, etc). Returns the process ID. The server keeps running.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'Command to start the server (e.g. "npm run dev")' }, port: { type: 'number', description: 'Expected port number (e.g. 3000)' } }, required: ['command'] } } },
 ]
 
+// ── Browser Agent tools (v0.5.5) ──────────────────────────────────────────
+// Schemas are inlined here because the worker is a plain Node process and
+// can't import browser-agent.js (it pulls Electron BrowserWindow). Main
+// reads its own copy via `require('./browser-agent').TOOLS`; the two must
+// match. Keep them in sync if you edit one.
+const BROWSER_TOOLS = [
+  { type: 'function', function: { name: 'browser_navigate', description: 'Open or navigate a Chromium browser window to the given URL. Only http(s) allowed. Returns the final URL (after redirects) and the page title.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
+  { type: 'function', function: { name: 'browser_get_text', description: 'Read the text content of the current page, or of a specific CSS selector. Returns up to 20,000 characters.', parameters: { type: 'object', properties: { selector: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'browser_click', description: 'Click an element in the current page (buttons, links). Selector must be a CSS query.', parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } } },
+  { type: 'function', function: { name: 'browser_fill', description: 'Type into an input / textarea / contenteditable element. Fires input + change events so frameworks pick up the value.', parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } } },
+  { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. Use for debugging or visual verification.', parameters: { type: 'object', properties: {} } } },
+]
+
 // ── Health-Specific Tools ──────────────────────────────────────────────────
 
 const HEALTH_TOOLS = [
@@ -366,10 +379,18 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // existing containedPath guards so a wrong mode can't slip past. More
   // granular gates (prompt / allow-list / rule resolution) arrive with the
   // approval IPC in v0.4.1+.
-  const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server'])
+  const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server',
+    'browser_navigate', 'browser_click', 'browser_fill'])
   if (mode === 'observe' && WRITE_TOOLS.has(name)) {
     return { error: `Observe mode is read-only. Switch to Careful, Flow, or Autopilot (Shift+Tab) to enable ${name}.` }
   }
+
+  // v0.5.5: Browser Agent — tool runs in main via IPC. All browser_* tools
+  // route through the same bridge; main dispatches by name.
+  if (name.startsWith('browser_')) {
+    return await requestBrowserTool(name, args || {})
+  }
+
   try {
     // ── Health tools (no workspace required) ──
     if (name === 'analyze_lab_result') {
@@ -486,6 +507,27 @@ function emitActivity(id, activity) {
   try { process.stdout.write(JSON.stringify({ id, activity }) + '\n') } catch {}
 }
 
+// v0.5.5: Browser Agent bridge. BrowserWindow lives in main, so the
+// worker can't call it directly — we stdout-request, main runs the tool,
+// then writes the result back to our stdin. Each request gets a uuid so
+// multiple concurrent tool calls don't tangle.
+const _pendingBrowserTools = new Map()
+function requestBrowserTool(name, args) {
+  const id = 'bt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  try { process.stdout.write(JSON.stringify({ type: 'browser-tool', id, name, args }) + '\n') } catch {}
+  return new Promise((resolve) => {
+    _pendingBrowserTools.set(id, resolve)
+    // Generous timeout — a slow page load shouldn't hang the model forever,
+    // but short enough that a dead main process doesn't wedge us.
+    setTimeout(() => {
+      if (_pendingBrowserTools.has(id)) {
+        _pendingBrowserTools.delete(id)
+        resolve({ error: `browser tool ${name} timed out after 60s` })
+      }
+    }, 60000)
+  })
+}
+
 /** Truncate tool args into a short, renderer-safe summary string. */
 function summarizeArgs(name, args) {
   if (!args) return ''
@@ -494,6 +536,10 @@ function summarizeArgs(name, args) {
   if (name === 'list_directory') return String(args.path || '.').slice(0, 80)
   if (name === 'open_in_browser') return String(args.url || '').slice(0, 80)
   if (name === 'start_dev_server') return String(args.command || '').slice(0, 80)
+  if (name === 'browser_navigate') return String(args.url || '').slice(0, 80)
+  if (name === 'browser_get_text' || name === 'browser_click') return String(args.selector || '').slice(0, 80)
+  if (name === 'browser_fill') return `${(args.selector || '').slice(0, 40)} ← ${(args.text || '').slice(0, 30)}`
+  if (name === 'browser_screenshot') return ''
   if (name === 'analyze_lab_result') return `${args.test_name} = ${args.value}`
   if (name === 'health_calculator') return String(args.calculator || '')
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
@@ -588,6 +634,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
+    ...BROWSER_TOOLS,  // v0.5.5: browser agent tools are always available
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
   const useTools = allTools.length > 0 ? allTools : undefined
@@ -726,6 +773,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
+    ...BROWSER_TOOLS,  // v0.5.5: browser agent tools are always available
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
   const useTools = allTools.length > 0 ? allTools : undefined
@@ -864,7 +912,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   }
   const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -973,6 +1021,13 @@ process.stdin.on('data', (chunk) => {
     if (!line.trim()) continue
     try {
       const req = JSON.parse(line)
+      // v0.5.5: browser-tool responses coming back from main — resolve the
+      // pending requestBrowserTool() promise instead of treating as a chat.
+      if (req.type === 'browser-tool-response') {
+        const resolver = _pendingBrowserTools.get(req.id)
+        if (resolver) { _pendingBrowserTools.delete(req.id); resolver(req.result) }
+        continue
+      }
       _inFlightRequest = { id: req.id }
       handleChat(req)
         .then(result => {
