@@ -3125,35 +3125,57 @@
     .msg-content .md-svg > svg { max-width: 100%; height: auto; }
 
     /* ─── HTML Artifacts (sandboxed iframes) ───────────────────── */
-    /* v0.5.8 Inline code runner — Python / JavaScript in chat */
+    /* v0.5.8 Inline code runner — Python / JavaScript in chat.
+       Styled to match the md-pre look so code reads well in both themes. */
     .md-coderun {
       border: 1px solid var(--border);
       border-radius: 10px;
       overflow: hidden;
-      margin: 10px 0;
+      margin: 12px 0;
       background: var(--bg-input);
+    }
+    .md-coderun .md-artifact-head {
+      padding: 7px 12px;
     }
     .md-coderun-src {
       margin: 0;
-      padding: 10px 12px;
-      background: var(--bg-input);
+      padding: 12px 14px;
+      background: color-mix(in oklch, var(--bg) 88%, var(--border));
       color: var(--text);
-      font-family: 'SF Mono', ui-monospace, monospace;
+      font-family: var(--mono, 'SF Mono', ui-monospace, monospace);
       font-size: 12.5px;
-      line-height: 1.5;
+      line-height: 1.6;
       max-height: 320px;
       overflow: auto;
+      white-space: pre;
+      word-break: normal;
       border-top: 1px solid var(--border);
+    }
+    .md-coderun-src code {
+      background: transparent !important;
+      padding: 0 !important;
+      font-size: inherit !important;
+      color: inherit !important;
+      white-space: inherit;
+      border: 0;
+      font-family: inherit;
+    }
+    :root[data-theme="dark"] .md-coderun-src { background: #1a1a1a; color: #e0e0e0; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme]) .md-coderun-src { background: #1a1a1a; color: #e0e0e0; }
     }
     .md-coderun-frame {
       width: 100%;
-      min-height: 80px;
+      min-height: 140px;
+      height: 240px;
       max-height: 480px;
       border: 0;
       border-top: 1px solid var(--border);
       background: #fff;
+      display: block;
     }
     .md-coderun.show-source-only .md-coderun-frame { display: none !important }
+    .md-coderun.show-output-only .md-coderun-src { display: none !important }
 
     .md-artifact {
       margin: 10px 0;
@@ -11390,13 +11412,24 @@ Title:`
       const frame = root.querySelector('.md-coderun-frame')
       if (!frame) return
       frame.srcdoc = srcdoc
-      frame.style.display = 'block'
+      // Swap from source-only (initial) to output-only so the user sees
+      // the live output immediately. Toggle button flips back to source.
+      root.classList.remove('show-source-only')
+      root.classList.add('show-output-only')
       btn.textContent = '↻ Re-run'
     }
-    function mdRunToggleSource(btn) {
+    function mdRunToggleView(btn) {
       const root = btn.closest('.md-coderun')
       if (!root) return
-      root.classList.toggle('show-source-only')
+      // Cycle: source-only → both → output-only → source-only
+      if (root.classList.contains('show-source-only')) {
+        root.classList.remove('show-source-only')
+      } else if (!root.classList.contains('show-output-only')) {
+        root.classList.add('show-output-only')
+      } else {
+        root.classList.remove('show-output-only')
+        root.classList.add('show-source-only')
+      }
     }
     // Listen for errors inside artifact iframes (posted by our injected hook)
     // and surface them as a visible red banner on the owning artifact card.
@@ -11733,15 +11766,15 @@ Title:`
           const isPy = lc === 'python-run'
           const label = isPy ? '🐍 Python · sandboxed' : '🟨 JavaScript · sandboxed'
           return `
-            <div class="md-coderun" data-lang="${lc}" data-src="${encoded}">
+            <div class="md-coderun show-source-only" data-lang="${lc}" data-src="${encoded}">
               <div class="md-artifact-head">
                 <span class="mda-label">${label}</span>
                 <button class="mda-run-btn" onclick="runCodeBlock(this)">▶ Run</button>
-                <button onclick="mdRunToggleSource(this)">&lt;&gt; Source</button>
+                <button onclick="mdRunToggleView(this)" title="Toggle source / output">⇅</button>
                 <button onclick="mdaCopySource(this)" title="Copy code">📋</button>
               </div>
               <pre class="md-coderun-src"><code>${escCode}</code></pre>
-              <iframe class="md-coderun-frame" style="display:none" sandbox="allow-scripts"></iframe>
+              <iframe class="md-coderun-frame" sandbox="allow-scripts"></iframe>
             </div>`
         }
         // HTML Artifacts: ```html or ```artifact → sandboxed iframe. The model
