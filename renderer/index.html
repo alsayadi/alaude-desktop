@@ -9263,41 +9263,52 @@ footer a { color: var(--accent); text-decoration: none; }
       // Reset live activity for this new turn
       liveActivity = []
 
+      // ── Capture the originating session ────────────────────────────────
+      // Crucial for "generation keeps going in the background if user
+      // switches sessions": every write inside this function must go to
+      // `target` (the array this turn was started in), not the global
+      // `messages` which rebinds on session switch. Session-switch code
+      // therefore doesn't need to abort in-flight turns — tokens keep
+      // landing in their originating session, which the user sees when
+      // they come back.
+      const target = messages
+      const targetSessionId = currentSessionId
+
       // Add typing indicator — tag it with uxMessageId so tokens route correctly
-      messages.push({
+      target.push({
         role: 'assistant', content: '', streaming: true,
         uxMessageId: uxMeta?.messageId,
         // Pre-seed streaming stats with the request-start timestamp so TTFT
         // (time-to-first-token) measures from SEND, not from first token arrival.
         stats: { startMs: performance.now(), firstTokenMs: null, tokens: 0, samples: [] },
       })
-      renderMessages()
+      if (currentSessionId === targetSessionId) renderMessages()
 
       try {
         // Send only role + content, strip UI fields like 'streaming'
-        const cleanMsgs = sanitizeHistoryForApi(messages.slice(0, -1))
+        const cleanMsgs = sanitizeHistoryForApi(target.slice(0, -1))
         // Memory Lens: extract facts from the user's latest message, then
         // inject any relevant recalled memories as a prefix to that message.
         const memoryExtracted = memoryExtract(userText)
-        for (const fact of memoryExtracted) memoryAdd(fact, { sessionId: currentSessionId })
+        for (const fact of memoryExtracted) memoryAdd(fact, { sessionId: targetSessionId })
         const { msgs: withMemory, used: memoriesUsed } = memoryInjectIntoLastUser(cleanMsgs, userText)
         // Tag the assistant streaming slot with the memories used so the chip
         // can render once the reply lands, and stash estimated input tokens
         // so the cost estimator can compute $ after streaming finishes.
-        const streamingSlot = messages[messages.length - 1]
+        const streamingSlot = target[target.length - 1]
         if (streamingSlot) {
           if (memoriesUsed.length) streamingSlot.memoriesUsed = memoriesUsed.map(m => ({ id: m.id, text: m.text }))
           streamingSlot.inputTokens = estimateInputTokensForCall(withMemory)
         }
-        console.log('[callAI] model:', model, 'msgs:', withMemory.length, 'memories:', memoriesUsed.length)
+        console.log('[callAI] model:', model, 'msgs:', withMemory.length, 'memories:', memoriesUsed.length, 'session:', targetSessionId)
         const response = await window.alaude.chat(withMemory, model, workspacePath, currentSpaceId, uxMeta)
         // Remember which messageId produced this assistant response so save/copy events
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
-        const prev = messages[messages.length - 1]
+        const prev = target[target.length - 1]
         if (prev) finalizeStats(prev)
-        messages[messages.length - 1] = {
+        target[target.length - 1] = {
           role: 'assistant',
           content: (response && typeof response === 'string') ? response : JSON.stringify(response) || '(no response)',
           model,
@@ -9309,8 +9320,8 @@ footer a { color: var(--accent); text-decoration: none; }
         }
       } catch (err) {
         console.error('[callAI] error:', err)
-        const prev = messages[messages.length - 1]
-        messages[messages.length - 1] = {
+        const prev = target[target.length - 1]
+        target[target.length - 1] = {
           role: 'assistant',
           content: `Error: ${err.message || String(err)}`,
           model,
@@ -9321,9 +9332,15 @@ footer a { color: var(--accent); text-decoration: none; }
         }
       }
 
-      isStreaming = false
-      sendBtn.disabled = !input.value.trim()
-      renderMessages()
+      // Only touch composer state / DOM if the user is still on the source
+      // session. Otherwise the background turn finished while they were
+      // looking at a different chat; updating isStreaming / sendBtn for them
+      // would be wrong. persistSessions() always runs so the reply is saved.
+      if (currentSessionId === targetSessionId) {
+        isStreaming = false
+        sendBtn.disabled = !input.value.trim()
+        renderMessages()
+      }
       persistSessions()
       // Auto-title via AI: after the 2nd assistant reply lands, ask the
       // current model to propose a short, meaningful title. Heuristic title
@@ -11521,17 +11538,23 @@ Title:`
     }
 
     function newSession() {
-      // Mid-stream race: abort the in-flight turn before detaching the
-      // current messages array, so any lingering worker write lands in
-      // the old session's copy and not the new (empty) one.
-      if (isStreaming) abortInFlightTurn({ reason: 'new-session' })
+      // callAI captures its target session's messages array at entry, so any
+      // in-flight turn from the previous session continues in the background
+      // and writes into that session's array — not the new empty one.
       // UX: session_end for previous
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
-      // Save current messages
+      // Save current messages by SAME reference — see switchSession note.
+      // If the previous session had a turn in flight, keeping the reference
+      // means tokens still land in the session.messages the user will see
+      // on return.
       const current = sessions.find(s => s.id === currentSessionId)
-      if (current) current.messages = [...messages]
+      if (current) current.messages = messages
 
+      // Reset isStreaming — the NEW session is idle. The previous session's
+      // streaming flag still lives on its own last message (streaming:true)
+      // and re-derives on switch-back.
+      isStreaming = false
       currentSessionId = Date.now()
       sessions.unshift({ id: currentSessionId, title: 'New session', messages: [] })
       // Hard cap total sessions to avoid unbounded growth
@@ -11626,22 +11649,22 @@ Title:`
     }
 
     function switchSession(id) {
-      // Mid-stream concern: swapping `messages` while the worker is still
-      // writing tokens into it corrupts the reply. Instead of refusing the
-      // switch (which traps users when the worker hangs or the flag goes
-      // stale), we abort the in-flight turn: mark the streaming placeholder
-      // as cancelled, clear the flag, persist, then let the switch proceed.
-      // Any tokens the worker later emits for the old turn land in the
-      // session's copy (safe) but never re-enter the live chat.
-      if (isStreaming) abortInFlightTurn({ reason: 'session-switch' })
+      // callAI captures its `target` and `targetSessionId` at entry, so any
+      // in-flight turn continues writing into its originating session even
+      // after we swap `messages` here. Nothing to abort — the user sees the
+      // in-progress turn finish when they come back to that session.
       // UX: mark previous session as ended
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
       // Save current — including the half-typed input draft so it's waiting
       // when the user comes back to this session.
+      // NOTE: assign the SAME array reference (not a copy). Background
+      // generation captured `messages` at callAI entry; if we shallow-copy
+      // here, the session.messages reference diverges from callAI's `target`
+      // and the in-flight tokens vanish from the user's view on return.
       const current = sessions.find(s => s.id === currentSessionId)
       if (current) {
-        current.messages = [...messages]
+        current.messages = messages
         const draft = input.value || ''
         if (draft) current.inputDraft = draft
         else delete current.inputDraft
@@ -11649,10 +11672,19 @@ Title:`
 
       currentSessionId = id
       const session = sessions.find(s => s.id === id)
-      messages = session ? [...session.messages] : []
+      // IMPORTANT: bind `messages` to the session's OWN array (not a copy) so
+      // that background-streaming turns writing into session.messages are
+      // reflected live when the user returns. Previously this was a shallow
+      // copy, which detached the live chat from incoming tokens.
+      messages = session ? session.messages : []
+      // Re-derive the streaming flag from the new session's actual state so
+      // the composer behaves correctly: disabled if THIS session is still
+      // generating, enabled otherwise.
+      isStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
       // Restore the new session's draft (or clear).
       input.value = session?.inputDraft || ''
       input.dispatchEvent(new Event('input', { bubbles: true }))
+      sendBtn.disabled = isStreaming || !input.value.trim()
       ux.sessionId = 'sess_' + id
       ux.lastPromptHash = null
       ux.lastMessageId = null
@@ -11670,9 +11702,10 @@ Title:`
     // so the user can undo if they tapped the X by accident.
     let _deletedSessionUndo = null
     function deleteSession(id) {
-      // Same concern as switchSession: deleting mid-stream corrupts the reply.
-      // Abort the in-flight turn first so the delete can proceed safely.
-      if (isStreaming && id === currentSessionId) abortInFlightTurn({ reason: 'session-delete' })
+      // Deleting a session that has a turn in flight: we let the generation
+      // finish into the now-orphaned session.messages array — those writes
+      // are harmless since the session is gone from the sidebar and cleared
+      // from localStorage on the next persist. No need to abort.
       const idx = sessions.findIndex(s => s.id === id)
       if (idx < 0) return
       const wasCurrent = id === currentSessionId
@@ -12385,14 +12418,34 @@ Title:`
     // Find the right streaming target for an incoming activity event.
     // Council mode: each lane is a separate streaming message keyed by uxMessageId.
     // Single-lane mode: just the last streaming message.
+    // Find the message a tool-activity event belongs to. Critical: we search
+    // EVERY session, not just the one currently on screen, so that switching
+    // away from a streaming session doesn't orphan subsequent tokens. If the
+    // target lives in another session the caller simply won't render to DOM —
+    // the data still updates in that session's array and shows when the user
+    // returns.
     function findStreamingTargetFor(activity) {
-      if (activity?.messageId) {
-        // Search assistant messages + council lanes for a match
+      const id = activity?.messageId
+      if (id) {
+        // 1. Live current session first (hot path)
         for (const m of messages) {
-          if (m.streaming && m.uxMessageId === activity.messageId) return m
+          if (m.streaming && m.uxMessageId === id) return m
           if (m.council && Array.isArray(m.lanes)) {
             for (const lane of m.lanes) {
-              if (lane.streaming && lane.uxMessageId === activity.messageId) return lane
+              if (lane.streaming && lane.uxMessageId === id) return lane
+            }
+          }
+        }
+        // 2. Every other session — matches the background-generation case.
+        for (const s of (sessions || [])) {
+          if (!Array.isArray(s?.messages)) continue
+          if (s.id === currentSessionId) continue
+          for (const m of s.messages) {
+            if (m.streaming && m.uxMessageId === id) return m
+            if (m.council && Array.isArray(m.lanes)) {
+              for (const lane of m.lanes) {
+                if (lane.streaming && lane.uxMessageId === id) return lane
+              }
             }
           }
         }
@@ -12400,6 +12453,16 @@ Title:`
       // Fallback to "last streaming message" for legacy single-lane flow
       return messages.findLast?.(m => m.streaming)
         || [...messages].reverse().find(m => m.streaming)
+    }
+    // True iff the given message object is inside the currently-visible session.
+    // Used to skip expensive DOM updates when streaming into a background session.
+    function _targetIsCurrent(target) {
+      if (!target) return false
+      if (messages.includes(target)) return true
+      for (const m of messages) {
+        if (m.council && Array.isArray(m.lanes) && m.lanes.includes(target)) return true
+      }
+      return false
     }
 
     // Live tool activity — refresh the streaming bubble as the agent works.
@@ -12429,8 +12492,13 @@ Title:`
           const cutoff = now - 2000
           while (target.stats.samples.length && target.stats.samples[0].t < cutoff) target.stats.samples.shift()
           target.content = (target.content || '') + (activity.text || '')
-          scheduleStreamUpdate(target.uxMessageId, target.content)
-          updateStatsBadge(target)
+          // Only touch the DOM when the streaming target is the session the
+          // user is currently looking at. Background sessions update in-memory
+          // and reveal themselves the next time the user switches to them.
+          if (_targetIsCurrent(target)) {
+            scheduleStreamUpdate(target.uxMessageId, target.content)
+            updateStatsBadge(target)
+          }
         }
         return
       }
