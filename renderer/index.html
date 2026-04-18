@@ -4675,16 +4675,23 @@
 
     /* ───── Focus ring ─────
        Many per-element rules `outline: none` without a fallback. Keyboard
-       users (or screen-reader presenters) got lost. Give every interactive
-       element a visible :focus-visible ring so Tab-nav works during demos.
-       Uses `:focus-visible` so mouse-clicks don't flash rings. */
-    :focus-visible {
+       users (or screen-reader presenters) got lost. Give interactive
+       controls a visible :focus-visible ring so Tab-nav works during demos.
+       Scoped to real controls so we don't draw a green box around the
+       artifact iframe or around <pre> blocks that happen to take focus. */
+    button:focus-visible,
+    a:focus-visible,
+    select:focus-visible,
+    [role="button"]:focus-visible,
+    [tabindex="0"]:not(iframe):not(pre):not(code):focus-visible {
       outline: 2px solid var(--green);
       outline-offset: 2px;
       border-radius: 4px;
     }
-    /* Don't double-up on elements that already provide a focus treatment. */
-    textarea:focus-visible, input:focus-visible { outline-offset: 0; }
+    textarea:focus-visible, input:focus-visible {
+      outline: 2px solid var(--green);
+      outline-offset: 0;
+    }
   </style>
 </head>
 <body>
@@ -10886,7 +10893,7 @@ Title:`
                 <button onclick="mdaCopySource(this)" title="Copy HTML">📋</button>
               </div>
               <div class="md-artifact-error-banner" style="display:none;padding:8px 12px;background:#fee;color:#a00;border-bottom:1px solid #fcc;font-family:monospace;font-size:11px;white-space:pre-wrap"></div>
-              <iframe class="md-artifact-frame" tabindex="0" sandbox="allow-scripts allow-modals allow-popups allow-popups-to-escape-sandbox allow-forms" onload="this.focus();try{this.contentWindow.focus()}catch(_){}" onclick="this.focus();try{this.contentWindow.focus()}catch(_){}" srcdoc="${srcdoc}"></iframe>
+              <iframe class="md-artifact-frame" tabindex="0" sandbox="allow-scripts allow-modals allow-popups allow-forms" onload="this.focus();try{this.contentWindow.focus()}catch(_){}" onclick="this.focus();try{this.contentWindow.focus()}catch(_){}" srcdoc="${srcdoc}"></iframe>
               <div class="md-artifact-hint" style="padding:4px 10px;font-size:10px;color:var(--text-faint);font-style:italic;border-top:1px solid var(--border-soft)">💡 Click inside the preview to give it keyboard focus</div>
               <pre class="md-artifact-src"><code>${escCode}</code></pre>
             </div>`

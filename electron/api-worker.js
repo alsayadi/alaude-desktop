@@ -11,6 +11,18 @@ const os = require('os')
 const dns = require('dns')
 const https = require('https')
 
+// ── Fail-loud crash handlers ───────────────────────────────────────────────
+// A silent worker crash used to surface as infinite renderer spinners; now
+// the stack trace makes it to the main-process `[worker stderr]` relay so we
+// can see why, then the worker dies cleanly (main respawns on next chat).
+process.on('uncaughtException', (err) => {
+  try { process.stderr.write(`[worker] uncaughtException: ${err?.stack || err}\n`) } catch {}
+  process.exit(1)
+})
+process.on('unhandledRejection', (err) => {
+  try { process.stderr.write(`[worker] unhandledRejection: ${err?.stack || err}\n`) } catch {}
+})
+
 // ── Resilient DNS resolver ──────────────────────────────────────────────────
 // VPN tools (e.g. Astrill) need DNS to go through their server to set up routing.
 // We try system DNS first (so VPN routing works), then fall back to public DNS.

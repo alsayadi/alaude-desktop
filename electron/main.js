@@ -281,6 +281,9 @@ function oauthAnthropic() {
       }
     })
 
+    // Fail fast if the random port is already in use (was hanging until the
+    // 5-min timeout because no 'error' handler existed on the server).
+    server.on('error', (err) => { try { server.close() } catch {}; reject(err) })
     server.listen(port, '127.0.0.1', () => {
       // Build the OAuth URL
       const authUrl = new URL(OAUTH_CONFIG.authorizeUrl)
@@ -397,8 +400,15 @@ function getWorker() {
         // renderer but DON'T resolve the pending promise — the final
         // {id, result} still follows.
         if (resp.activity) {
-          try { mainWindow?.webContents?.send('tool-activity', resp.activity) } catch {}
-          try { if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) quickWindow.webContents.send('tool-activity', resp.activity) } catch {}
+          // Route activity to the window that actually sent this request.
+          // Broadcasting to both windows leaked Quick-window tool calls onto
+          // the main chat (and vice versa) when both were in use.
+          const pendingForActivity = pendingRequests.get(resp.id)
+          const sender = pendingForActivity?.sender
+          try {
+            if (sender && !sender.isDestroyed()) sender.send('tool-activity', resp.activity)
+            else mainWindow?.webContents?.send('tool-activity', resp.activity)
+          } catch {}
           continue
         }
         const pending = pendingRequests.get(resp.id)
@@ -422,9 +432,10 @@ function getWorker() {
   return apiWorker
 }
 
-ipcMain.handle('chat', async (_, messagesRaw, model, workspacePath, spaceId, uxMeta) => {
+ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId, uxMeta) => {
   const id = ++requestId
   const worker = getWorker()
+  const senderWebContents = event?.sender
 
   // Compose system prompt from active space
   let spacePrompt = ''
@@ -492,6 +503,7 @@ ipcMain.handle('chat', async (_, messagesRaw, model, workspacePath, spaceId, uxM
 
   return new Promise((resolve, reject) => {
     pendingRequests.set(id, {
+      sender: senderWebContents,
       resolve: (result) => { finalize(true, null, String(result || '').length); resolve(result) },
       reject: (err) => { finalize(false, err); reject(err) },
     })
