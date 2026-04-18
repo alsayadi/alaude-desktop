@@ -11463,6 +11463,20 @@ Title:`
     }
 
     function newSession() {
+      // Same mid-stream race as switchSession — if the worker is still
+      // writing tokens into the current `messages` array, swapping it out
+      // corrupts the reply. Reuse the stale-flag recovery so a crashed
+      // worker doesn't trap the user.
+      if (isStreaming) {
+        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
+        if (!reallyStreaming) {
+          isStreaming = false
+          sendBtn.disabled = !input.value.trim()
+        } else {
+          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
+          return
+        }
+      }
       // UX: session_end for previous
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
@@ -11568,8 +11582,18 @@ Title:`
       // tokens into a detached buffer and persistSessions mixes them into the new
       // session. Refuse rather than silently corrupting data.
       if (isStreaming) {
-        showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
-        return
+        // `isStreaming` can go stale after a worker hang or crash (the await
+        // never resolved, so the finally-style reset at callAI's end never
+        // ran). Detect that by checking whether any message is actually
+        // flagged streaming — if not, treat the flag as noise and clear it.
+        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
+        if (!reallyStreaming) {
+          isStreaming = false
+          sendBtn.disabled = !input.value.trim()
+        } else {
+          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
+          return
+        }
       }
       // UX: mark previous session as ended
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
@@ -11610,8 +11634,15 @@ Title:`
       // Same concern as switchSession: deleting the currently streaming session
       // detaches the messages array from the worker's target.
       if (isStreaming && id === currentSessionId) {
-        showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
-        return
+        // Stale-flag recovery — see switchSession for the explanation.
+        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
+        if (!reallyStreaming) {
+          isStreaming = false
+          sendBtn.disabled = !input.value.trim()
+        } else {
+          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
+          return
+        }
       }
       const idx = sessions.findIndex(s => s.id === id)
       if (idx < 0) return
