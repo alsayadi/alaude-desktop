@@ -2050,6 +2050,13 @@
       :root:not([data-theme]) .msg-content [style*="color:#999"] { color: var(--text-faint) !important; }
     }
 
+    /* v0.5.9 Crew mode toggle — same styling idiom as council */
+    .topbar-keys-btn.crew-toggle.on {
+      border-color: #9b59b6;
+      color: #9b59b6;
+      background: color-mix(in oklch, #9b59b6 10%, var(--bg-input));
+    }
+
     /* ─── Permission mode dropdown (v0.4.0) ────────────────────────────────── */
     /* Sits in the workspace bar next to the folder chooser. Color-coded per
        mode so the user knows at a glance whether the model can touch their
@@ -5046,6 +5053,7 @@
         <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
         <button class="topbar-keys-btn" onclick="toggleSkillsModal()" title="Scheduled skills — run prompts on a cron">⏰ Skills</button>
+        <button class="topbar-keys-btn crew-toggle" id="crew-toggle" onclick="toggleCrewMode()" title="Crew mode — send every turn through 3 specialists (Architect + Critic + Researcher) and auto-synthesize">👥 Crew</button>
         <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
         <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
       </div>
@@ -8672,6 +8680,41 @@ footer a { color: var(--accent); text-decoration: none; }
       } catch (err) { console.warn('[perm] cycle failed:', err.message) }
     }
 
+    // ── v0.5.9 Crew mode ─────────────────────────────────────────────────
+    // User-facing name for a curated multi-agent flow: the current model
+    // runs three times in parallel, once as an Architect (structure), once
+    // as a Critic (flaws), once as a Researcher (facts). A fourth call
+    // synthesizes all three into a unified answer.
+    //
+    // Implementation reuses the existing council lane machinery. Key
+    // differences vs raw Council:
+    //   • Crew seeds 3 role-based specialists, not 3 arbitrary model picks
+    //   • Auto-synthesizes when all lanes finish (no manual Synthesize click)
+    //   • Visual styling uses purple instead of green to tell them apart
+    const CREW_ROLES = [
+      { name: 'Architect',  icon: '🏛️', prompt: 'You are the Architect. Focus on structure, design decisions, and trade-offs. Describe the shape of the answer before the details. Be concise.' },
+      { name: 'Critic',     icon: '🧐', prompt: 'You are the Critic. Find flaws, edge cases, and unstated assumptions. Challenge the question itself if it needs challenging. Be specific about what could go wrong.' },
+      { name: 'Researcher', icon: '🔍', prompt: 'You are the Researcher. Ground the answer in facts, cite reasoning chains, surface relevant precedents or prior art. Link where possible.' },
+    ]
+    let crewMode = false
+    function refreshCrewUi() {
+      const btn = document.getElementById('crew-toggle')
+      if (btn) btn.classList.toggle('on', crewMode)
+    }
+    function toggleCrewMode() {
+      crewMode = !crewMode
+      refreshCrewUi()
+      if (crewMode) {
+        // If council is on, turn it off — they're mutually exclusive (both
+        // want to own the multi-lane message shape). User gets a heads-up
+        // so they're not surprised.
+        if (councilMode) toggleCouncilMode()
+        showRewindToast?.('👥 Crew on — every turn runs through Architect · Critic · Researcher, then synthesizes', false)
+      } else {
+        showRewindToast?.('Crew off', false)
+      }
+    }
+
     function toggleCouncilMode() {
       councilMode = !councilMode
       if (councilMode && councilModels.length === 0) {
@@ -9355,12 +9398,95 @@ footer a { color: var(--accent); text-decoration: none; }
       ux.pendingEntry = 'freeform'
       ux.pendingAction = null
 
-      // Council mode: fire one request per model, each in its own lane.
-      if (councilMode && councilModels.filter(Boolean).length >= 2) {
+      // Crew mode: 3 specialists on the current model, parallel + auto-synth.
+      if (crewMode) {
+        callCrew(text, uxMeta)
+      } else if (councilMode && councilModels.filter(Boolean).length >= 2) {
+        // Council mode: fire one request per model, each in its own lane.
         callCouncil(text, uxMeta)
       } else {
         callAI(text, uxMeta)
       }
+    }
+
+    // ── Crew call: Architect + Critic + Researcher in parallel, auto-synth ─
+    async function callCrew(userText, uxMeta) {
+      const model = document.getElementById('model-select')?.value || ''
+      const t0 = Date.now()
+      liveActivity = []
+
+      const lanes = CREW_ROLES.map((role, i) => ({
+        role: 'assistant',
+        streaming: true,
+        content: '',
+        model,
+        roleName: role.name,
+        roleIcon: role.icon,
+        uxMessageId: `${uxMeta.messageId}_crew${i}`,
+        startedAt: t0,
+        elapsed: 0,
+      }))
+
+      const crewMsg = {
+        role: 'assistant',
+        council: true,  // reuse the existing lane rendering
+        crew: true,
+        lanes,
+        streaming: true,
+        model: 'crew',
+        ts: t0,
+        pickedLaneIdx: null,
+      }
+      messages.push(crewMsg)
+      renderMessages()
+
+      // Reuse the council elapsed-timer idiom to update in-place.
+      const elapsedTimer = setInterval(() => {
+        for (const lane of crewMsg.lanes) {
+          if (!lane.streaming) continue
+          lane.elapsed = Date.now() - lane.startedAt
+          const node = document.querySelector(`[data-stream-id="${lane.uxMessageId}"]`)
+          const laneEl = node?.closest('.council-lane')
+          const elapsedEl = laneEl?.querySelector('.council-lane-elapsed')
+          if (elapsedEl) elapsedEl.textContent = `${(lane.elapsed / 1000).toFixed(1)}s`
+        }
+      }, 250)
+
+      const priorHistory = sanitizeHistoryForApi(messages.slice(0, -1))
+      // Pop the user message we just added — each specialist gets a
+      // role-prefixed variant rather than the bare user text.
+      const history = priorHistory.slice(0, -1)
+      const lastUser = priorHistory[priorHistory.length - 1] // { role:'user', content:... }
+
+      await Promise.allSettled(CREW_ROLES.map(async (role, i) => {
+        const msgs = [...history, {
+          role: 'user',
+          content: `[Your role: ${role.name}. ${role.prompt}]\n\n${typeof lastUser?.content === 'string' ? lastUser.content : userText}`,
+        }]
+        try {
+          const response = await window.alaude.chat(msgs, model, workspacePath, currentSpaceId, { ...uxMeta, messageId: lanes[i].uxMessageId })
+          lanes[i].content = (typeof response === 'string') ? response : (JSON.stringify(response) || '(no response)')
+        } catch (err) {
+          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].error = true
+        }
+        lanes[i].streaming = false
+        lanes[i].elapsed = Date.now() - lanes[i].startedAt
+      }))
+
+      clearInterval(elapsedTimer)
+      crewMsg.streaming = false
+      renderMessages()
+      persistSessions()
+
+      // Auto-synthesize: merge all three specialist answers into one unified
+      // final response. Reuse councilSynthesize if it exists in this session.
+      if (typeof councilSynthesize === 'function') {
+        const idx = messages.indexOf(crewMsg)
+        if (idx >= 0) councilSynthesize(idx)
+      }
+      isStreaming = false
+      sendBtn.disabled = !input.value.trim()
     }
 
     // Fire N parallel chat requests, one per council model, each with a
