@@ -4323,9 +4323,16 @@
       gap: 14px;
       align-items: flex-start;
     }
-    .login-path:hover { border-color: var(--green); background: var(--green-dim); transform: translateY(-1px); }
-    .login-path.primary { border-color: var(--green); background: color-mix(in oklch, var(--green) 12%, var(--bg-input)); }
-    .login-path.primary:hover { background: color-mix(in oklch, var(--green) 18%, var(--bg-input)); }
+    button.login-path:hover { border-color: var(--green); background: var(--green-dim); transform: translateY(-1px); }
+    /* The primary card is a <div> containing the key form — don't render as
+       a clickable button, don't translate on hover. Just give it the green
+       emphasis to signal "this is the main path." */
+    .login-path.primary {
+      cursor: default;
+      border-color: var(--green);
+      background: color-mix(in oklch, var(--green) 10%, var(--bg-input));
+    }
+    .login-path.primary:hover { transform: none; }
 
     .login-path-icon {
       font-size: 22px;
@@ -4846,52 +4853,40 @@
     <div class="login-card">
       <img class="login-logo" src="logo.jpg" alt="Alaude" />
       <h1 class="login-title">Welcome to Alaude</h1>
-      <p class="login-sub">Pick how you'd like to chat with AI — you can always add more later.</p>
+      <p class="login-sub">Connect a provider — you can always add more later.</p>
 
       <div class="login-paths">
-        <!-- Path 1 — recommended: Claude OAuth, no key needed -->
-        <button class="login-path primary" onclick="loginOAuth('anthropic')" aria-label="Sign in with Claude">
-          <div class="login-path-icon" style="background: color-mix(in oklch, #d97757 18%, var(--bg))">🤖</div>
-          <div class="login-path-body">
-            <div class="login-path-title">Sign in with Claude <span class="login-path-badge">Recommended</span></div>
-            <div class="login-path-desc">Use your Claude account — no API key, best-in-class models, one click.</div>
+        <!-- Path 1 (primary) — BYO API key, form expanded by default -->
+        <div class="login-path primary" aria-label="Connect with your API key">
+          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🔑</div>
+          <div class="login-path-body" style="flex:1">
+            <div class="login-path-title">Connect with your API key <span class="login-path-badge">Recommended</span></div>
+            <div class="login-path-desc" style="margin-bottom:10px">OpenAI, Gemini, Qwen, Kimi, Grok, GLM, or Anthropic.</div>
+            <div class="login-key-form" id="login-key-form" style="display:flex">
+              <select class="login-provider-select" id="login-provider-select">
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="google">Google (Gemini)</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="moonshot">Kimi (Moonshot)</option>
+                <option value="dashscope">Qwen (Alibaba)</option>
+                <option value="zhipu">GLM (Zhipu)</option>
+              </select>
+              <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();submitLoginKey()}" />
+              <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
+            </div>
           </div>
-          <div class="login-path-chevron">›</div>
-        </button>
+        </div>
 
         <!-- Path 2 — local runtime -->
         <button class="login-path" onclick="loginLocalPath()" aria-label="Run models locally">
-          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🦙</div>
+          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 12%, var(--bg))">🦙</div>
           <div class="login-path-body">
             <div class="login-path-title">Run models locally <span class="login-path-badge" style="color: var(--text); background: var(--bg)">FREE · PRIVATE</span></div>
             <div class="login-path-desc">Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.</div>
           </div>
           <div class="login-path-chevron">›</div>
         </button>
-
-        <!-- Path 3 — BYO API key (expandable) -->
-        <button class="login-path" onclick="toggleKeyForm()" aria-label="Use your own API key">
-          <div class="login-path-icon">🔑</div>
-          <div class="login-path-body">
-            <div class="login-path-title">Bring your own API key</div>
-            <div class="login-path-desc">OpenAI, Gemini, Qwen, Kimi, Grok, GLM — paste a key and go.</div>
-          </div>
-          <div class="login-path-chevron">›</div>
-        </button>
-      </div>
-
-      <div class="login-key-form" id="login-key-form" style="display:none; margin-top:16px">
-        <select class="login-provider-select" id="login-provider-select">
-          <option value="openai">OpenAI (GPT)</option>
-          <option value="google">Google (Gemini)</option>
-          <option value="xai">xAI (Grok)</option>
-          <option value="moonshot">Kimi (Moonshot)</option>
-          <option value="dashscope">Qwen (Alibaba)</option>
-          <option value="zhipu">GLM (Zhipu)</option>
-          <option value="anthropic">Anthropic API key (advanced)</option>
-        </select>
-        <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off" />
-        <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
       </div>
 
       <div class="login-status" id="login-status"></div>
