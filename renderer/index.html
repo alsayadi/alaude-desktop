@@ -5004,7 +5004,9 @@
         <span class="model-slots" id="model-slots"></span>
       </div>
       <div class="topbar-actions">
-        <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
+        <!-- Council (multi-model parallel) button hidden in v0.4.2 — returns in a later release once the flow is polished.
+             The handler + UI still exists so ⌘⇧C continues to work for anyone who finds it. -->
+        <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)" style="display:none">
           🎭 <span id="council-label">Council</span>
         </button>
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
@@ -5061,11 +5063,11 @@
                 <span class="frc-hint">.pptx / .docx / .xlsx with Save + Open.</span>
               </span>
             </button>
-            <button class="frc-prompt" onclick="coachOpenCouncil()">
-              <span class="frc-icon">🎭</span>
+            <button class="frc-prompt" onclick="coachFillAndSend('Summarize this repo in 3 bullet points, then propose one concrete improvement')">
+              <span class="frc-icon">🗂️</span>
               <span class="frc-body">
-                <span class="frc-head">Compare models side-by-side</span>
-                <span class="frc-hint">Ask 3 models the same question. ⌘⇧C.</span>
+                <span class="frc-head">Understand a codebase fast</span>
+                <span class="frc-hint">Pick a folder, then let Alaude read + summarize it.</span>
               </span>
             </button>
           </div>
