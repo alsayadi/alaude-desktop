@@ -390,6 +390,10 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   if (name.startsWith('browser_')) {
     return await requestBrowserTool(name, args || {})
   }
+  // v0.5.6: MCP tools — names are mcp_<server>__<tool>. Route to main.
+  if (name.startsWith('mcp_')) {
+    return await requestMcpTool(name, args || {})
+  }
 
   try {
     // ── Health tools (no workspace required) ──
@@ -507,25 +511,44 @@ function emitActivity(id, activity) {
   try { process.stdout.write(JSON.stringify({ id, activity }) + '\n') } catch {}
 }
 
-// v0.5.5: Browser Agent bridge. BrowserWindow lives in main, so the
-// worker can't call it directly — we stdout-request, main runs the tool,
-// then writes the result back to our stdin. Each request gets a uuid so
-// multiple concurrent tool calls don't tangle.
+// v0.5.5/0.5.6: Bridges for tools that live in main (browser agent &
+// MCP servers). Worker writes a request line to stdout, main runs the
+// tool, writes response back to stdin. Each request has a unique id.
 const _pendingBrowserTools = new Map()
-function requestBrowserTool(name, args) {
-  const id = 'bt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
-  try { process.stdout.write(JSON.stringify({ type: 'browser-tool', id, name, args }) + '\n') } catch {}
+const _pendingMcpCalls = new Map()
+const _pendingMcpLists = new Map()
+
+function _bridge(map, type, extra = {}) {
+  const id = type.slice(0, 2) + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  try { process.stdout.write(JSON.stringify({ type, id, ...extra }) + '\n') } catch {}
   return new Promise((resolve) => {
-    _pendingBrowserTools.set(id, resolve)
-    // Generous timeout — a slow page load shouldn't hang the model forever,
-    // but short enough that a dead main process doesn't wedge us.
+    map.set(id, resolve)
     setTimeout(() => {
-      if (_pendingBrowserTools.has(id)) {
-        _pendingBrowserTools.delete(id)
-        resolve({ error: `browser tool ${name} timed out after 60s` })
+      if (map.has(id)) {
+        map.delete(id)
+        resolve({ error: `${type} timed out after 60s` })
       }
     }, 60000)
   })
+}
+
+function requestBrowserTool(name, args) {
+  return _bridge(_pendingBrowserTools, 'browser-tool', { name, args })
+}
+function requestMcpTool(name, args) {
+  return _bridge(_pendingMcpCalls, 'mcp-call', { name, args })
+    .then(r => r && typeof r === 'object' && 'result' in r ? r.result : r)
+}
+// MCP tool schemas change as servers come up/down — we cache for 5s to
+// avoid pinging main on every single chat turn.
+let _mcpToolCache = { at: 0, tools: [] }
+async function getMcpTools() {
+  const now = Date.now()
+  if (now - _mcpToolCache.at < 5000) return _mcpToolCache.tools
+  const r = await _bridge(_pendingMcpLists, 'mcp-list')
+  const tools = r && r.tools ? r.tools : []
+  _mcpToolCache = { at: now, tools }
+  return tools
 }
 
 /** Truncate tool args into a short, renderer-safe summary string. */
@@ -632,9 +655,11 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // everywhere else, and avoids models in unrelated spaces inventing
   // "analyze_lab_result" calls on random input).
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
+  const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,  // v0.5.5: browser agent tools are always available
+    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
   const useTools = allTools.length > 0 ? allTools : undefined
@@ -771,9 +796,11 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   const baseURL = 'http://localhost:11434'
   const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({ role: m.role, content: m.content }))]
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
+  const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,  // v0.5.5: browser agent tools are always available
+    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
   const useTools = allTools.length > 0 ? allTools : undefined
@@ -912,7 +939,8 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   }
   const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const mcpTools = await getMcpTools().catch(() => [])
+  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -1026,6 +1054,17 @@ process.stdin.on('data', (chunk) => {
       if (req.type === 'browser-tool-response') {
         const resolver = _pendingBrowserTools.get(req.id)
         if (resolver) { _pendingBrowserTools.delete(req.id); resolver(req.result) }
+        continue
+      }
+      // v0.5.6: MCP responses
+      if (req.type === 'mcp-call-response') {
+        const resolver = _pendingMcpCalls.get(req.id)
+        if (resolver) { _pendingMcpCalls.delete(req.id); resolver({ result: req.result }) }
+        continue
+      }
+      if (req.type === 'mcp-list-response') {
+        const resolver = _pendingMcpLists.get(req.id)
+        if (resolver) { _pendingMcpLists.delete(req.id); resolver({ tools: req.tools }) }
         continue
       }
       _inFlightRequest = { id: req.id }

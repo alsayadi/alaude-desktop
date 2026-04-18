@@ -8,6 +8,7 @@ const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
 const permissions = require('./permissions')
 const skills = require('./skills')
+const mcp = require('./mcp')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
 // Stored in ~/.alaude/permissions.json so it survives reinstalls. This
@@ -465,6 +466,22 @@ function getWorker() {
           } catch {}
           continue
         }
+        // v0.5.6: MCP tool bridge. Worker asks main for the current MCP
+        // tool schemas (so it can merge them into the request) or to execute
+        // an MCP tool call. Same shape as the browser-tool bridge.
+        if (resp.type === 'mcp-list') {
+          try { apiWorker?.stdin.write(JSON.stringify({ type: 'mcp-list-response', id: resp.id, tools: mcp.getToolSchemas() }) + '\n') } catch {}
+          continue
+        }
+        if (resp.type === 'mcp-call') {
+          ;(async () => {
+            let result
+            try { result = await mcp.callTool(resp.name, resp.args || {}) }
+            catch (err) { result = { error: String(err?.message || err) } }
+            try { apiWorker?.stdin.write(JSON.stringify({ type: 'mcp-call-response', id: resp.id, result }) + '\n') } catch {}
+          })()
+          continue
+        }
         // v0.5.5: Browser Agent tool request from the worker. We run the
         // actual Electron BrowserWindow API here in main (the worker can't
         // touch BrowserWindow) and write the result back to its stdin.
@@ -827,6 +844,15 @@ ipcMain.handle('skills-list', () => skills.list())
 ipcMain.handle('skills-upsert', (_e, skill) => skills.upsert(skill))
 ipcMain.handle('skills-remove', (_e, id) => { skills.remove(id); return true })
 ipcMain.handle('skills-set-enabled', (_e, id, enabled) => skills.setEnabled(id, enabled))
+
+// ── IPC: MCP (v0.5.6) ─────────────────────────────────────────────────────
+ipcMain.handle('mcp-status', () => mcp.listStatus())
+ipcMain.handle('mcp-add-server', async (_e, cfg) => {
+  const srv = await mcp.addServer(cfg)
+  return { name: srv.name, status: srv.status, toolCount: srv.tools.length, error: srv.error }
+})
+ipcMain.handle('mcp-remove-server', async (_e, name) => mcp.removeServer(name))
+ipcMain.handle('mcp-get-config', () => mcp.loadConfig())
 
 // ── IPC: Key management ─────────────────────────────────────────────────────
 
@@ -1458,6 +1484,13 @@ app.whenReady().then(() => {
   // v0.5.4: kick off the cron-skills scheduler. Fires due skills by running
   // a silent chat turn through the existing worker pipeline and notifying
   // the renderer so it can append the result into a dedicated skills session.
+  // v0.5.6: Boot any configured MCP servers. Don't await — a slow server
+  // shouldn't hold up the UI; its tools just appear once the handshake
+  // completes. Errors surface as toasts via the mcp-status event.
+  mcp.startAll().then(results => {
+    try { mainWindow?.webContents?.send('mcp-ready', results) } catch {}
+  }).catch(err => console.warn('[mcp] startAll failed:', err.message))
+
   try {
     skills.startScheduler(async (skill) => {
       const worker = getWorker()

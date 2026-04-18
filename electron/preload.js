@@ -63,6 +63,17 @@ contextBridge.exposeInMainWorld('alaude', {
   // Session events from menu
   onNewSession: (callback) => ipcRenderer.on('new-session', () => callback()),
 
+  // MCP — Model Context Protocol (v0.5.6)
+  mcpStatus: () => ipcRenderer.invoke('mcp-status'),
+  mcpAddServer: (cfg) => ipcRenderer.invoke('mcp-add-server', cfg),
+  mcpRemoveServer: (name) => ipcRenderer.invoke('mcp-remove-server', name),
+  mcpGetConfig: () => ipcRenderer.invoke('mcp-get-config'),
+  onMcpReady: (callback) => {
+    const h = (_e, payload) => callback(payload)
+    ipcRenderer.on('mcp-ready', h)
+    return () => ipcRenderer.removeListener('mcp-ready', h)
+  },
+
   // Cron Skills (v0.5.4)
   skillsList: () => ipcRenderer.invoke('skills-list'),
   skillsUpsert: (skill) => ipcRenderer.invoke('skills-upsert', skill),
