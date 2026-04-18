@@ -8293,15 +8293,25 @@ footer a { color: var(--accent); text-decoration: none; }
     function toggleCouncilMode() {
       councilMode = !councilMode
       if (councilMode && councilModels.length === 0) {
-        // Seed with the currently selected model + two useful defaults
+        // Seed with the currently selected model + two more — but prefer
+        // models whose provider is actually connected (dataset.connected='1')
+        // so a fresh install doesn't spawn 2 lanes that 401 immediately.
         const current = document.getElementById('model-select').value || ''
         const available = collectAvailableModels()
+        const ready = available.filter(m => m.connected)
         const seed = [current].filter(Boolean)
-        for (const m of available) {
+        // First pass: ready models from other providers (maximises diversity).
+        for (const m of ready) {
           if (seed.length >= 3) break
           if (!seed.includes(m.value)) seed.push(m.value)
         }
-        councilModels = seed.filter(Boolean).slice(0, 3)
+        // Fallback pass: if we still need slots and have no more ready models,
+        // leave the rest empty so the council-slot dropdown shows "pick model"
+        // instead of silently assigning one that will fail.
+        councilModels = seed.filter(Boolean).slice(0, Math.max(2, seed.length))
+        if (councilModels.length < 2 && ready.length === 0) {
+          showRewindToast?.('🎭 Council needs at least 2 connected providers — add a key or pull a local model', true)
+        }
       }
       saveCouncilState()
       refreshCouncilUi()
@@ -8313,7 +8323,11 @@ footer a { color: var(--accent); text-decoration: none; }
       for (const opt of Array.from(select.options)) {
         if (!opt.textContent) continue
         const group = opt.parentElement?.label || 'Other'
-        out.push({ value: opt.value || '', label: opt.textContent, group })
+        // `connected` reflects refreshModelReadiness's dataset flag — lets
+        // features like council-mode seeding prefer models that will actually
+        // work rather than ones whose provider lacks a key.
+        const connected = opt.dataset?.connected === '1'
+        out.push({ value: opt.value || '', label: opt.textContent, group, connected })
       }
       return out
     }
