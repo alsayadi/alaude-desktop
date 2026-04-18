@@ -12563,18 +12563,35 @@ Title:`
     // ── Login ────────────────────────────────────────────────────────────
 
     async function checkLoginStatus() {
-      const statuses = await window.alaude.getKeyStatuses()
-      const hasAny = Object.values(statuses).some(s => s === 'set')
       const loginScreen = document.getElementById('login-screen')
+      const status = document.getElementById('login-status')
+      let statuses
+      try {
+        statuses = await window.alaude.getKeyStatuses()
+      } catch (err) {
+        if (status) {
+          status.textContent = `⚠️ getKeyStatuses failed: ${err.message || err}`
+          status.className = 'login-status error'
+        }
+        console.error('[login] getKeyStatuses error:', err)
+        return
+      }
+      const hasAny = statuses && Object.values(statuses).some(s => s === 'set')
+      console.log('[login] statuses:', statuses, 'hasAny:', hasAny)
       if (hasAny) {
         loginScreen.classList.add('hidden')
-        // Re-annotate the model dropdown now that we know which providers are
-        // ready, and auto-switch off any 🔒 default the user was parked on.
+        // Belt-and-braces: some older CSS with !important could theoretically
+        // fight the .hidden class. Force-hide inline as well.
+        loginScreen.style.display = 'none'
         refreshModelReadiness?.()
-        // First-run coach on the welcome screen — shown once per install.
         maybeShowFirstRunCoach?.()
       } else {
         loginScreen.classList.remove('hidden')
+        loginScreen.style.display = ''
+        if (status && statuses) {
+          status.textContent = `No keys detected. Connected providers: ${Object.entries(statuses).filter(([,v]) => v === 'set').map(([k]) => k).join(', ') || 'none'}`
+          status.className = 'login-status'
+        }
       }
     }
 
@@ -12695,13 +12712,28 @@ Title:`
         return
       }
 
-      const ok = await window.alaude.setKey(provider, key)
+      status.textContent = 'Saving…'
+      status.className = 'login-status'
+      let ok
+      try {
+        ok = await window.alaude.setKey(provider, key)
+      } catch (err) {
+        status.textContent = `Save failed: ${err.message || err}`
+        status.className = 'login-status error'
+        console.error('[login] setKey error:', err)
+        return
+      }
       if (ok) {
-        status.textContent = 'Key saved!'
+        status.textContent = '✓ Key saved — loading app…'
         status.className = 'login-status success'
-        setTimeout(() => checkLoginStatus(), 500)
+        // Don't wait — dismiss the login screen immediately, then re-verify
+        // in the background. Users were seeing the screen stick after a
+        // successful save when getKeyStatuses had any async hiccup.
+        const ls = document.getElementById('login-screen')
+        if (ls) { ls.classList.add('hidden'); ls.style.display = 'none' }
+        setTimeout(() => checkLoginStatus(), 200)
       } else {
-        status.textContent = 'Failed to save key'
+        status.textContent = 'Failed to save key — check the value and try again'
         status.className = 'login-status error'
       }
     }
