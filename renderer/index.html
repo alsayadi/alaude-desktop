@@ -1763,6 +1763,84 @@
       margin: 0 2px;
     }
 
+    /* ── First-run coach card ──
+       Shows on the welcome screen exactly once per install, then dismissed
+       to `alaude:seenCoach:v1`. Clickable prompts demo killer features so
+       new users find them within the first minute. */
+    .first-run-coach {
+      margin-top: 28px;
+      max-width: 680px;
+      width: 100%;
+      padding: 16px 18px 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: color-mix(in oklch, var(--green) 6%, var(--bg-input));
+      text-align: left;
+      animation: msgSlideIn 0.3s ease-out;
+    }
+    .frc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .frc-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .frc-close {
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      font-size: 20px;
+      line-height: 1;
+      padding: 0 4px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .frc-close:hover { color: var(--text); background: var(--bg); }
+    .frc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 640px) { .frc-grid { grid-template-columns: 1fr; } }
+    .frc-prompt {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      text-align: left;
+      padding: 11px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color 0.12s, transform 0.1s;
+    }
+    .frc-prompt:hover { border-color: var(--green); transform: translateY(-1px); }
+    .frc-icon { font-size: 18px; line-height: 1; flex-shrink: 0; padding-top: 2px; }
+    .frc-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .frc-head { font-size: 13px; font-weight: 600; color: var(--text); }
+    .frc-hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+    .frc-footer {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+    .frc-footer kbd {
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--bg);
+      color: var(--text-dim);
+      font-family: var(--mono, ui-monospace, monospace);
+      font-size: 10px;
+      margin: 0 1px;
+    }
+
     @keyframes msgSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
     .scroll-fab {
@@ -4931,6 +5009,48 @@
         <div class="welcome-title">What can I help you with?</div>
         <div class="welcome-sub">Drop files here, or try one of these:</div>
         <div class="quick-actions" id="quick-actions"></div>
+        <!-- First-run coach card — shown once per install, then dismissed to
+             localStorage. Each prompt is clickable and demonstrates one of
+             Alaude's killer features so new users discover them early. -->
+        <div class="first-run-coach" id="first-run-coach" style="display:none">
+          <div class="frc-header">
+            <span class="frc-title">✨ New here? Try any of these</span>
+            <button class="frc-close" onclick="dismissFirstRunCoach()" title="Dismiss">×</button>
+          </div>
+          <div class="frc-grid">
+            <button class="frc-prompt" onclick="coachFillAndSend('Build me a playable snake game I can run right here')">
+              <span class="frc-icon">🎮</span>
+              <span class="frc-body">
+                <span class="frc-head">Playable games in chat</span>
+                <span class="frc-hint">Alaude runs HTML artifacts in a sandboxed iframe — keyboard works.</span>
+              </span>
+            </button>
+            <button class="frc-prompt" onclick="coachFillAndSend('Make a bar chart comparing Q1-Q4 revenue: 120, 150, 180, 210 (in thousands)')">
+              <span class="frc-icon">📊</span>
+              <span class="frc-body">
+                <span class="frc-head">Inline charts</span>
+                <span class="frc-hint">```chart blocks render as real SVG.</span>
+              </span>
+            </button>
+            <button class="frc-prompt" onclick="coachFillAndSend('Write a one-page PPTX about the solar system — title, 3 planet slides with bullets')">
+              <span class="frc-icon">📄</span>
+              <span class="frc-body">
+                <span class="frc-head">Real Office files</span>
+                <span class="frc-hint">.pptx / .docx / .xlsx with Save + Open.</span>
+              </span>
+            </button>
+            <button class="frc-prompt" onclick="coachOpenCouncil()">
+              <span class="frc-icon">🎭</span>
+              <span class="frc-body">
+                <span class="frc-head">Compare models side-by-side</span>
+                <span class="frc-hint">Ask 3 models the same question. ⌘⇧C.</span>
+              </span>
+            </button>
+          </div>
+          <div class="frc-footer">
+            Power-user tips: <kbd>⌘K</kbd> palette · <kbd>⌘1-6</kbd> model slots · <kbd>⌘F</kbd> find · <kbd>⌘/</kbd> snippets
+          </div>
+        </div>
       </div>
       <div class="drop-overlay" id="drop-overlay">
         <div class="drop-icon">📎</div>
@@ -11722,9 +11842,49 @@ Title:`
         // Re-annotate the model dropdown now that we know which providers are
         // ready, and auto-switch off any 🔒 default the user was parked on.
         refreshModelReadiness?.()
+        // First-run coach on the welcome screen — shown once per install.
+        maybeShowFirstRunCoach?.()
       } else {
         loginScreen.classList.remove('hidden')
       }
+    }
+
+    // ── First-run coach ──────────────────────────────────────────────────
+    const LS_FIRST_RUN_COACH = 'alaude:seenCoach:v1'
+    function maybeShowFirstRunCoach() {
+      try {
+        if (localStorage.getItem(LS_FIRST_RUN_COACH)) return
+        // Only show when the welcome screen is the active view (no messages yet).
+        if (!Array.isArray(messages) || messages.length > 0) return
+        const card = document.getElementById('first-run-coach')
+        if (card) card.style.display = 'block'
+      } catch {}
+    }
+    function dismissFirstRunCoach() {
+      try { localStorage.setItem(LS_FIRST_RUN_COACH, String(Date.now())) } catch {}
+      const card = document.getElementById('first-run-coach')
+      if (card) card.style.display = 'none'
+    }
+    // Click a prompt chip → fill the composer, focus, and send. Also dismiss
+    // the coach so it doesn't re-appear for subsequent sessions.
+    function coachFillAndSend(text) {
+      const box = document.getElementById('input')
+      if (!box) return
+      box.value = text
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+      dismissFirstRunCoach()
+      try { sendMessage() } catch { box.focus() }
+    }
+    function coachOpenCouncil() {
+      dismissFirstRunCoach()
+      // Flip council mode ON and focus the composer so the user can type
+      // a prompt that will fan out to the pinned model slots.
+      try {
+        const btn = document.getElementById('council-toggle')
+        if (btn && !btn.classList.contains('on') && typeof toggleCouncilMode === 'function') toggleCouncilMode()
+        document.getElementById('input')?.focus()
+        showRewindToast?.('🎭 Council mode on — type a prompt, 3 models will answer in parallel', false)
+      } catch { document.getElementById('input')?.focus() }
     }
 
     async function loginOAuth(provider) {
