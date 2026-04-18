@@ -726,12 +726,42 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
       ...(useTools ? { tools: useTools } : {}),
     }
     // Stream NDJSON. Each line is a {message:{role,content,thinking?,tool_calls?},done?} object.
-    const res = await fetch(`${baseURL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    // Sanitize messages: Ollama's native API rejects OpenAI-shaped `tool` role
+    // messages that use `tool_call_id`. It expects `tool_name` instead. Also
+    // strip fields it doesn't recognize on assistant messages.
+    body.messages = body.messages.map(m => {
+      if (m.role === 'tool') {
+        // OpenAI shape → Ollama shape. Ollama takes `tool_name` keyed to the
+        // most recent tool_calls entry in the preceding assistant msg.
+        const out = { role: 'tool', content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }
+        if (m.tool_name) out.tool_name = m.tool_name
+        return out
+      }
+      // Content may be a multimodal array — flatten text parts for Ollama.
+      let content = m.content
+      if (Array.isArray(content)) {
+        content = content.filter(p => p?.type === 'text').map(p => p.text || '').join('\n')
+      }
+      return { role: m.role, content: content == null ? '' : String(content) }
     })
-    if (!res.ok) throw new Error(`Ollama /api/chat failed: ${res.status} ${res.statusText}`)
+
+    let res
+    try {
+      res = await fetch(`${baseURL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch (netErr) {
+      throw new Error(`Ollama /api/chat network error: ${netErr.message}`)
+    }
+    if (!res.ok) {
+      let errBody = ''
+      try { errBody = (await res.text()).slice(0, 300) } catch {}
+      process.stderr.write(`[worker] Ollama /api/chat ${res.status}: ${errBody}\n`)
+      process.stderr.write(`[worker] request payload (truncated): ${JSON.stringify(body).slice(0, 600)}\n`)
+      throw new Error(`Ollama /api/chat failed: ${res.status} ${res.statusText}${errBody ? ' — ' + errBody : ''}`)
+    }
 
     let assistantMsg = { role: 'assistant', content: '' }
     const partialTools = []
@@ -792,7 +822,9 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
           isNewFile: result.isNewFile,
         })
       }
-      chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 50000) })
+      // Ollama native shape: `tool_name` keys the result back to the function,
+      // not an OpenAI-style tool_call_id.
+      chatMsgs.push({ role: 'tool', tool_name: tc.function.name, content: JSON.stringify(result).slice(0, 50000) })
     }
   }
   return fullText || '(no response)'
