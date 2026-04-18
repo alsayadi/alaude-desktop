@@ -11498,26 +11498,29 @@ Title:`
         if (!select) return
         for (const opt of select.options) {
           if (!opt.value && !opt.text) continue
-          // Don't re-annotate the dynamic Local optgroup — those are always
-          // ready by definition once installed.
-          if (opt.parentElement?.id === 'model-select-local') continue
-          const provider = providerOf(opt.value || '')
-          const connected = statuses[provider] === 'set'
+          // Local Ollama options are always ready once installed — mark them
+          // ⚡ too so the auto-switch loop below can find them.
+          const isLocal = opt.parentElement?.id === 'model-select-local'
+          const provider = isLocal ? 'ollama' : providerOf(opt.value || '')
+          const connected = isLocal || statuses[provider] === 'set'
           // Strip any old marker (⚡ / 🔒 at start of the label)
           const rawLabel = opt.text.replace(/^[⚡🔒]\s+/, '')
           opt.text = (connected ? '⚡ ' : '🔒 ') + rawLabel
           opt.dataset.connected = connected ? '1' : '0'
         }
-        // If the currently selected model's provider has no key, switch to the
-        // first available one (prefer local → Claude → whatever's connected).
+        // Auto-switch only when the CURRENT selection looks like a dead-on-boot
+        // default the user never intentionally picked — i.e. the HTML-marked
+        // `selected` default OR the very first option, and its provider is
+        // not connected. Don't override an explicit user choice.
+        const htmlDefault = Array.from(select.options).find(o => o.defaultSelected)?.value ?? select.options[0]?.value
+        const isDefault = select.value === htmlDefault || !_lastModelForUx
         const current = select.value
         const currentProv = providerOf(current || '')
-        if (statuses[currentProv] !== 'set') {
+        if (isDefault && statuses[currentProv] !== 'set') {
           const preferred = ['ollama', 'anthropic', 'openai', 'google', 'xai', 'moonshot', 'dashscope', 'zhipu']
           const firstReady = preferred.find(p => statuses[p] === 'set')
           if (firstReady) {
-            // Pick the first option matching that provider.
-            const found = Array.from(select.options).find(o => o.dataset.connected === '1' && providerOf(o.value || '') === firstReady)
+            const found = Array.from(select.options).find(o => o.dataset.connected === '1' && (o.parentElement?.id === 'model-select-local' ? firstReady === 'ollama' : providerOf(o.value || '') === firstReady))
             if (found) { select.value = found.value; changeModel(found.value) }
           }
         }
@@ -13126,6 +13129,9 @@ Title:`
       if (!og) return
       og.innerHTML = lmInstalled.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')
       og.style.display = lmInstalled.length ? '' : 'none'
+      // New local tags need the ⚡ marker + dataset.connected so the readiness
+      // auto-switch / visual cue stay consistent after a pull / remove.
+      refreshModelReadiness?.()
     }
 
     async function downloadLocalModel(model) {
