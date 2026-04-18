@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('alaude', {
   // replacement for recovering the real on-disk path of a dropped/picked File.
   getPathForFile: (file) => { try { return webUtils.getPathForFile(file) } catch { return '' } },
   readFileForChat: (filePath) => ipcRenderer.invoke('read-file-for-chat', filePath),
+  // v0.6.0 Screen Vision: takes a screenshot and returns the file path.
+  // mode: 'region' (default, interactive crosshair) | 'window' | 'screen'.
+  captureScreen: (mode) => ipcRenderer.invoke('capture-screen', mode),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   saveFile: (content, defaultName) => ipcRenderer.invoke('save-file', content, defaultName),
   saveBinaryFile: (arrayBuffer, defaultName) => ipcRenderer.invoke('save-binary-file', arrayBuffer, defaultName),

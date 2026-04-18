@@ -1057,6 +1057,51 @@ ipcMain.handle('read-file-for-chat', async (_, filePath) => {
   }
 })
 
+// v0.6.0: Screen Vision — macOS screencapture CLI grabs a region (default),
+// the whole screen, or the frontmost window. The PNG path flows through the
+// same read-file-for-chat pipeline so the attachment chip + base64 encode +
+// vision-model routing all work without extra plumbing.
+ipcMain.handle('capture-screen', async (_e, mode = 'region') => {
+  const { spawn } = require('child_process')
+  const fs = require('fs')
+  const tmpDir = path.join(os.tmpdir(), 'alaude-screenshots')
+  try { fs.mkdirSync(tmpDir, { recursive: true }) } catch {}
+  const outPath = path.join(tmpDir, `shot-${Date.now()}.png`)
+  const args = ['-x']  // -x: no shutter sound
+  if (mode === 'region') args.push('-s')       // interactive crosshair select
+  else if (mode === 'window') args.push('-Wo') // window pick, no drop shadow
+  // else 'screen' — no extra flags → full primary screen
+  args.push(outPath)
+
+  return new Promise((resolve, reject) => {
+    // Hide Alaude briefly so the user can capture underneath the app.
+    const wasVisible = mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized()
+    if (wasVisible && mode !== 'screen') {
+      try { mainWindow.hide() } catch {}
+    }
+    const child = spawn('/usr/sbin/screencapture', args, { stdio: 'ignore' })
+    child.on('error', (err) => {
+      if (wasVisible) try { mainWindow.show() } catch {}
+      reject(new Error('screencapture failed: ' + err.message))
+    })
+    child.on('close', (code) => {
+      if (wasVisible) try { mainWindow.show(); mainWindow.focus() } catch {}
+      if (code !== 0) {
+        // User pressed Esc during -s region select — not an error, just null.
+        try { fs.unlinkSync(outPath) } catch {}
+        return resolve(null)
+      }
+      if (!fs.existsSync(outPath)) return resolve(null)
+      const stats = fs.statSync(outPath)
+      if (stats.size < 100) { // likely empty / cancelled
+        try { fs.unlinkSync(outPath) } catch {}
+        return resolve(null)
+      }
+      resolve(outPath)
+    })
+  })
+})
+
 ipcMain.handle('pick-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
