@@ -3118,6 +3118,36 @@
     .msg-content .md-svg > svg { max-width: 100%; height: auto; }
 
     /* ─── HTML Artifacts (sandboxed iframes) ───────────────────── */
+    /* v0.5.8 Inline code runner — Python / JavaScript in chat */
+    .md-coderun {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 10px 0;
+      background: var(--bg-input);
+    }
+    .md-coderun-src {
+      margin: 0;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      color: var(--text);
+      font-family: 'SF Mono', ui-monospace, monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      max-height: 320px;
+      overflow: auto;
+      border-top: 1px solid var(--border);
+    }
+    .md-coderun-frame {
+      width: 100%;
+      min-height: 80px;
+      max-height: 480px;
+      border: 0;
+      border-top: 1px solid var(--border);
+      background: #fff;
+    }
+    .md-coderun.show-source-only .md-coderun-frame { display: none !important }
+
     .md-artifact {
       margin: 10px 0;
       border: 1px solid var(--border);
@@ -11125,13 +11155,122 @@ Title:`
       root.classList.toggle('tall')
     }
     async function mdaCopySource(btn) {
-      const root = btn.closest('.md-artifact')
+      const root = btn.closest('.md-artifact') || btn.closest('.md-coderun')
       if (!root) return
-      const src = root.querySelector('.md-artifact-src code')?.textContent || ''
+      const src = (root.querySelector('.md-artifact-src code') || root.querySelector('.md-coderun-src code'))?.textContent || ''
       try {
         await navigator.clipboard.writeText(src)
-        showRewindToast?.('📋 Copied artifact source', false)
+        showRewindToast?.('📋 Copied source', false)
       } catch {}
+    }
+
+    // ── v0.5.8 Inline code runner ────────────────────────────────────────
+    // Click ▶ Run on a ```python-run / ```js-run block → spawn a sandboxed
+    // iframe that loads the appropriate runtime (Pyodide for Python, nothing
+    // for JS since it's native), executes the user's code, and streams
+    // stdout/stderr into its own body as the output pane. The iframe is
+    // scoped to allow-scripts only — no access to the app's DOM or IPC.
+    function _buildCodeRunnerSrcdoc(lang, code) {
+      const codeJson = JSON.stringify(code)
+      if (lang === 'python-run') {
+        // Pyodide is loaded from the official CDN. ~6 MB first time; cached
+        // after. We redirect stdout/stderr into a <pre> so print() output
+        // shows up as it happens. matplotlib + pandas are auto-loaded if
+        // imports are detected (Pyodide's loadPackagesFromImports helper).
+        return `<!doctype html><html><head><meta charset="utf-8"><style>
+            html,body{margin:0;padding:0;font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:12.5px;background:#fff;color:#111;line-height:1.5}
+            #status{padding:8px 12px;color:#666;font-style:italic;border-bottom:1px solid #eee}
+            #out{padding:8px 12px;white-space:pre-wrap;word-break:break-word;min-height:40px}
+            .err{color:#c00}
+          </style></head><body>
+          <div id="status">Loading Python runtime (Pyodide)…</div>
+          <div id="out"></div>
+          <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+          <script>(async () => {
+            const status = document.getElementById('status')
+            const out = document.getElementById('out')
+            try {
+              const py = await loadPyodide()
+              status.textContent = 'Running…'
+              py.setStdout({batched: s => out.appendChild(document.createTextNode(s + '\\n'))})
+              py.setStderr({batched: s => { const e = document.createElement('span'); e.className='err'; e.textContent = s + '\\n'; out.appendChild(e) }})
+              const code = ${codeJson}
+              try { await py.loadPackagesFromImports(code) } catch {}
+              try {
+                const t0 = performance.now()
+                const result = await py.runPythonAsync(code)
+                const ms = Math.round(performance.now() - t0)
+                if (result !== undefined && result !== null) {
+                  const pre = document.createElement('div')
+                  pre.style.marginTop = '6px'; pre.style.color = '#0a7'
+                  pre.textContent = '⇒ ' + String(result)
+                  out.appendChild(pre)
+                }
+                status.textContent = 'Done · ' + ms + 'ms'
+                status.style.color = '#0a7'
+              } catch (e) {
+                const err = document.createElement('div'); err.className = 'err'
+                err.textContent = String(e.message || e)
+                out.appendChild(err)
+                status.textContent = 'Error'; status.style.color = '#c00'
+              }
+            } catch (e) {
+              status.textContent = 'Failed to load Pyodide: ' + e.message
+              status.style.color = '#c00'
+            }
+          })()<\/script></body></html>`
+      }
+      // JavaScript runner — tiny, no CDN dep.
+      return `<!doctype html><html><head><meta charset="utf-8"><style>
+          html,body{margin:0;padding:0;font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:12.5px;background:#fff;color:#111;line-height:1.5}
+          #status{padding:8px 12px;color:#666;font-style:italic;border-bottom:1px solid #eee}
+          #out{padding:8px 12px;white-space:pre-wrap;word-break:break-word;min-height:40px}
+          .err{color:#c00}
+          .ret{color:#0a7;margin-top:6px}
+        </style></head><body>
+        <div id="status">Running…</div>
+        <div id="out"></div>
+        <script>(async () => {
+          const status = document.getElementById('status')
+          const out = document.getElementById('out')
+          const append = (s, cls) => { const n = document.createElement(cls === 'err' ? 'span' : 'span'); if (cls) n.className = cls; n.textContent = String(s) + '\\n'; out.appendChild(n) }
+          console.log = (...a) => append(a.map(x => typeof x === 'object' ? JSON.stringify(x, null, 2) : String(x)).join(' '))
+          console.error = (...a) => append(a.join(' '), 'err')
+          console.warn = console.error
+          try {
+            const t0 = performance.now()
+            const code = ${codeJson}
+            const asyncFn = new Function('"use strict";return (async () => { ' + code + ' })()')
+            const result = await asyncFn()
+            const ms = Math.round(performance.now() - t0)
+            if (result !== undefined) {
+              const r = document.createElement('div'); r.className = 'ret'
+              r.textContent = '⇒ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result))
+              out.appendChild(r)
+            }
+            status.textContent = 'Done · ' + ms + 'ms'; status.style.color = '#0a7'
+          } catch (e) {
+            append(e.message || e, 'err'); status.textContent = 'Error'; status.style.color = '#c00'
+          }
+        })()<\/script></body></html>`
+    }
+    function runCodeBlock(btn) {
+      const root = btn.closest('.md-coderun')
+      if (!root) return
+      const lang = root.dataset.lang
+      let code = ''
+      try { code = decodeURIComponent(escape(atob(root.dataset.src || ''))) } catch { code = '' }
+      const srcdoc = _buildCodeRunnerSrcdoc(lang, code)
+      const frame = root.querySelector('.md-coderun-frame')
+      if (!frame) return
+      frame.srcdoc = srcdoc
+      frame.style.display = 'block'
+      btn.textContent = '↻ Re-run'
+    }
+    function mdRunToggleSource(btn) {
+      const root = btn.closest('.md-coderun')
+      if (!root) return
+      root.classList.toggle('show-source-only')
     }
     // Listen for errors inside artifact iframes (posted by our injected hook)
     // and surface them as a visible red banner on the owning artifact card.
@@ -11253,7 +11392,7 @@ Title:`
     // office files / diagrams). During streaming we collapse them to a
     // compact "Building…" chip because partial content would either render
     // wrong (invalid JSON/HTML) or be visually noisy.
-    const RICH_BLOCK_LANGS = new Set(['html', 'artifact', 'chart', 'mermaid', 'svg', 'pptx', 'docx', 'xlsx'])
+    const RICH_BLOCK_LANGS = new Set(['html', 'artifact', 'chart', 'mermaid', 'svg', 'pptx', 'docx', 'xlsx', 'python-run', 'js-run'])
     const RICH_LANG_LABEL = {
       html: 'HTML Artifact', artifact: 'HTML Artifact',
       chart: 'Chart', mermaid: 'Diagram', svg: 'SVG',
@@ -11456,6 +11595,28 @@ Title:`
         // The file is built lazily on the user's click (libs load from CDN).
         if (lc === 'pptx' || lc === 'docx' || lc === 'xlsx') {
           return renderOfficeBlock(lc, code)
+        }
+        // ── v0.5.8 Inline code runner: ```python-run and ```js-run ──────────
+        // The model can now emit executable snippets that run right in the
+        // chat bubble. Sandboxed iframe with `allow-scripts` only — no DOM
+        // access to the rest of the app, no network except what the
+        // runtime itself fetches (Pyodide CDN for Python).
+        if (lc === 'python-run' || lc === 'js-run') {
+          const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          const encoded = btoa(unescape(encodeURIComponent(code)))
+          const isPy = lc === 'python-run'
+          const label = isPy ? '🐍 Python · sandboxed' : '🟨 JavaScript · sandboxed'
+          return `
+            <div class="md-coderun" data-lang="${lc}" data-src="${encoded}">
+              <div class="md-artifact-head">
+                <span class="mda-label">${label}</span>
+                <button class="mda-run-btn" onclick="runCodeBlock(this)">▶ Run</button>
+                <button onclick="mdRunToggleSource(this)">&lt;&gt; Source</button>
+                <button onclick="mdaCopySource(this)" title="Copy code">📋</button>
+              </div>
+              <pre class="md-coderun-src"><code>${escCode}</code></pre>
+              <iframe class="md-coderun-frame" style="display:none" sandbox="allow-scripts"></iframe>
+            </div>`
         }
         // HTML Artifacts: ```html or ```artifact → sandboxed iframe. The model
         // can now ship small games, interactive demos, canvas animations,

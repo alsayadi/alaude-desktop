@@ -171,22 +171,26 @@ function shouldSkipToolsForLocal(model) {
 // assembles a *minimal* prompt for plain-prose questions and adds only the
 // rich-block docs the user's message actually hints at.
 const RICH_BLOCK_DOCS = {
-  chart:   '• ```chart JSON → inline SVG. Shape: {"type":"bar|line|pie|area|donut","title":"...","data":{"labels":[...],"values":[...]}}',
-  mermaid: '• ```mermaid → flowchart / sequence / class / gantt / ER.',
-  svg:     '• ```svg → raw <svg> for custom illustrations.',
-  html:    '• ```html (or ```artifact) → standalone HTML + JS + CSS, sandboxed iframe. Include everything inline.',
-  pptx:    '• ```pptx → .pptx file. Shape: {"title":"...","subtitle":"...","slides":[{"title":"...","bullets":["..."],"body":"...","notes":"..."}]}',
-  docx:    '• ```docx → .docx file. Shape: {"title":"...","sections":[{"heading":"...","level":1,"body":"...","bullets":["..."]}]}',
-  xlsx:    '• ```xlsx → .xlsx file. Shape: {"title":"...","sheets":[{"name":"...","rows":[["H1","H2"],[1,2]]}]}',
+  chart:     '• ```chart JSON → inline SVG. Shape: {"type":"bar|line|pie|area|donut","title":"...","data":{"labels":[...],"values":[...]}}',
+  mermaid:   '• ```mermaid → flowchart / sequence / class / gantt / ER.',
+  svg:       '• ```svg → raw <svg> for custom illustrations.',
+  html:      '• ```html (or ```artifact) → standalone HTML + JS + CSS, sandboxed iframe. Include everything inline.',
+  pptx:      '• ```pptx → .pptx file. Shape: {"title":"...","subtitle":"...","slides":[{"title":"...","bullets":["..."],"body":"...","notes":"..."}]}',
+  docx:      '• ```docx → .docx file. Shape: {"title":"...","sections":[{"heading":"...","level":1,"body":"...","bullets":["..."]}]}',
+  xlsx:      '• ```xlsx → .xlsx file. Shape: {"title":"...","sheets":[{"name":"...","rows":[["H1","H2"],[1,2]]}]}',
+  pythonrun: '• ```python-run → executable Python in the user\'s chat (Pyodide). Use print() for output. Has numpy/pandas/matplotlib on demand. Great for calculations, data analysis, quick plots. Runs in a sandbox — no network, no filesystem.',
+  jsrun:     '• ```js-run → executable JavaScript in the user\'s chat. Use console.log() for output. Return a value as the last expression to see it. Great for quick scripts, JSON manipulation, API-shape exploration.',
 }
 const RICH_BLOCK_KEYWORDS = {
-  chart:   /\b(chart|graph|plot|bar\s*chart|pie\s*chart|line\s*chart|donut|visuali[sz]e|chart\s*of)\b/i,
-  mermaid: /\b(diagram|flow(chart)?|sequence\s*diagram|gantt|class\s*diagram|er\s*diagram|architecture\s*diagram)\b/i,
-  svg:     /\b(svg|illustration|icon|draw\s*(a|an|me))\b/i,
-  html:    /\b(game|playable|interactive|widget|canvas|demo|animation|simulation|typing\s*test|run\s*it)\b/i,
-  pptx:    /\b(slides?|deck|presentation|powerpoint|pptx)\b/i,
-  docx:    /\b(document|report|write[- ]?up|brief|memo|docx|word\s*doc)\b/i,
-  xlsx:    /\b(spreadsheet|excel|workbook|xlsx|roster|budget|table\s*of\s*(data|numbers))\b/i,
+  chart:     /\b(chart|graph|plot|bar\s*chart|pie\s*chart|line\s*chart|donut|visuali[sz]e|chart\s*of)\b/i,
+  mermaid:   /\b(diagram|flow(chart)?|sequence\s*diagram|gantt|class\s*diagram|er\s*diagram|architecture\s*diagram)\b/i,
+  svg:       /\b(svg|illustration|icon|draw\s*(a|an|me))\b/i,
+  html:      /\b(game|playable|interactive|widget|canvas|demo|animation|simulation|typing\s*test|run\s*it)\b/i,
+  pptx:      /\b(slides?|deck|presentation|powerpoint|pptx)\b/i,
+  docx:      /\b(document|report|write[- ]?up|brief|memo|docx|word\s*doc)\b/i,
+  xlsx:      /\b(spreadsheet|excel|workbook|xlsx|roster|budget|table\s*of\s*(data|numbers))\b/i,
+  pythonrun: /\b(python|pandas|numpy|matplotlib|calculate|compute|simulate|crunch|fibonacci|prime|data\s*analysis)\b/i,
+  jsrun:     /\b(javascript|json|parse|regex|transform|format|js\b)\b/i,
 }
 
 /**
