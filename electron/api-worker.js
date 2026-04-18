@@ -268,8 +268,16 @@ function formatHealthCard(toolName, args, result) {
   return null // No special formatting — use default
 }
 
-async function executeToolCall(name, args, workspacePath) {
+async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   const { execSync } = require('child_process')
+  // v0.4.0: Observe mode is read-only. The gate here lives alongside the
+  // existing containedPath guards so a wrong mode can't slip past. More
+  // granular gates (prompt / allow-list / rule resolution) arrive with the
+  // approval IPC in v0.4.1+.
+  const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server'])
+  if (mode === 'observe' && WRITE_TOOLS.has(name)) {
+    return { error: `Observe mode is read-only. Switch to Careful, Flow, or Autopilot (Shift+Tab) to enable ${name}.` }
+  }
   try {
     // ── Health tools (no workspace required) ──
     if (name === 'analyze_lab_result') {
@@ -401,7 +409,7 @@ function summarizeArgs(name, args) {
   return ''
 }
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId }) {
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -455,19 +463,19 @@ Rules:
   const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity })
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
     const skipTools = shouldSkipToolsForLocal(model)
-    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools, onActivity })
+    return await chatOpenAI(messages, normalizeOllamaModel(model), provider, workspacePath, sysPrompt, { skipTools, onActivity, mode })
   } else {
-    return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt, { onActivity })
+    return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt, { onActivity, mode })
   }
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {} } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
   const OpenAI = require('openai').default || require('openai')
   // Ollama runs locally; keep a shorter timeout for external providers, longer for local generation.
   const timeout = provider === 'ollama' ? 300000 : 60000
@@ -539,7 +547,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
       for (const tc of msg.tool_calls) {
         const args = JSON.parse(tc.function.arguments || '{}')
         onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
-        const result = await executeToolCall(tc.function.name, args, workspacePath)
+        const result = await executeToolCall(tc.function.name, args, workspacePath, mode)
         onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
         // Emit a structured file_edit event with old/new content so the renderer
         // can show a live colored diff inline in the chat bubble.
@@ -580,7 +588,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {} } = opts
+  const { onActivity = () => {}, mode = 'autopilot' } = opts
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
   // token. The SDK takes authToken for Bearer auth. When the credential
@@ -651,7 +659,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
       const results = []
       for (const tu of tuBlocks) {
         onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
-        const result = await executeToolCall(tu.name, tu.input, workspacePath)
+        const result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
         onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
         if (tu.name === 'write_file' && result?.success) {
           onActivity({

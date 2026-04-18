@@ -6,6 +6,59 @@ const crypto = require('crypto')
 const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
+const permissions = require('./permissions')
+
+// ── Permission mode persistence (v0.4.0) ──────────────────────────────────
+// Stored in ~/.alaude/permissions.json so it survives reinstalls. This
+// release only exposes Observe + Autopilot to the UI; Careful/Flow arrive
+// in v0.4.1/0.4.2 once the approval dialog lands.
+const PERMISSIONS_FILE = path.join(os.homedir(), '.alaude', 'permissions.json')
+let permState = null  // { version, defaultMode, workspaces: { [path]: { mode, allow, deny } } }
+
+function loadPermissions() {
+  try {
+    const fs = require('fs')
+    if (!fs.existsSync(PERMISSIONS_FILE)) return { version: 1, defaultMode: 'autopilot', workspaces: {} }
+    const raw = fs.readFileSync(PERMISSIONS_FILE, 'utf8')
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') throw new Error('malformed')
+    if (!parsed.workspaces || typeof parsed.workspaces !== 'object') parsed.workspaces = {}
+    if (!permissions.MODES.includes(parsed.defaultMode)) parsed.defaultMode = 'autopilot'
+    return parsed
+  } catch (err) {
+    console.warn('[permissions] could not load, using defaults:', err.message)
+    return { version: 1, defaultMode: 'autopilot', workspaces: {} }
+  }
+}
+function savePermissions(state) {
+  try {
+    const fs = require('fs')
+    fs.mkdirSync(path.dirname(PERMISSIONS_FILE), { recursive: true })
+    fs.writeFileSync(PERMISSIONS_FILE, JSON.stringify(state, null, 2), 'utf8')
+  } catch (err) {
+    console.error('[permissions] save failed:', err.message)
+  }
+}
+function getCurrentMode(workspacePath) {
+  if (!permState) permState = loadPermissions()
+  if (workspacePath && permState.workspaces?.[workspacePath]?.mode) {
+    const m = permState.workspaces[workspacePath].mode
+    if (permissions.MODES.includes(m)) return m
+  }
+  return permState.defaultMode
+}
+function setCurrentMode(workspacePath, mode) {
+  if (!permissions.MODES.includes(mode)) return false
+  if (!permState) permState = loadPermissions()
+  if (workspacePath) {
+    if (!permState.workspaces[workspacePath]) permState.workspaces[workspacePath] = {}
+    permState.workspaces[workspacePath].mode = mode
+  } else {
+    permState.defaultMode = mode
+  }
+  savePermissions(permState)
+  return true
+}
 
 // Tiny duplicate of api-worker's detectProvider, so main can derive provider
 // from a model string for telemetry without round-tripping through the worker.
@@ -507,7 +560,10 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
       resolve: (result) => { finalize(true, null, String(result || '').length); resolve(result) },
       reject: (err) => { finalize(false, err); reject(err) },
     })
-    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt }) + '\n'
+    // Pass the current permission mode for this workspace so the worker can
+    // gate tool execution before the OS-level tool call actually runs.
+    const mode = getCurrentMode(workspacePath)
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
 
@@ -715,6 +771,29 @@ async function chatGemini(messagesRaw, model) {
 
   return response.text || ''
 }
+
+// ── IPC: Permission modes (v0.4.0) ──────────────────────────────────────────
+
+ipcMain.handle('perm-get-mode', (_e, workspacePath) => {
+  const mode = getCurrentMode(workspacePath)
+  return { mode, meta: permissions.MODE_META[mode], allModes: permissions.MODES, allMeta: permissions.MODE_META }
+})
+
+ipcMain.handle('perm-set-mode', (_e, workspacePath, mode) => {
+  return setCurrentMode(workspacePath, mode)
+})
+
+ipcMain.handle('perm-cycle-mode', (_e, workspacePath) => {
+  const current = getCurrentMode(workspacePath)
+  const next = permissions.nextMode(current)
+  setCurrentMode(workspacePath, next)
+  return { mode: next, meta: permissions.MODE_META[next] }
+})
+
+ipcMain.handle('perm-get-state', () => {
+  if (!permState) permState = loadPermissions()
+  return permState
+})
 
 // ── IPC: Key management ─────────────────────────────────────────────────────
 

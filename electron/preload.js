@@ -60,6 +60,12 @@ contextBridge.exposeInMainWorld('alaude', {
   // Session events from menu
   onNewSession: (callback) => ipcRenderer.on('new-session', () => callback()),
 
+  // Permission mode (v0.4.0 — Observe + Autopilot; Careful/Flow arrive later)
+  permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),
+  permSetMode: (workspacePath, mode) => ipcRenderer.invoke('perm-set-mode', workspacePath, mode),
+  permCycleMode: (workspacePath) => ipcRenderer.invoke('perm-cycle-mode', workspacePath),
+  permGetState: () => ipcRenderer.invoke('perm-get-state'),
+
   // Ollama local runtime
   ollamaAvailable: () => ipcRenderer.invoke('ollama-available'),
   ollamaList: () => ipcRenderer.invoke('ollama-list'),

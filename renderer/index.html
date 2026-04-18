@@ -2050,6 +2050,19 @@
       :root:not([data-theme]) .msg-content [style*="color:#999"] { color: var(--text-faint) !important; }
     }
 
+    /* ─── Permission mode pill (v0.4.0) ────────────────────────────────────── */
+    /* The pill lives alongside other top-bar buttons; color-coded per mode so
+       the user knows at a glance whether the model can touch their disk. */
+    .topbar-keys-btn.perm-mode-btn {
+      gap: 4px;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    .topbar-keys-btn.perm-mode-btn[data-mode="observe"]   { border-color: #e0994a; color: #e0994a; background: color-mix(in oklch, #e0994a 10%, var(--bg-input)); }
+    .topbar-keys-btn.perm-mode-btn[data-mode="careful"]   { border-color: #3b82f6; color: #3b82f6; background: color-mix(in oklch, #3b82f6 10%, var(--bg-input)); }
+    .topbar-keys-btn.perm-mode-btn[data-mode="flow"]      { border-color: #14b8a6; color: #14b8a6; background: color-mix(in oklch, #14b8a6 10%, var(--bg-input)); }
+    .topbar-keys-btn.perm-mode-btn[data-mode="autopilot"] { border-color: var(--text-faint); color: var(--text-dim); }
+
     /* ─── Council mode ────────────────────────────────────────────────────── */
     .topbar-keys-btn.council-toggle.on {
       border-color: var(--green);
@@ -4977,6 +4990,11 @@
         <span class="model-slots" id="model-slots"></span>
       </div>
       <div class="topbar-actions">
+        <!-- Permission mode pill — v0.4.0 ships Observe + Autopilot only; Careful/Flow arrive when the approval dialog lands. Shift+Tab cycles. -->
+        <button class="topbar-keys-btn perm-mode-btn" id="perm-mode-btn" onclick="cyclePermMode()" title="Permission mode — click to cycle (⇧⇥). Observe = read-only, Autopilot = run everything.">
+          <span id="perm-mode-icon">🚀</span>
+          <span id="perm-mode-label">Autopilot</span>
+        </button>
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)">
           🎭 <span id="council-label">Council</span>
         </button>
@@ -8285,6 +8303,32 @@ footer a { color: var(--accent); text-decoration: none; }
       renderCouncilSlots()
     }
 
+    // ── Permission mode pill (v0.4.0) ─────────────────────────────────────
+    // Thin renderer glue — the real policy lives in electron/permissions.js.
+    // This pill lets users toggle between read-only Observe and
+    // full-autonomy Autopilot. Intermediate modes ship in v0.4.1/.2.
+    let _permMode = 'autopilot'
+    async function refreshPermModeUi() {
+      try {
+        const { mode, meta } = await window.alaude.permGetMode(workspacePath || null)
+        _permMode = mode
+        const btn = document.getElementById('perm-mode-btn')
+        if (!btn) return
+        btn.dataset.mode = mode
+        document.getElementById('perm-mode-icon').textContent = meta?.icon || '🚀'
+        document.getElementById('perm-mode-label').textContent = meta?.label || mode
+        btn.title = (meta?.hint || '') + '  (click or ⇧⇥ to cycle)'
+      } catch (err) { console.warn('[perm] refresh failed:', err.message) }
+    }
+    async function cyclePermMode() {
+      try {
+        const { mode, meta } = await window.alaude.permCycleMode(workspacePath || null)
+        _permMode = mode
+        await refreshPermModeUi()
+        showRewindToast?.(`${meta.icon} ${meta.label} — ${meta.hint}`, false)
+      } catch (err) { console.warn('[perm] cycle failed:', err.message) }
+    }
+
     function toggleCouncilMode() {
       councilMode = !councilMode
       if (councilMode && councilModels.length === 0) {
@@ -8749,6 +8793,11 @@ footer a { color: var(--accent); text-decoration: none; }
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault()
         toggleCouncilMode()
+      }
+      // Cmd/Ctrl+Shift+A → cycle permission mode (Observe → Careful → Flow → Autopilot)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        cyclePermMode()
       }
       // Cmd/Ctrl+Shift+M → open Thinking Graph (DAG of all sessions + branches)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
@@ -12833,6 +12882,7 @@ Title:`
         document.getElementById('open-btn').style.display = 'flex'
         refreshWorkspaceHint()
         refreshWorkspaceFiles()
+        refreshPermModeUi()  // mode is per-workspace
       }
     }
 
@@ -14030,6 +14080,7 @@ Title:`
     refreshWorkspaceHint()
     renderModelSlots()
     loadCouncilState()
+    refreshPermModeUi()
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
   </script>
