@@ -11,16 +11,29 @@ const os = require('os')
 const dns = require('dns')
 const https = require('https')
 
-// ── Fail-loud crash handlers ───────────────────────────────────────────────
-// A silent worker crash used to surface as infinite renderer spinners; now
-// the stack trace makes it to the main-process `[worker stderr]` relay so we
-// can see why, then the worker dies cleanly (main respawns on next chat).
+// ── Crash handlers ─────────────────────────────────────────────────────────
+// The worker is a request loop serving one chat at a time. A single bad
+// request (e.g. the OpenAI SDK emits a sync `error` event inside a stream
+// iterator that nothing else listens to) should NOT take the whole process
+// down — next request should just work. We log the stack for diagnostics
+// and fire any in-flight request's reject path so the renderer sees an
+// error promptly instead of waiting 30s for the parent-process's `exit`
+// handler to notice a dead worker.
+let _inFlightRequest = null  // { id, rejectOnCrash } — set when handleChat starts
 process.on('uncaughtException', (err) => {
-  try { process.stderr.write(`[worker] uncaughtException: ${err?.stack || err}\n`) } catch {}
-  process.exit(1)
+  try { process.stderr.write(`[worker] uncaughtException (recovered): ${err?.stack || err}\n`) } catch {}
+  if (_inFlightRequest?.id != null) {
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    _inFlightRequest = null
+  }
+  // Do NOT exit — the loop can accept new work.
 })
 process.on('unhandledRejection', (err) => {
   try { process.stderr.write(`[worker] unhandledRejection: ${err?.stack || err}\n`) } catch {}
+  if (_inFlightRequest?.id != null) {
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    _inFlightRequest = null
+  }
 })
 
 // ── Resilient DNS resolver ──────────────────────────────────────────────────
@@ -149,6 +162,69 @@ function shouldSkipToolsForLocal(model) {
   // DeepSeek R1 distills wrap their output in <think> tags and often mis-format tool calls
   if (m.startsWith('deepseek-r1')) return true
   return false
+}
+
+// ─── System-prompt builder ─────────────────────────────────────────────────
+// The old unconditional primer was ~500 tokens and got shipped with every
+// turn regardless of user intent. Prompt-eval on that is ~1s on local models
+// and a measurable chunk of cloud latency on small prompts. This builder
+// assembles a *minimal* prompt for plain-prose questions and adds only the
+// rich-block docs the user's message actually hints at.
+const RICH_BLOCK_DOCS = {
+  chart:   '• ```chart JSON → inline SVG. Shape: {"type":"bar|line|pie|area|donut","title":"...","data":{"labels":[...],"values":[...]}}',
+  mermaid: '• ```mermaid → flowchart / sequence / class / gantt / ER.',
+  svg:     '• ```svg → raw <svg> for custom illustrations.',
+  html:    '• ```html (or ```artifact) → standalone HTML + JS + CSS, sandboxed iframe. Include everything inline.',
+  pptx:    '• ```pptx → .pptx file. Shape: {"title":"...","subtitle":"...","slides":[{"title":"...","bullets":["..."],"body":"...","notes":"..."}]}',
+  docx:    '• ```docx → .docx file. Shape: {"title":"...","sections":[{"heading":"...","level":1,"body":"...","bullets":["..."]}]}',
+  xlsx:    '• ```xlsx → .xlsx file. Shape: {"title":"...","sheets":[{"name":"...","rows":[["H1","H2"],[1,2]]}]}',
+}
+const RICH_BLOCK_KEYWORDS = {
+  chart:   /\b(chart|graph|plot|bar\s*chart|pie\s*chart|line\s*chart|donut|visuali[sz]e|chart\s*of)\b/i,
+  mermaid: /\b(diagram|flow(chart)?|sequence\s*diagram|gantt|class\s*diagram|er\s*diagram|architecture\s*diagram)\b/i,
+  svg:     /\b(svg|illustration|icon|draw\s*(a|an|me))\b/i,
+  html:    /\b(game|playable|interactive|widget|canvas|demo|animation|simulation|typing\s*test|run\s*it)\b/i,
+  pptx:    /\b(slides?|deck|presentation|powerpoint|pptx)\b/i,
+  docx:    /\b(document|report|write[- ]?up|brief|memo|docx|word\s*doc)\b/i,
+  xlsx:    /\b(spreadsheet|excel|workbook|xlsx|roster|budget|table\s*of\s*(data|numbers))\b/i,
+}
+
+/**
+ * Decide which rich-output blocks to advertise based on the user's latest turn.
+ * Returns an array of block keys to include; empty = user wants plain prose.
+ */
+function detectRichIntent(userText) {
+  const keys = []
+  const t = String(userText || '')
+  if (!t) return keys
+  for (const [key, re] of Object.entries(RICH_BLOCK_KEYWORDS)) {
+    if (re.test(t)) keys.push(key)
+  }
+  return keys
+}
+
+function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
+  let sys = 'You are Alaude, a helpful AI assistant.'
+  if (workspacePath) {
+    sys += ` Workspace: ${workspacePath}. Use tools to read/write files, list dirs, run commands. Always explain what you do.`
+  }
+  // Local models: stay quiet unless the user clearly wants a rich block. Small
+  // open-weight models process every token slowly, and they often ignore the
+  // primer anyway. This single change recovered the ~15× local-speed gap
+  // measured between direct Ollama and Alaude in testing.
+  const isLocal = provider === 'ollama'
+  const intent = detectRichIntent(userText)
+  if (intent.length) {
+    sys += '\n\nRich output — use these fenced blocks when the user asks for visuals / files. No preamble before the block.\n'
+    for (const k of intent) sys += RICH_BLOCK_DOCS[k] + '\n'
+    sys += '- Always emit valid JSON inside the block.\n- Prefer inline (chart/mermaid/svg) over a downloadable file unless the user asked to "download" or "export".'
+  } else if (!isLocal) {
+    // Cloud models get a tiny one-liner — cheap enough, reminds them the
+    // rich blocks exist for follow-up turns in the same session.
+    sys += '\n\nAlaude renders chart / mermaid / svg / html / pptx / docx / xlsx fenced blocks when the user asks for visuals or exports.'
+  }
+  if (spacePrompt) sys += '\n\n' + spacePrompt
+  return sys
 }
 
 const TOOLS = [
@@ -419,44 +495,27 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   }
   process.stderr.write(`[worker] resolved provider="${provider}" model="${model}"\n`)
 
-  let sysPrompt = 'You are Alaude, a helpful AI assistant.'
-  if (workspacePath) {
-    sysPrompt += ` Workspace: ${workspacePath}. Use tools to read/write files, list dirs, run commands. Always explain what you do.`
-  }
-  // Rich rendering primer: teach the model about Alaude-specific fenced code
-  // blocks. When the user's intent calls for a chart / diagram / presentation
-  // / document / spreadsheet / interactive demo, the model should pick the
-  // matching format so Alaude can render or export it natively.
-  sysPrompt += `
+  // Pull the user's latest turn so we can decide which rich-output docs to
+  // ship. The full primer used to be ~500 tokens on every call — that cost
+  // 1–3s of prompt-eval latency on local models for a simple "hi". We now
+  // only include the block docs the user's intent actually hints at.
+  const lastUserText = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m?.role !== 'user') continue
+      if (typeof m.content === 'string') return m.content
+      if (Array.isArray(m.content)) return m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    return ''
+  })()
 
-RICH OUTPUT — Alaude renders these special fenced code blocks. Pick the format that fits the user's intent. No preamble before the block, no commentary inside it.
-
-• \`\`\`chart  — JSON spec → inline SVG chart. Use when the user wants a bar/line/pie/area/donut chart of concrete numbers.
-   Example: \`\`\`chart\\n{"type":"bar","title":"Q1","data":{"labels":["Jan","Feb"],"values":[10,20]}}\\n\`\`\`
-
-• \`\`\`mermaid  — flowcharts, sequence, class, gantt, ER diagrams. Use when the user asks for a process, flow, or relationship diagram.
-
-• \`\`\`svg  — raw <svg> for custom illustrations, icons, or charts you want to hand-draw.
-
-• \`\`\`html (or \`\`\`artifact)  — full standalone HTML + JS + CSS. Renders in a sandboxed iframe. Use for games, interactive widgets, animations, demos, canvas/Web Audio/typing tests. Include everything inline (no relative paths). External scripts from CDN work.
-
-• \`\`\`pptx  — PowerPoint deck spec → downloadable .pptx. Use when the user asks for a "deck", "presentation", "slides".
-   Shape: {"title": "...", "subtitle":"...", "slides":[{"title":"...","bullets":["..."],"body":"...","notes":"speaker notes"}]}
-
-• \`\`\`docx  — Word document spec → downloadable .docx. Use for "document", "report", "write-up", "brief", "memo".
-   Shape: {"title":"...","sections":[{"heading":"...","level":1,"body":"...","bullets":["..."]}]}
-
-• \`\`\`xlsx  — Excel workbook spec → downloadable .xlsx. Use for tables of numeric data, budgets, rosters, any "spreadsheet".
-   Shape: {"title":"...","sheets":[{"name":"...","rows":[["Header1","Header2"],[1,2]]}]}
-
-Rules:
-- Use rich blocks when asked for something visual, structural, or exportable. For plain prose answers, stick with normal markdown.
-- Don't wrap rich blocks with extra commentary like "here's your chart:". A short one-line intro is fine but not required.
-- When in doubt between a ready-to-download file (pptx/docx/xlsx) and inline content, prefer inline (chart/table) unless the user said "export", "give me a file", "download", or named the format.
-- Always emit valid JSON inside the block. Escape strings properly.`
-  if (spacePrompt) {
-    sysPrompt += '\n\n' + spacePrompt
-  }
+  const sysPrompt = buildSystemPrompt({
+    provider,
+    model,
+    workspacePath,
+    spacePrompt,
+    userText: lastUserText,
+  })
 
   // Wrap every activity event with the renderer messageId so the renderer can
   // route tokens to the right lane in council / multi-model mode.
@@ -713,9 +772,16 @@ process.stdin.on('data', (chunk) => {
     if (!line.trim()) continue
     try {
       const req = JSON.parse(line)
+      _inFlightRequest = { id: req.id }
       handleChat(req)
-        .then(result => process.stdout.write(JSON.stringify({ id: req.id, result }) + '\n'))
-        .catch(err => process.stdout.write(JSON.stringify({ id: req.id, error: err.message || String(err) }) + '\n'))
+        .then(result => {
+          _inFlightRequest = null
+          process.stdout.write(JSON.stringify({ id: req.id, result }) + '\n')
+        })
+        .catch(err => {
+          _inFlightRequest = null
+          process.stdout.write(JSON.stringify({ id: req.id, error: err.message || String(err) }) + '\n')
+        })
     } catch (err) {
       process.stdout.write(JSON.stringify({ error: 'Invalid JSON: ' + err.message }) + '\n')
     }
