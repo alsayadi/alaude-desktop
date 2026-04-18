@@ -718,13 +718,24 @@ async function chatGemini(messagesRaw, model) {
 
 // ── IPC: Key management ─────────────────────────────────────────────────────
 
-ipcMain.handle('get-key-statuses', () => {
+ipcMain.handle('get-key-statuses', async () => {
   const providers = ['anthropic', 'openai', 'google', 'xai', 'moonshot', 'dashscope', 'zhipu']
   const result = {}
   for (const p of providers) {
     const key = getApiKey(p)
     result[p] = key ? 'set' : 'none'
   }
+  // Local Ollama runtime counts as a connected "provider" for onboarding —
+  // a user who has Ollama running with any installed model should not be
+  // stuck on the login screen asking for a cloud API key.
+  try {
+    if (await ollama.isAvailable()) {
+      const installed = await ollama.listInstalled()
+      result.ollama = (Array.isArray(installed) && installed.length) ? 'set' : 'available'
+    } else {
+      result.ollama = 'none'
+    }
+  } catch { result.ollama = 'none' }
   return result
 })
 
