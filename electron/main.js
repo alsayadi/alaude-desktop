@@ -11,11 +11,28 @@ const crypto = require('crypto')
 // "Claude" when launching via the Claude CLI) into permission dialogs.
 // The packaged DMG already has the right name baked into Info.plist, so
 // this is a belt-and-braces measure.
+// Pin the user-data directory FIRST (before setName, which would move it).
+// Existing users have sessions / localStorage / cookies at
+// ~/Library/Application Support/alaude-desktop — if we let Electron
+// derive the dir from our app name it'd silently jump to /Alaude and
+// orphan everything. If the packaged app didn't pre-create a userData
+// dir (first-run on a fresh install) we fall back to Electron's default.
+try {
+  const fsMod = require('fs')
+  const legacyDir = path.join(app.getPath('appData'), 'alaude-desktop')
+  const brandedDir = path.join(app.getPath('appData'), 'Alaude')
+  // Prefer legacy if it exists (keep existing users' data). Use branded
+  // only on a truly fresh install where neither dir has anything.
+  if (fsMod.existsSync(legacyDir)) {
+    app.setPath('userData', legacyDir)
+  } else if (fsMod.existsSync(brandedDir)) {
+    app.setPath('userData', brandedDir)
+  }
+  // Otherwise leave as-is; setName below will produce /Alaude on first run.
+} catch {}
+
 app.setName('Alaude')
 try { app.setAboutPanelOptions({ applicationName: 'Alaude', credits: 'https://alaude.ai' }) } catch {}
-// NB: we do NOT reset userData path here — existing users keep their
-// sessions, keys, permissions.json at the current location. A future
-// migration can clean this up if we want a branded directory.
 const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
