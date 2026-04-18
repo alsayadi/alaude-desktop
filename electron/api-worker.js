@@ -256,6 +256,18 @@ const TOOLS = [
   { type: 'function', function: { name: 'start_dev_server', description: 'Start a dev server in the background (npm run dev, python -m http.server, etc). Returns the process ID. The server keeps running.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'Command to start the server (e.g. "npm run dev")' }, port: { type: 'number', description: 'Expected port number (e.g. 3000)' } }, required: ['command'] } } },
 ]
 
+// ── Screen Control tools (v0.5.10) ────────────────────────────────────────
+// Paired with Screen Vision: the model sees a screenshot, then clicks /
+// types / hits keys on the actual desktop. Tool implementations live in
+// main process (electron/screen-control.js) because they shell out to
+// cliclick / osascript. Schemas below mirror those; keep in sync.
+const SCREEN_TOOLS = [
+  { type: 'function', function: { name: 'screen_click', description: 'Click a screen coordinate (x, y in pixels from top-left of the main display). Use after a screenshot to operate the active app on macOS.', parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, button: { type: 'string', enum: ['left', 'right'] } }, required: ['x', 'y'] } } },
+  { type: 'function', function: { name: 'screen_type', description: 'Type text into whatever has keyboard focus on the screen. Works system-wide — Slack, Xcode, anywhere.', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
+  { type: 'function', function: { name: 'screen_key', description: 'Send a keyboard combo system-wide (e.g. "cmd+c", "escape", "return", "cmd+shift+t"). Use for shortcuts and modal dismissal.', parameters: { type: 'object', properties: { combo: { type: 'string' } }, required: ['combo'] } } },
+  { type: 'function', function: { name: 'screen_move_mouse', description: 'Move the mouse cursor to a screen coordinate without clicking (for hover-triggered UI).', parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'] } } },
+]
+
 // ── Browser Agent tools (v0.5.5) ──────────────────────────────────────────
 // Schemas are inlined here because the worker is a plain Node process and
 // can't import browser-agent.js (it pulls Electron BrowserWindow). Main
@@ -384,7 +396,8 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // granular gates (prompt / allow-list / rule resolution) arrive with the
   // approval IPC in v0.4.1+.
   const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server',
-    'browser_navigate', 'browser_click', 'browser_fill'])
+    'browser_navigate', 'browser_click', 'browser_fill',
+    'screen_click', 'screen_type', 'screen_key', 'screen_move_mouse'])
   if (mode === 'observe' && WRITE_TOOLS.has(name)) {
     return { error: `Observe mode is read-only. Switch to Careful, Flow, or Autopilot (Shift+Tab) to enable ${name}.` }
   }
@@ -397,6 +410,10 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // v0.5.6: MCP tools — names are mcp_<server>__<tool>. Route to main.
   if (name.startsWith('mcp_')) {
     return await requestMcpTool(name, args || {})
+  }
+  // v0.5.10: Screen control tools — click / type / key / move. Route to main.
+  if (name.startsWith('screen_')) {
+    return await requestScreenTool(name, args || {})
   }
 
   try {
@@ -521,6 +538,7 @@ function emitActivity(id, activity) {
 const _pendingBrowserTools = new Map()
 const _pendingMcpCalls = new Map()
 const _pendingMcpLists = new Map()
+const _pendingScreenTools = new Map()
 
 function _bridge(map, type, extra = {}) {
   const id = type.slice(0, 2) + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
@@ -538,6 +556,9 @@ function _bridge(map, type, extra = {}) {
 
 function requestBrowserTool(name, args) {
   return _bridge(_pendingBrowserTools, 'browser-tool', { name, args })
+}
+function requestScreenTool(name, args) {
+  return _bridge(_pendingScreenTools, 'screen-tool', { name, args })
 }
 function requestMcpTool(name, args) {
   return _bridge(_pendingMcpCalls, 'mcp-call', { name, args })
@@ -567,6 +588,9 @@ function summarizeArgs(name, args) {
   if (name === 'browser_get_text' || name === 'browser_click') return String(args.selector || '').slice(0, 80)
   if (name === 'browser_fill') return `${(args.selector || '').slice(0, 40)} ← ${(args.text || '').slice(0, 30)}`
   if (name === 'browser_screenshot') return ''
+  if (name === 'screen_click' || name === 'screen_move_mouse') return `(${args.x || 0}, ${args.y || 0})`
+  if (name === 'screen_type') return (args.text || '').slice(0, 60)
+  if (name === 'screen_key') return String(args.combo || '')
   if (name === 'analyze_lab_result') return `${args.test_name} = ${args.value}`
   if (name === 'health_calculator') return String(args.calculator || '')
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
@@ -663,6 +687,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -804,6 +829,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -944,7 +970,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = await getMcpTools().catch(() => [])
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -1058,6 +1084,11 @@ process.stdin.on('data', (chunk) => {
       if (req.type === 'browser-tool-response') {
         const resolver = _pendingBrowserTools.get(req.id)
         if (resolver) { _pendingBrowserTools.delete(req.id); resolver(req.result) }
+        continue
+      }
+      if (req.type === 'screen-tool-response') {
+        const resolver = _pendingScreenTools.get(req.id)
+        if (resolver) { _pendingScreenTools.delete(req.id); resolver(req.result) }
         continue
       }
       // v0.5.6: MCP responses

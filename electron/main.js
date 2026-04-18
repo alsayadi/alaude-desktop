@@ -517,6 +517,25 @@ function getWorker() {
           })()
           continue
         }
+        // v0.5.10: Screen control tool request (full desktop, not just browser).
+        if (resp.type === 'screen-tool') {
+          const sC = require('./screen-control')
+          ;(async () => {
+            let result
+            try {
+              const a = resp.args || {}
+              if (resp.name === 'screen_click') result = await sC.click(a)
+              else if (resp.name === 'screen_type') result = await sC.type(a)
+              else if (resp.name === 'screen_key') result = await sC.key(a)
+              else if (resp.name === 'screen_move_mouse') result = await sC.moveMouse(a)
+              else result = { error: `unknown screen tool: ${resp.name}` }
+            } catch (err) {
+              result = { error: String(err?.message || err) }
+            }
+            try { apiWorker?.stdin.write(JSON.stringify({ type: 'screen-tool-response', id: resp.id, result }) + '\n') } catch {}
+          })()
+          continue
+        }
         const pending = pendingRequests.get(resp.id)
         if (pending) {
           pendingRequests.delete(resp.id)
