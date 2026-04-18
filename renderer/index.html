@@ -8797,11 +8797,14 @@ footer a { color: var(--accent); text-decoration: none; }
       const msg = messages[msgIdx]
       if (!msg?.council || msg.synthesizing) return
       msg.synthesizing = true
+      // Pick the first non-errored lane's model — synthesizing with a broken
+      // lane-0 just reproduces the original failure.
+      const synthModel = (msg.lanes.find(l => !l.error) || msg.lanes[0]).model
       msg.synthLane = {
         role: 'assistant',
         streaming: true,
         content: '',
-        model: msg.lanes[0].model,
+        model: synthModel,
         uxMessageId: `synth_${Date.now()}`,
         startedAt: Date.now(),
       }
@@ -8826,7 +8829,7 @@ footer a { color: var(--accent); text-decoration: none; }
       }
 
       try {
-        const response = await window.alaude.chat(synthMsgs, msg.synthLane.model, workspacePath, currentSpaceId, synthMeta)
+        const response = await window.alaude.chat(synthMsgs, synthModel, workspacePath, currentSpaceId, synthMeta)
         msg.synthLane.content = response || '(no response)'
       } catch (err) {
         msg.synthLane.content = `Error: ${err.message}`
@@ -8852,11 +8855,19 @@ footer a { color: var(--accent); text-decoration: none; }
         // successful lane as the canonical turn. Other lanes aren't part
         // of the API's concept of history.
         if (m.council && Array.isArray(m.lanes)) {
-          const picked = (m.pickedLaneIdx != null) ? m.lanes[m.pickedLaneIdx]
-            : (m.synthLane && !m.synthLane.streaming) ? m.synthLane
-            : m.lanes.find(l => !l.error && l.content)
-          if (picked) {
-            out.push({ role: 'assistant', content: String(picked.content || '') })
+          // Prefer the user's pick, then the synth result, then any clean lane.
+          // CRITICAL: skip errored candidates — shipping an error-string as the
+          // canonical assistant turn poisons every follow-up round-trip.
+          let picked = null
+          if (m.pickedLaneIdx != null && m.lanes[m.pickedLaneIdx] && !m.lanes[m.pickedLaneIdx].error) {
+            picked = m.lanes[m.pickedLaneIdx]
+          } else if (m.synthLane && !m.synthLane.streaming && !m.synthLane.error) {
+            picked = m.synthLane
+          } else {
+            picked = m.lanes.find(l => !l.error && l.content)
+          }
+          if (picked && picked.content) {
+            out.push({ role: 'assistant', content: String(picked.content) })
           }
           continue
         }
@@ -9684,22 +9695,29 @@ Title:`
       const PADDING = 60
       const positions = new Map()  // sessionId → { x, y, depth }
 
-      function leafCount(node) {
-        const kids = childrenOf.get(node.id) || []
+      // Visited set prevents a stack overflow if a session self-parents or a
+      // cycle sneaks in via a bad import. Each node is laid out once.
+      const visited = new Set()
+      function leafCount(node, seen = new Set()) {
+        if (seen.has(node.id)) return 1
+        seen.add(node.id)
+        const kids = (childrenOf.get(node.id) || []).filter(k => !seen.has(k.id))
         if (!kids.length) return 1
-        return kids.reduce((sum, k) => sum + leafCount(k), 0)
+        return kids.reduce((sum, k) => sum + leafCount(k, seen), 0)
       }
 
       function layout(node, depth, leftX) {
-        const kids = childrenOf.get(node.id) || []
-        const subtreeLeaves = leafCount(node)
+        if (visited.has(node.id)) return
+        visited.add(node.id)
+        const kids = (childrenOf.get(node.id) || []).filter(k => !visited.has(k.id))
+        const subtreeLeaves = leafCount(node, new Set(visited))
         const subtreeWidth = subtreeLeaves * (NODE_W + GAP_X) - GAP_X
         const centerX = leftX + subtreeWidth / 2
         const y = PADDING + depth * (NODE_H + GAP_Y)
         positions.set(node.id, { x: centerX - NODE_W / 2, y, depth })
         let cursor = leftX
         for (const kid of kids) {
-          const kidLeaves = leafCount(kid)
+          const kidLeaves = leafCount(kid, new Set(visited))
           const kidWidth = kidLeaves * (NODE_W + GAP_X) - GAP_X
           layout(kid, depth + 1, cursor)
           cursor += kidWidth + GAP_X
@@ -10283,7 +10301,8 @@ Title:`
       const entry = window._officeSpecs[id]
       if (!entry) return
       const { kind, spec } = entry
-      const safeTitle = ((spec.title || 'alaude-' + kind) + '').replace(/[^a-z0-9_\- ]+/gi, '').trim().slice(0, 80) || ('alaude-' + kind)
+      // Strip only path-illegal chars so Arabic / CJK / accented titles survive.
+      const safeTitle = ((spec.title || 'alaude-' + kind) + '').replace(/[\/\\:*?"<>|]+/g, '').trim().slice(0, 80) || ('alaude-' + kind)
       const defaultName = safeTitle + '.' + kind
       try {
         let buffer = null
@@ -10349,11 +10368,21 @@ Title:`
           const XLSX = await loadOfficeLib('xlsx')
           const wb = XLSX.utils.book_new()
           const sheets = spec.sheets || []
-          for (const sh of sheets) {
+          // Dedupe sheet names — book_append_sheet throws on duplicates, killing Save.
+          const seenNames = new Set()
+          sheets.forEach((sh, i) => {
             const rows = sh.rows || []
             const ws = XLSX.utils.aoa_to_sheet(rows)
-            XLSX.utils.book_append_sheet(wb, ws, (sh.name || 'Sheet').slice(0, 31))
-          }
+            let name = (sh.name || `Sheet${i + 1}`).slice(0, 31) || `Sheet${i + 1}`
+            if (seenNames.has(name)) {
+              let n = 2
+              let candidate = name.slice(0, 28) + ` (${n})`
+              while (seenNames.has(candidate)) { n++; candidate = name.slice(0, 28) + ` (${n})` }
+              name = candidate
+            }
+            seenNames.add(name)
+            XLSX.utils.book_append_sheet(wb, ws, name)
+          })
           if (!sheets.length) {
             const ws = XLSX.utils.aoa_to_sheet([['(empty)']])
             XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
@@ -10531,8 +10560,12 @@ Title:`
     }
     let _mermaidCounter = 0
     async function renderPendingMermaids() {
-      const nodes = document.querySelectorAll('.md-mermaid.loading[data-mermaid-src]')
+      // Exclude nodes already claimed by a prior in-flight render — prevents
+      // double-render when renderAll() fires twice before mermaid.render() resolves.
+      const nodes = document.querySelectorAll('.md-mermaid.loading[data-mermaid-src]:not([data-rendering])')
       if (!nodes.length) return
+      // Claim synchronously so a concurrent caller skips these nodes.
+      nodes.forEach(n => n.setAttribute('data-rendering', '1'))
       try {
         const mermaid = await loadMermaid()
         for (const node of nodes) {
@@ -11216,6 +11249,13 @@ Title:`
     }
 
     function switchSession(id) {
+      // Guard: swapping the `messages` array mid-stream leaves the worker writing
+      // tokens into a detached buffer and persistSessions mixes them into the new
+      // session. Refuse rather than silently corrupting data.
+      if (isStreaming) {
+        showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
+        return
+      }
       // UX: mark previous session as ended
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
@@ -11252,6 +11292,12 @@ Title:`
     // so the user can undo if they tapped the X by accident.
     let _deletedSessionUndo = null
     function deleteSession(id) {
+      // Same concern as switchSession: deleting the currently streaming session
+      // detaches the messages array from the worker's target.
+      if (isStreaming && id === currentSessionId) {
+        showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
+        return
+      }
       const idx = sessions.findIndex(s => s.id === id)
       if (idx < 0) return
       const wasCurrent = id === currentSessionId
@@ -12709,8 +12755,12 @@ Title:`
       notInst.style.display = available ? 'none' : 'block'
       connected.style.display = available ? 'block' : 'none'
       if (!available) return
-      lmCatalog = await window.alaude.ollamaCatalog()
-      lmInstalled = await window.alaude.ollamaList()
+      // IPC can return null/undefined if Ollama crashed mid-call — keep them arrays
+      // so the .map() in renderInstalled / renderCatalog doesn't blow up.
+      const cat = await window.alaude.ollamaCatalog()
+      const inst = await window.alaude.ollamaList()
+      lmCatalog = Array.isArray(cat) ? cat : []
+      lmInstalled = Array.isArray(inst) ? inst : []
       renderInstalled()
       renderCatalog()
       refreshLocalOptgroup()
@@ -12906,7 +12956,8 @@ Title:`
     async function initLocalModelsOptgroup() {
       try {
         if (await window.alaude.ollamaAvailable()) {
-          lmInstalled = await window.alaude.ollamaList()
+          const inst2 = await window.alaude.ollamaList()
+          lmInstalled = Array.isArray(inst2) ? inst2 : []
           refreshLocalOptgroup()
         }
       } catch {}

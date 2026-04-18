@@ -66,7 +66,14 @@ function getCredential(provider) {
       const oauth = data?.providerOauthTokens?.[provider]
       if (oauth) return { value: oauth, isOauth: true }
       const apiKey = data?.providerApiKeys?.[provider]
-      if (apiKey) return { value: apiKey, isOauth: false }
+      if (apiKey) {
+        // Migration: pre-v0.2.73 stored OAuth tokens under providerApiKeys.
+        // Anthropic OAuth access tokens have the distinctive "sk-ant-oat" prefix.
+        if (provider === 'anthropic' && typeof apiKey === 'string' && apiKey.startsWith('sk-ant-oat')) {
+          return { value: apiKey, isOauth: true }
+        }
+        return { value: apiKey, isOauth: false }
+      }
     } catch {}
   }
   const envMap = {
@@ -290,12 +297,21 @@ async function executeToolCall(name, args, workspacePath) {
 
     // ── Workspace tools (require workspace) ──
     if (!workspacePath) return { error: 'No workspace selected. Choose a folder first.' }
+    // Sandbox: reject any path that escapes the workspace root (../ traversal, symlink jumps).
+    const wsRoot = path.resolve(workspacePath)
+    const containedPath = (rel) => {
+      const fp = path.resolve(wsRoot, rel || '.')
+      if (fp !== wsRoot && !fp.startsWith(wsRoot + path.sep)) return null
+      return fp
+    }
     if (name === 'read_file') {
-      const fp = path.resolve(workspacePath, args.path)
+      const fp = containedPath(args.path)
+      if (!fp) return { error: `Path escapes workspace: ${args.path}` }
       return { content: fs.readFileSync(fp, 'utf8').slice(0, 50000) }
     }
     if (name === 'write_file') {
-      const fp = path.resolve(workspacePath, args.path)
+      const fp = containedPath(args.path)
+      if (!fp) return { error: `Path escapes workspace: ${args.path}` }
       // Capture old content BEFORE writing so we can render a real diff
       let oldContent = null
       try { if (fs.existsSync(fp)) oldContent = fs.readFileSync(fp, 'utf8') } catch {}
@@ -310,7 +326,8 @@ async function executeToolCall(name, args, workspacePath) {
       }
     }
     if (name === 'list_directory') {
-      const dp = path.resolve(workspacePath, args.path || '.')
+      const dp = containedPath(args.path || '.')
+      if (!dp) return { error: `Path escapes workspace: ${args.path}` }
       const entries = fs.readdirSync(dp, { withFileTypes: true })
       return { entries: entries.filter(e => !e.name.startsWith('.')).slice(0, 100).map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`).join('\n') }
     }
