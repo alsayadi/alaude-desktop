@@ -5542,12 +5542,35 @@
     const LS_ACTIVE_SESSION = 'alaude:activeSessionId:v1'
     const MAX_SESSIONS = 50  // soft cap — oldest dropped when exceeded
 
+    // Strip transient streaming state before persisting — otherwise a killed
+    // worker or a mid-stream app crash leaves a message with
+    // `streaming: true` baked into localStorage, which then makes every
+    // session-switch think generation is still in flight after restart.
+    function _sanitizeForPersist(msgs) {
+      if (!Array.isArray(msgs)) return []
+      return msgs.map(m => {
+        if (!m) return m
+        if (!m.streaming) return m
+        const cleaned = { ...m, streaming: false }
+        // If the streaming placeholder never got content, mark it as an
+        // aborted turn so the user can distinguish it from a real reply.
+        if (!cleaned.content) cleaned.content = '(generation interrupted)'
+        return cleaned
+      })
+    }
+
     function persistSessions() {
       try {
         // Snapshot current session's messages before saving
         const current = sessions.find(s => s.id === currentSessionId)
         if (current) current.messages = messages
-        localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions.slice(0, MAX_SESSIONS)))
+        // Serialize a clean copy so we never write `streaming: true` flags
+        // that outlive the process.
+        const snapshot = sessions.slice(0, MAX_SESSIONS).map(s => ({
+          ...s,
+          messages: _sanitizeForPersist(s.messages),
+        }))
+        localStorage.setItem(LS_SESSIONS, JSON.stringify(snapshot))
         localStorage.setItem(LS_ACTIVE_SESSION, String(currentSessionId))
       } catch (err) {
         console.warn('[persist] sessions failed:', err.message)
@@ -5560,6 +5583,12 @@
         if (!raw) return null
         const parsed = JSON.parse(raw)
         if (!Array.isArray(parsed) || parsed.length === 0) return null
+        // Defensive: older builds wrote `streaming: true` into storage.
+        // Clear those so a session restored from disk doesn't look like
+        // it's still generating and trap the session switcher.
+        for (const s of parsed) {
+          if (Array.isArray(s?.messages)) s.messages = _sanitizeForPersist(s.messages)
+        }
         return parsed
       } catch {
         return null
@@ -8913,6 +8942,35 @@ footer a { color: var(--accent); text-decoration: none; }
     }
 
     // ── Messages ─────────────────────────────────────────────────────────
+    /**
+     * Forcibly end the current in-flight chat turn.
+     *
+     * Why this exists: `callAI` can hang indefinitely if the worker crashed,
+     * the provider stalled, or the network dropped — no Stop button exists
+     * yet (v0.4.x adds one). Without an abort path, `isStreaming` stays true
+     * and blocks session-switch / new-session forever. This function marks
+     * any lingering streaming message as `(cancelled)`, resets the flag,
+     * and persists so reloading doesn't revive the zombie. If the worker
+     * eventually does reply, the catch in callAI still runs (harmlessly).
+     */
+    function abortInFlightTurn({ reason = 'user' } = {}) {
+      try {
+        if (Array.isArray(messages)) {
+          for (const m of messages) {
+            if (m && m.streaming) {
+              m.streaming = false
+              if (!m.content) m.content = '(generation cancelled)'
+            }
+          }
+        }
+      } catch {}
+      isStreaming = false
+      try { sendBtn.disabled = !input.value.trim() } catch {}
+      try { persistSessions() } catch {}
+      try { renderMessages() } catch {}
+      try { console.log('[abort] in-flight turn aborted, reason:', reason) } catch {}
+    }
+
     function sendMessage() {
       let text = input.value.trim()
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
@@ -11463,20 +11521,10 @@ Title:`
     }
 
     function newSession() {
-      // Same mid-stream race as switchSession — if the worker is still
-      // writing tokens into the current `messages` array, swapping it out
-      // corrupts the reply. Reuse the stale-flag recovery so a crashed
-      // worker doesn't trap the user.
-      if (isStreaming) {
-        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
-        if (!reallyStreaming) {
-          isStreaming = false
-          sendBtn.disabled = !input.value.trim()
-        } else {
-          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
-          return
-        }
-      }
+      // Mid-stream race: abort the in-flight turn before detaching the
+      // current messages array, so any lingering worker write lands in
+      // the old session's copy and not the new (empty) one.
+      if (isStreaming) abortInFlightTurn({ reason: 'new-session' })
       // UX: session_end for previous
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
@@ -11578,23 +11626,14 @@ Title:`
     }
 
     function switchSession(id) {
-      // Guard: swapping the `messages` array mid-stream leaves the worker writing
-      // tokens into a detached buffer and persistSessions mixes them into the new
-      // session. Refuse rather than silently corrupting data.
-      if (isStreaming) {
-        // `isStreaming` can go stale after a worker hang or crash (the await
-        // never resolved, so the finally-style reset at callAI's end never
-        // ran). Detect that by checking whether any message is actually
-        // flagged streaming — if not, treat the flag as noise and clear it.
-        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
-        if (!reallyStreaming) {
-          isStreaming = false
-          sendBtn.disabled = !input.value.trim()
-        } else {
-          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
-          return
-        }
-      }
+      // Mid-stream concern: swapping `messages` while the worker is still
+      // writing tokens into it corrupts the reply. Instead of refusing the
+      // switch (which traps users when the worker hangs or the flag goes
+      // stale), we abort the in-flight turn: mark the streaming placeholder
+      // as cancelled, clear the flag, persist, then let the switch proceed.
+      // Any tokens the worker later emits for the old turn land in the
+      // session's copy (safe) but never re-enter the live chat.
+      if (isStreaming) abortInFlightTurn({ reason: 'session-switch' })
       // UX: mark previous session as ended
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
@@ -11631,19 +11670,9 @@ Title:`
     // so the user can undo if they tapped the X by accident.
     let _deletedSessionUndo = null
     function deleteSession(id) {
-      // Same concern as switchSession: deleting the currently streaming session
-      // detaches the messages array from the worker's target.
-      if (isStreaming && id === currentSessionId) {
-        // Stale-flag recovery — see switchSession for the explanation.
-        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
-        if (!reallyStreaming) {
-          isStreaming = false
-          sendBtn.disabled = !input.value.trim()
-        } else {
-          showRewindToast?.('⏳ Still generating — wait or press Stop first', false)
-          return
-        }
-      }
+      // Same concern as switchSession: deleting mid-stream corrupts the reply.
+      // Abort the in-flight turn first so the delete can proceed safely.
+      if (isStreaming && id === currentSessionId) abortInFlightTurn({ reason: 'session-delete' })
       const idx = sessions.findIndex(s => s.id === id)
       if (idx < 0) return
       const wasCurrent = id === currentSessionId
