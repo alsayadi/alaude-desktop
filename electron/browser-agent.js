@@ -30,7 +30,7 @@ function _ensureWindow() {
   agentWin = new BrowserWindow({
     width: 1024,
     height: 768,
-    title: 'Alaude Browser Agent',
+    title: 'Labaik Browser Agent',
     show: true,
     webPreferences: {
       partition: 'persist:alaude-agent',  // isolated cookie jar

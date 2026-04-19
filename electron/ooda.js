@@ -1,5 +1,5 @@
 /**
- * OODA loop — UX self-tuning microscope for Alaude (local/dev only).
+ * OODA loop — UX self-tuning microscope for Labaik (local/dev only).
  *
  * Observe: append every interaction event to ~/.claude/alaude-events.ndjson.
  * Orient:  every MIN_BATCH_SIZE outcomes, group by dimension and compute stats.
@@ -466,7 +466,7 @@ function writeProposal(diagnosis, orientation, batchMeta) {
       '',
     ].join('\n')
     // Prepend so newest batch is at the top
-    const existing = fs.existsSync(PROPOSALS_FILE) ? fs.readFileSync(PROPOSALS_FILE, 'utf8') : '# Alaude UX Proposals\n\nReviewed manually — never auto-applied.\n\n---\n\n'
+    const existing = fs.existsSync(PROPOSALS_FILE) ? fs.readFileSync(PROPOSALS_FILE, 'utf8') : '# Labaik UX Proposals\n\nReviewed manually — never auto-applied.\n\n---\n\n'
     const [header, ...rest] = existing.split('---\n\n')
     const body = rest.join('---\n\n')
     fs.writeFileSync(PROPOSALS_FILE, header + '---\n\n' + md + body)

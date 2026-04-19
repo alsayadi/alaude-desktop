@@ -1,7 +1,7 @@
 /**
  * Cron Skills — scheduled background chats.
  *
- * A "skill" is a prompt + cron spec that Alaude runs automatically on a
+ * A "skill" is a prompt + cron spec that Labaik runs automatically on a
  * schedule. Examples:
  *   • 08:00 daily → "summarize overnight Hacker News"
  *   • 18:00 weekdays → "draft a standup update from my git log"

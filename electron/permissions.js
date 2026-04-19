@@ -1,5 +1,5 @@
 /**
- * Alaude permission classifier — pure module.
+ * Labaik permission classifier — pure module.
  *
  * No Electron / fs / net deps. Every export is a pure function so the
  * renderer, the main process, and the worker can share the same truth
@@ -16,7 +16,7 @@ const MODE_META = {
   observe:  { icon: '👁️', label: 'Observe',  hint: 'Read-only research. No writes, no commands.' },
   careful:  { icon: '🛡️', label: 'Careful',  hint: 'Ask before every write and every command.' },
   flow:     { icon: '🌊', label: 'Flow',     hint: 'Auto-run safe edits and allow-listed commands. Always ask for dangerous ones.' },
-  autopilot:{ icon: '🚀', label: 'Autopilot',hint: 'Run everything except protected paths and destructive commands. Previous Alaude behavior.' },
+  autopilot:{ icon: '🚀', label: 'Autopilot',hint: 'Run everything except protected paths and destructive commands. Previous Labaik behavior.' },
 }
 const MODE_ORDER = MODES
 function nextMode(m) {

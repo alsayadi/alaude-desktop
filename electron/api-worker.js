@@ -208,7 +208,7 @@ function detectRichIntent(userText) {
 }
 
 function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
-  let sys = 'You are Alaude, a helpful AI assistant.'
+  let sys = 'You are Labaik, a helpful AI assistant.'
   if (workspacePath) {
     sys += ` Workspace: ${workspacePath}. Use tools to read/write files, list dirs, run commands. Always explain what you do.`
   }
@@ -225,7 +225,7 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
   } else if (!isLocal) {
     // Cloud models get a tiny one-liner — cheap enough, reminds them the
     // rich blocks exist for follow-up turns in the same session.
-    sys += '\n\nAlaude renders chart / mermaid / svg / html / pptx / docx / xlsx fenced blocks when the user asks for visuals or exports.'
+    sys += '\n\nLabaik renders chart / mermaid / svg / html / pptx / docx / xlsx fenced blocks when the user asks for visuals or exports.'
   }
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys

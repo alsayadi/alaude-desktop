@@ -31,8 +31,8 @@ try {
   // Otherwise leave as-is; setName below will produce /Alaude on first run.
 } catch {}
 
-app.setName('Alaude')
-try { app.setAboutPanelOptions({ applicationName: 'Alaude', credits: 'https://alaude.ai' }) } catch {}
+app.setName('Labaik')
+try { app.setAboutPanelOptions({ applicationName: 'Labaik', credits: 'https://labaik.ai' }) } catch {}
 const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
@@ -349,7 +349,7 @@ function oauthAnthropic() {
         saveCredential('anthropic', accessToken, 'oauth')
 
         res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.end('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5f5f5"><h2 style="color:#00a846">Logged in!</h2><p>You can close this window and return to Alaude.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>')
+        res.end('<html><body style="font-family:sans-serif;text-align:center;padding:60px;background:#f5f5f5"><h2 style="color:#00a846">Logged in!</h2><p>You can close this window and return to Labaik.</p><script>setTimeout(()=>window.close(),2000)</script></body></html>')
         server.close()
 
         // Notify the renderer
@@ -692,8 +692,8 @@ async function chatAnthropic(messagesRaw, model, workspacePath) {
   const client = new Anthropic({ apiKey, timeout: 60000 })
 
   const systemPrompt = workspacePath
-    ? `You are Alaude, an AI coding assistant. You have access to the user's workspace at: ${workspacePath}\n\nYou can read files, write files, list directories, and run shell commands. Use the provided tools to help the user. When writing code, always use write_file. Always explain what you're doing.`
-    : 'You are Alaude, an AI coding assistant.'
+    ? `You are Labaik, an AI coding assistant. You have access to the user's workspace at: ${workspacePath}\n\nYou can read files, write files, list directories, and run shell commands. Use the provided tools to help the user. When writing code, always use write_file. Always explain what you're doing.`
+    : 'You are Labaik, an AI coding assistant.'
 
   const anthropicTools = workspacePath ? TOOLS.map(t => ({
     name: t.function.name,
@@ -765,8 +765,8 @@ async function chatOpenAI(messagesRaw, model, provider, workspacePath) {
   const client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}), timeout: 60000 })
 
   const systemMsg = workspacePath
-    ? `You are Alaude, an AI coding assistant. You have access to the user's workspace at: ${workspacePath}\n\nYou can read files, write files, list directories, and run shell commands. Use the provided tools to help the user with coding tasks. When writing code, always use write_file to save it. When the user asks to see files, use read_file. Always explain what you're doing.`
-    : 'You are Alaude, an AI coding assistant. Help the user with coding questions and tasks.'
+    ? `You are Labaik, an AI coding assistant. You have access to the user's workspace at: ${workspacePath}\n\nYou can read files, write files, list directories, and run shell commands. Use the provided tools to help the user with coding tasks. When writing code, always use write_file to save it. When the user asks to see files, use read_file. Always explain what you're doing.`
+    : 'You are Labaik, an AI coding assistant. Help the user with coding questions and tasks.'
 
   const messages = [
     { role: 'system', content: systemMsg },
@@ -1182,7 +1182,7 @@ ipcMain.handle('capture-screen', async (_e, mode = 'region') => {
   args.push(outPath)
 
   return new Promise((resolve, reject) => {
-    // Hide Alaude briefly so the user can capture underneath the app.
+    // Hide the window briefly so the user can capture underneath the app.
     const wasVisible = mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized()
     if (wasVisible && mode !== 'screen') {
       try { mainWindow.hide() } catch {}
@@ -1359,7 +1359,7 @@ ipcMain.handle('open-external', async (_, url) => {
 })
 
 // ── Menu Bar Ambient (Tray + Quick Window) ────────────────────────────────
-// A small always-available "⚡ Alaude Quick" panel that lives in the macOS
+// A small always-available "⚡ Labaik Quick" panel that lives in the macOS
 // menu bar. Lets the user ask a question and get an answer without
 // switching windows. Same chat IPC as the main app, but a minimal UI.
 
@@ -1434,18 +1434,18 @@ function createTray() {
     icon = nativeImage.createEmpty()
   }
   tray = new Tray(icon)
-  tray.setToolTip('Alaude Quick — ⌘⇧A to toggle')
+  tray.setToolTip('Labaik Quick — ⌘⇧A to toggle')
   tray.on('click', () => toggleQuickWindow())
   tray.on('right-click', () => {
     const menu = Menu.buildFromTemplate([
-      { label: 'Ask Alaude…', click: () => toggleQuickWindow() },
+      { label: 'Ask Labaik…', click: () => toggleQuickWindow() },
       { type: 'separator' },
-      { label: 'Open Alaude (full)', click: () => {
+      { label: 'Open Labaik (full)', click: () => {
         if (!mainWindow || mainWindow.isDestroyed()) createWindow()
         else mainWindow.show()
       }},
       { type: 'separator' },
-      { label: 'Quit Alaude', click: () => app.quit() },
+      { label: 'Quit Labaik', click: () => app.quit() },
     ])
     tray.popUpContextMenu(menu)
   })

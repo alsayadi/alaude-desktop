@@ -121,7 +121,7 @@ async function startServer(cfg) {
     await _send(server, 'initialize', {
       protocolVersion: '2024-11-05',
       capabilities: { tools: {} },
-      clientInfo: { name: 'Alaude', version: require('../package.json').version },
+      clientInfo: { name: 'Labaik', version: require('../package.json').version },
     })
     const list = await _send(server, 'tools/list', {})
     server.tools = (list?.tools || []).map(t => ({

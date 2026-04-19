@@ -1,5 +1,5 @@
 /**
- * Built-in Alaude Spaces — domain-specific AI modes.
+ * Built-in Labaik Spaces — domain-specific AI modes.
  * Each space defines: persona, quick actions, file types, and UI hints.
  */
 
@@ -19,7 +19,7 @@ const BUILT_IN_SPACES = [
       { id: 'proofread', label: 'Proofread', icon: '📝', prompt: 'Proofread and improve this text:\n\n', filePicker: false },
       { id: 'describe', label: 'Describe Image', icon: '🖼️', prompt: 'Describe this image in detail:', filePicker: true },
     ],
-    placeholder: 'Message Alaude...',
+    placeholder: 'Message Labaik...',
   },
   {
     id: 'health',

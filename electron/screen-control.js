@@ -8,7 +8,7 @@
  * Slack, Xcode, anything.
  *
  * Implementation (macOS): prefer `cliclick` if installed; fall back to
- * AppleScript via `osascript`. Neither is shipped with Alaude — cliclick
+ * AppleScript via `osascript`. Neither is shipped with Labaik — cliclick
  * is a one-line Homebrew install, AppleScript is always available.
  *
  * Security: these tools respect Observe mode in api-worker.js; they're

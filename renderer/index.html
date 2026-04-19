@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Alaude</title>
+  <title>Labaik</title>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -4937,8 +4937,8 @@
   <!-- Login Screen -->
   <div id="login-screen" class="login-screen">
     <div class="login-card">
-      <img class="login-logo" src="logo.jpg" alt="Alaude" />
-      <h1 class="login-title">Welcome to Alaude</h1>
+      <img class="login-logo" src="logo.jpg" alt="Labaik" />
+      <h1 class="login-title">Welcome to Labaik</h1>
       <p class="login-sub">Connect a provider — you can always add more later.</p>
 
       <div class="login-paths">
@@ -4979,7 +4979,7 @@
 
       <p style="font-size:11px; color:var(--text-faint); margin-top:24px; line-height:1.5">
         Keys stay on this device in <code style="font-size:10.5px">~/.claude/.credentials.json</code>.<br/>
-        Alaude sends messages directly to the provider you chose — no middleman.
+        Labaik sends messages directly to the provider you chose — no middleman.
       </p>
     </div>
   </div>
@@ -4998,7 +4998,7 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <img class="sidebar-logo" id="logo" />
-      <span class="sidebar-title">Alaude</span>
+      <span class="sidebar-title">Labaik</span>
     </div>
     <div class="space-selector">
       <button class="space-btn" onclick="toggleSpaceDropdown()">
@@ -5058,7 +5058,7 @@
     <div class="topbar">
       <div class="topbar-leading">
         <span class="topbar-model" id="topbar-model" title="Current model">GPT-4o</span>
-        <span class="version-badge" id="version-badge" title="Alaude version — click to view release notes">v–</span>
+        <span class="version-badge" id="version-badge" title="Labaik version — click to view release notes">v–</span>
         <span class="cost-session-total" id="topbar-cost" title="Estimated API cost for this session"></span>
         <span class="model-slots" id="model-slots"></span>
       </div>
@@ -5071,7 +5071,7 @@
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
-        <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Alaude remembers across sessions">🧠 Memory</button>
+        <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Labaik remembers across sessions">🧠 Memory</button>
         <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
         <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
         <button class="topbar-keys-btn" onclick="toggleSkillsModal()" title="Scheduled skills — run prompts on a cron">⏰ Skills</button>
@@ -5090,13 +5090,13 @@
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
-        <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Alaude" />
+        <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title">What can I help you with?</div>
         <div class="welcome-sub">Drop files here, or try one of these:</div>
         <div class="quick-actions" id="quick-actions"></div>
         <!-- First-run coach card — shown once per install, then dismissed to
              localStorage. Each prompt is clickable and demonstrates one of
-             Alaude's killer features so new users discover them early. -->
+             Labaik's killer features so new users discover them early. -->
         <div class="first-run-coach" id="first-run-coach" style="display:none">
           <div class="frc-header">
             <span class="frc-title">✨ New here? Try any of these</span>
@@ -5107,7 +5107,7 @@
               <span class="frc-icon">🎮</span>
               <span class="frc-body">
                 <span class="frc-head">Playable games in chat</span>
-                <span class="frc-hint">Alaude runs HTML artifacts in a sandboxed iframe — keyboard works.</span>
+                <span class="frc-hint">Labaik runs HTML artifacts in a sandboxed iframe — keyboard works.</span>
               </span>
             </button>
             <button class="frc-prompt" onclick="coachFillAndSend('Make a bar chart comparing Q1-Q4 revenue: 120, 150, 180, 210 (in thousands)')">
@@ -5128,7 +5128,7 @@
               <span class="frc-icon">🗂️</span>
               <span class="frc-body">
                 <span class="frc-head">Understand a codebase fast</span>
-                <span class="frc-hint">Pick a folder, then let Alaude read + summarize it.</span>
+                <span class="frc-hint">Pick a folder, then let Labaik read + summarize it.</span>
               </span>
             </button>
           </div>
@@ -5170,7 +5170,7 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <textarea class="input-field" id="input" rows="1" placeholder="Message Alaude..." autofocus></textarea>
+        <textarea class="input-field" id="input" rows="1" placeholder="Message Labaik..." autofocus></textarea>
         <!-- v0.6.0 Screen Vision: snap a region, attach to composer, send to vision model. ⌘⇧V. -->
         <button class="icon-btn" id="shot-btn" onclick="captureScreenForChat('region')" title="Screen Vision — snap a region to send (⌘⇧V)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
@@ -5207,8 +5207,8 @@
         </button>
         <span class="workspace-path" id="folder-path"></span>
         <!-- Permission mode dropdown — sits beside the folder chooser because
-             the two together define "what Alaude is allowed to touch". ⌘⇧A still cycles. -->
-        <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Alaude is allowed to do without asking. ⌘⇧A to cycle.">
+             the two together define "what Labaik is allowed to touch". ⌘⇧A still cycles. -->
+        <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Labaik is allowed to do without asking. ⌘⇧A to cycle.">
           <option value="observe">👁️ Observe · read-only</option>
           <option value="careful">🛡️ Careful · ask for writes &amp; commands</option>
           <option value="flow">🌊 Flow · auto-edit, ask dangerous</option>
@@ -5234,7 +5234,7 @@
         <button class="modal-close" onclick="toggleMemoryModal()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
-        Alaude remembers key facts about you across all sessions. Relevant memories
+        Labaik remembers key facts about you across all sessions. Relevant memories
         are silently attached to each prompt so responses feel less amnesic.
       </div>
       <div class="memory-modal-list" id="memory-modal-list"></div>
@@ -5298,7 +5298,7 @@
         <div class="lm-empty-icon">🦙</div>
         <div class="lm-empty-title">Local models in 60 seconds</div>
         <div class="lm-empty-sub">
-          Alaude uses Ollama to run models on your own hardware — free, private, offline.
+          Labaik uses Ollama to run models on your own hardware — free, private, offline.
           Click below and we'll install and launch it for you.
         </div>
         <button class="key-save-btn" id="lm-install-btn" onclick="installOllamaInApp()">🦙 Install Ollama</button>
@@ -5479,12 +5479,12 @@
     </div>
   </div>
 
-  <!-- What's in Alaude — feature tour / changelog -->
+  <!-- What's in Labaik — feature tour / changelog -->
   <div class="modal-overlay" id="whats-in-modal">
     <div class="modal ux-modal" style="max-width:720px;width:94vw">
       <h2>
-        🎉 What's in Alaude
-        <button class="modal-close" onclick="toggleWhatsInAlaude()">&times;</button>
+        🎉 What's in Labaik
+        <button class="modal-close" onclick="toggleWhatsInLabaik()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
         Every feature shipped in the v0.2 line. Click <em>Try it</em> to jump straight in.
@@ -5501,7 +5501,7 @@
         <button class="modal-close" onclick="toggleSkillsModal()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
-        Alaude runs a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
+        Labaik runs a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
       </div>
       <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a skill</div>
@@ -6405,7 +6405,7 @@
       const list = document.getElementById('memory-modal-list')
       if (!list) return
       if (!memories.length) {
-        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, or type "Remember that I prefer X" — Alaude will capture it automatically.</div>`
+        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, or type "Remember that I prefer X" — Labaik will capture it automatically.</div>`
         return
       }
       // Newest first
@@ -8099,7 +8099,7 @@ JSON:`
           const data = JSON.parse(text)
           if (!data || typeof data !== 'object') throw new Error('Invalid JSON shape')
           if (data.schema && !String(data.schema).startsWith('alaude-backup')) {
-            if (!confirm(`This looks like a non-Alaude file (schema: ${data.schema}). Try anyway?`)) return
+            if (!confirm(`This looks like a non-Labaik file (schema: ${data.schema}). Try anyway?`)) return
           }
           // Merge sessions: new ones added, existing ones keep their local
           // version unless the imported one has strictly more messages.
@@ -8154,13 +8154,13 @@ JSON:`
     // ── Export current session as Markdown ──────────────────────────────
     // Emits a self-contained markdown transcript. Branches are enumerated
     // as a separate "Branches" section at the top with links to their
-    // fork points — if the user reopens the Alaude file ecosystem later,
+    // fork points — if the user reopens the Labaik file ecosystem later,
     // this is the source of truth for reconstruction.
     function exportSessionMarkdown() {
       const session = sessions.find(s => s.id === currentSessionId)
       if (!session) return
       const lines = []
-      lines.push(`# ${session.title || 'Alaude session'}`)
+      lines.push(`# ${session.title || 'Labaik session'}`)
       lines.push('')
       lines.push(`*Exported: ${new Date().toISOString()}*`)
       if (session.parentId) {
@@ -8182,7 +8182,7 @@ JSON:`
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i]
         if (m.streaming) continue
-        const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Alaude')
+        const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Labaik')
         const meta = m.model ? ` · _${m.model}_` : ''
         const pin = m.pinned ? ' 📌' : ''
         lines.push(`### ${who}${meta}${pin}`)
@@ -8219,7 +8219,7 @@ JSON:`
     function exportSessionHtml() {
       const session = sessions.find(s => s.id === currentSessionId)
       if (!session) return
-      const title = session.title || 'Alaude session'
+      const title = session.title || 'Labaik session'
       const exportedAt = new Date().toLocaleString()
       const theme = document.documentElement.getAttribute('data-theme') || 'dark'
 
@@ -8335,7 +8335,7 @@ footer a { color: var(--accent); text-decoration: none; }
       const msgsHtml = messages
         .filter(m => !m.streaming)
         .map(m => {
-          const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Alaude')
+          const who = m.role === 'user' ? '👤 You' : (m.council ? '🎭 Council' : '✨ Labaik')
           const modelBadge = m.model ? `<span>${escapeHtml(m.model)}</span>` : ''
           const ts = m.ts ? `<span>${new Date(m.ts).toLocaleString()}</span>` : ''
           const pin = m.pinned ? `<span class="pin">📌 Pinned</span>` : ''
@@ -8367,7 +8367,7 @@ footer a { color: var(--accent); text-decoration: none; }
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>${escapeHtml(title)} — Alaude</title>
+<title>${escapeHtml(title)} — Labaik</title>
 <style>${css}</style>
 </head>
 <body>
@@ -8378,7 +8378,7 @@ footer a { color: var(--accent); text-decoration: none; }
   </header>
   ${msgsHtml}
   <footer>
-    Exported from <a href="${escapeHtml(homepage)}">Alaude v${escapeHtml(version)}</a>
+    Exported from <a href="${escapeHtml(homepage)}">Labaik v${escapeHtml(version)}</a>
   </footer>
 </div>
 </body>
@@ -8455,7 +8455,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '⎘', label: 'Duplicate current session', search: 'duplicate copy clone session fork standalone', action: () => { closeCmdPalette(); duplicateCurrentSession() } },
         { kind: 'action', icon: '★', label: 'Star / unstar current session', search: 'star unstar favorite pin top sidebar bookmark', action: () => { closeCmdPalette(); toggleCurrentSessionStar() } },
         { kind: 'action', icon: '🎨', label: 'Cycle session color', search: 'color accent dot palette sidebar organize visual', action: () => { closeCmdPalette(); cycleCurrentSessionColor() } },
-        { kind: 'action', icon: '🎉', label: "What's in Alaude (feature tour)", search: 'whats new tour changelog features release notes help intro', action: () => { closeCmdPalette(); toggleWhatsInAlaude() } },
+        { kind: 'action', icon: '🎉', label: "What's in Labaik (feature tour)", search: 'whats new tour changelog features release notes help intro', action: () => { closeCmdPalette(); toggleWhatsInLabaik() } },
         ...allTemplates().map(t => ({
           kind: 'template',
           icon: t.icon,
@@ -10057,7 +10057,7 @@ Title:`
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i]
         const roleClass = msg.role
-        const roleLabel = msg.role === 'user' ? 'You' : (msg.council ? 'Council' : 'Alaude')
+        const roleLabel = msg.role === 'user' ? 'You' : (msg.council ? 'Council' : 'Labaik')
 
         // Council messages take a special render path with side-by-side lanes.
         if (msg.council) {
@@ -10217,7 +10217,7 @@ Title:`
         : ''
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
-        <div class="welcome-title"><span class="welcome-gradient">Alaude</span> — what are we building?</div>
+        <div class="welcome-title"><span class="welcome-gradient">Labaik</span> — what are we building?</div>
         <div class="welcome-sub">Drop a file, or just start typing. Local and cloud models in one window.</div>
         ${spaceCardsHtml}
         <div class="quick-actions" id="quick-actions"></div>
@@ -10706,7 +10706,7 @@ Title:`
           if (rendered >= MAX_RESULTS) break
           const flatIdx = gsearchResults.indexOf(r)
           const isActive = flatIdx === gsearchActiveIdx
-          const roleLabel = r.msg.role === 'user' ? '👤 You' : '✨ Alaude'
+          const roleLabel = r.msg.role === 'user' ? '👤 You' : '✨ Labaik'
           // Highlight matches in the snippet
           const highlighted = escapeHtml(r.snippet).replace(safeRegex, m => `<mark>${m}</mark>`)
           html.push(`<div class="gsearch-result${isActive ? ' active' : ''}" data-flat-idx="${flatIdx}" onclick="globalSearchJump(${flatIdx})">
@@ -13318,7 +13318,7 @@ Title:`
         const name = `screen-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`
         const file = new File([blob], name, { type: result.mime })
         await attachImageFromFile(file)
-        showRewindToast?.(`📸 Screenshot attached — tell Alaude what you're looking at`, false)
+        showRewindToast?.(`📸 Screenshot attached — tell Labaik what you're looking at`, false)
         // Warn if current model isn't vision-capable so the user doesn't waste a send.
         const sel = document.getElementById('model-select')
         const model = sel?.value || ''
@@ -13796,7 +13796,7 @@ Title:`
         const cls = f.isDir ? 'dir' : ''
         const depthCls = f.depth === 1 ? 'child' : f.depth >= 2 ? 'child grand' : ''
         const size = f.isDir ? '' : `<span class="file-row-size">${formatFileSize(f.size)}</span>`
-        const edited = filesEditedByAi.has(f.path) ? `<span class="file-row-edited" title="Edited by Alaude this session"></span>` : ''
+        const edited = filesEditedByAi.has(f.path) ? `<span class="file-row-edited" title="Edited by Labaik this session"></span>` : ''
         return `<div class="file-row ${cls} ${depthCls}" data-file-idx="${i}" onclick="${f.isDir ? `toggleDir(${i})` : `attachWorkspaceFile(${i})`}" title="${escapeHtml(f.path)}">${edited}<span class="file-row-icon">${icon}</span><span class="file-row-name">${escapeHtml(f.name)}</span>${size}</div>`
       }).join('')
     }
@@ -13884,7 +13884,7 @@ Title:`
       if (welcomeSub) welcomeSub.textContent = space.description
 
       // Update input placeholder
-      document.getElementById('input').placeholder = space.placeholder || 'Message Alaude...'
+      document.getElementById('input').placeholder = space.placeholder || 'Message Labaik...'
 
       // Update quick actions
       renderQuickActions(space)
@@ -14295,7 +14295,7 @@ Title:`
       } catch {}
     }
 
-    // ── What's in Alaude (feature tour / changelog) ─────────────────
+    // ── What's in Labaik (feature tour / changelog) ─────────────────
     // Hand-curated manifest of everything shipped in the v0.2 line. The
     // 50th release is a milestone — a single place to discover (or
     // rediscover) features that otherwise live behind command-palette
@@ -14307,7 +14307,7 @@ Title:`
       { v: '0.2.4',  icon: '✨', name: 'Prompt Snippets',                desc: 'Slash-menu prompt compiler with {{variable}} placeholders.', try: () => toggleSnippetModal?.() },
       { v: '0.2.5',  icon: '🧘', name: 'Zen pass',                       desc: 'Focus mode + Pinned messages + Markdown export.' },
       { v: '0.2.6',  icon: '🧠', name: 'Memory Lens + PTT',              desc: 'Cross-session memory of facts + push-to-talk voice input.', try: () => toggleMemoryModal?.() },
-      { v: '0.2.7',  icon: '⚡', name: 'Menu Bar Quick',                 desc: 'Alaude lives in your macOS menu bar; ⌘⇧A toggles from anywhere.' },
+      { v: '0.2.7',  icon: '⚡', name: 'Menu Bar Quick',                 desc: 'Labaik lives in your macOS menu bar; ⌘⇧A toggles from anywhere.' },
       { v: '0.2.8',  icon: '🔥', name: 'Streaming Stats HUD',            desc: 'Live tok/s + TTFT badge on every assistant reply.' },
       { v: '0.2.9',  icon: '🧹', name: 'Topbar polish',                  desc: 'Model name + version + action buttons no longer overlap.' },
       { v: '0.2.10', icon: '🔎', name: 'Global Search (⌘F)',             desc: 'Full-text search across every session + undo session delete.', try: () => openGlobalSearch?.() },
@@ -14350,20 +14350,20 @@ Title:`
       { v: '0.2.47', icon: '★',  name: 'Star sessions',                  desc: 'Pin favorite sessions to the top of the sidebar.' },
       { v: '0.2.48', icon: '🕘', name: 'Command Palette recents',        desc: 'Last 8 executed actions pinned to the top of ⌘P.' },
       { v: '0.2.49', icon: '🎨', name: 'Session accent colors',          desc: '8-color palette per session; a dot before the sidebar title.' },
-      { v: '0.2.50', icon: '🎉', name: 'What\'s in Alaude',              desc: 'This feature tour. Every capability shipped in the v0.2 line.' },
+      { v: '0.2.50', icon: '🎉', name: 'What\'s in Labaik',              desc: 'This feature tour. Every capability shipped in the v0.2 line.' },
     ]
-    function toggleWhatsInAlaude() {
+    function toggleWhatsInLabaik() {
       const modal = document.getElementById('whats-in-modal')
       if (!modal) return
       const opening = !modal.classList.contains('show')
       if (opening) {
-        renderWhatsInAlaude()
+        renderWhatsInLabaik()
         modal.classList.add('show')
       } else {
         modal.classList.remove('show')
       }
     }
-    function renderWhatsInAlaude() {
+    function renderWhatsInLabaik() {
       const body = document.getElementById('whats-in-body')
       if (!body) return
       // Reverse chronological so the newest (this release) shows at the top
@@ -14888,7 +14888,7 @@ Title:`
       const el = document.getElementById('version-badge')
       if (el) {
         el.textContent = 'v' + v
-        el.title = `Alaude ${v} — click to view release notes on GitHub`
+        el.title = `Labaik ${v} — click to view release notes on GitHub`
         el.onclick = () => {
           try { window.alaude.openExternal(releasesUrl) } catch {}
         }
