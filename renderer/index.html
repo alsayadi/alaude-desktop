@@ -5199,6 +5199,10 @@
     </div>
 
     <div class="council-slots" id="council-slots" style="display:none"></div>
+    <!-- v0.5.19 Crew mode — one model per specialist role. Each dropdown
+         picks independently; empty falls back to the currently-selected
+         model in the sidebar. -->
+    <div class="council-slots" id="crew-slots" style="display:none"></div>
 
     <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none">
       <span class="radar-item"><span class="radar-icon">💬</span><span id="radar-msgs">0</span></span>
@@ -8773,9 +8777,59 @@ footer a { color: var(--accent); text-decoration: none; }
       { name: 'Researcher', icon: '🔍', prompt: 'You are the Researcher. Ground the answer in facts, cite reasoning chains, surface relevant precedents or prior art. Link where possible.' },
     ]
     let crewMode = false
+    // Per-role model picks. Empty string = "use whatever's in the sidebar
+    // selector" (fallback). Persists across launches.
+    const LS_CREW_MODELS = 'alaude:crewModels:v1'
+    let crewModels = ['', '', '']
+    function loadCrewModels() {
+      try {
+        const raw = localStorage.getItem(LS_CREW_MODELS)
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          for (let i = 0; i < 3; i++) crewModels[i] = String(parsed[i] || '')
+        }
+      } catch {}
+    }
+    function saveCrewModels() {
+      try { localStorage.setItem(LS_CREW_MODELS, JSON.stringify(crewModels)) } catch {}
+    }
+    loadCrewModels()
+
     function refreshCrewUi() {
       const btn = document.getElementById('crew-toggle')
       if (btn) btn.classList.toggle('on', crewMode)
+      const slots = document.getElementById('crew-slots')
+      if (slots) {
+        slots.style.display = crewMode ? '' : 'none'
+        if (crewMode) renderCrewSlots()
+      }
+    }
+    function renderCrewSlots() {
+      const slots = document.getElementById('crew-slots')
+      if (!slots) return
+      const available = collectAvailableModels()
+      const currentSidebar = document.getElementById('model-select')?.value || ''
+      const html = CREW_ROLES.map((role, i) => {
+        const selected = crewModels[i] || ''
+        const options = [
+          `<option value="">— use current (${escapeHtml(currentSidebar || 'default')})</option>`,
+          ...available
+            .filter(m => m.value)
+            .map(m => `<option value="${escapeHtml(m.value)}"${m.value === selected ? ' selected' : ''}>${escapeHtml(m.label)}</option>`),
+        ].join('')
+        return `
+          <select class="council-slot" data-crew-slot="${i}" onchange="updateCrewSlot(${i}, this.value)" title="Model for ${role.name}">
+            <optgroup label="${role.icon} ${role.name}">${options}</optgroup>
+          </select>`
+      }).join('')
+      slots.innerHTML = html
+    }
+    function updateCrewSlot(idx, value) {
+      crewModels[idx] = String(value || '')
+      saveCrewModels()
+      const modelLabel = value || 'current'
+      showRewindToast?.(`${CREW_ROLES[idx].icon} ${CREW_ROLES[idx].name} → ${modelLabel}`, false)
     }
     function toggleCrewMode() {
       crewMode = !crewMode
@@ -8785,7 +8839,8 @@ footer a { color: var(--accent); text-decoration: none; }
         // want to own the multi-lane message shape). User gets a heads-up
         // so they're not surprised.
         if (councilMode) toggleCouncilMode()
-        showRewindToast?.('👥 Crew on — every turn runs through Architect · Critic · Researcher, then synthesizes', false)
+        const sidebarChoice = document.getElementById('model-select')?.value || 'current model'
+        showRewindToast?.(`👥 Crew on — pick a model per role below, or leave as "${sidebarChoice}" to use the sidebar pick`, false)
       } else {
         showRewindToast?.('Crew off', false)
       }
@@ -9530,7 +9585,11 @@ footer a { color: var(--accent); text-decoration: none; }
 
     // ── Crew call: Architect + Critic + Researcher in parallel, auto-synth ─
     async function callCrew(userText, uxMeta) {
-      const model = document.getElementById('model-select')?.value || ''
+      // Per-role model: prefer the crew-slots pick, fall back to the sidebar
+      // selector. Enables heterogeneous crew runs (e.g. Architect on Claude,
+      // Critic on GPT-5, Researcher on Gemini) for wider coverage.
+      const fallback = document.getElementById('model-select')?.value || ''
+      const laneModels = CREW_ROLES.map((_role, i) => crewModels[i] || fallback)
       const t0 = Date.now()
       liveActivity = []
 
@@ -9538,7 +9597,7 @@ footer a { color: var(--accent); text-decoration: none; }
         role: 'assistant',
         streaming: true,
         content: '',
-        model,
+        model: laneModels[i],
         roleName: role.name,
         roleIcon: role.icon,
         uxMessageId: `${uxMeta.messageId}_crew${i}`,
@@ -9583,7 +9642,7 @@ footer a { color: var(--accent); text-decoration: none; }
           content: `[Your role: ${role.name}. ${role.prompt}]\n\n${typeof lastUser?.content === 'string' ? lastUser.content : userText}`,
         }]
         try {
-          const response = await window.alaude.chat(msgs, model, workspacePath, currentSpaceId, { ...uxMeta, messageId: lanes[i].uxMessageId })
+          const response = await window.alaude.chat(msgs, laneModels[i], workspacePath, currentSpaceId, { ...uxMeta, messageId: lanes[i].uxMessageId })
           lanes[i].content = (typeof response === 'string') ? response : (JSON.stringify(response) || '(no response)')
         } catch (err) {
           lanes[i].content = `Error: ${err.message || String(err)}`
@@ -12505,6 +12564,11 @@ Title:`
         }
       } catch (err) {
         console.warn('[model-readiness] refresh failed:', err.message)
+      }
+      // Keep Crew's per-role dropdowns in sync with the model list whenever
+      // readiness changes (e.g. a new local model got pulled or a provider key was saved).
+      if (typeof crewMode !== 'undefined' && crewMode) {
+        try { renderCrewSlots?.() } catch {}
       }
     }
 
