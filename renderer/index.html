@@ -5372,6 +5372,17 @@
         Labaik remembers key facts about you across all sessions. Relevant memories
         are silently attached to each prompt so responses feel less amnesic.
       </div>
+      <!-- v0.6.0 Semantic recall status + controls -->
+      <div id="memory-semantic-status" style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:7px;margin-bottom:10px;font-size:12px">
+        <span id="memory-semantic-icon">🧭</span>
+        <span id="memory-semantic-text" style="flex:1;color:var(--text-dim)">Checking semantic recall…</span>
+        <select id="memory-recall-mode" onchange="setMemoryRecallMode(this.value)" style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+          <option value="auto">Auto</option>
+          <option value="semantic">Semantic only</option>
+          <option value="keyword">Keyword only</option>
+        </select>
+        <button class="msg-action-btn" id="memory-reindex-btn" onclick="reindexMemoryEmbeddings()" style="font-size:11px">Re-index</button>
+      </div>
       <!-- Search + stats row -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
         <input id="memory-search" type="text" placeholder="🔍 Search memories…" oninput="renderMemoryModal()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
@@ -6485,6 +6496,7 @@
     // is / I prefer / I work at / I'm building"), plus an explicit
     // "🧠 Remember" button on user messages.
     const LS_MEMORY = 'alaude:memory:v1'
+    const LS_MEMORY_MODE = 'alaude:memory-recall-mode:v1' // 'auto' | 'semantic' | 'keyword'
     function loadMemories() {
       try {
         const raw = localStorage.getItem(LS_MEMORY)
@@ -6497,6 +6509,75 @@
       try { localStorage.setItem(LS_MEMORY, JSON.stringify(memories)) } catch {}
     }
     let memories = loadMemories()
+    let memoryRecallMode = localStorage.getItem(LS_MEMORY_MODE) || 'auto'
+    let _embedModelCached = undefined  // undefined = not checked yet; string | null afterward
+
+    // v0.6.0: Semantic memory. Each memory carries an optional `embedding`
+    // (number[]). We compute it on write if Ollama + an embedding model
+    // are available. For backfill (existing memories) and first-run we
+    // lazily embed up to N at a time. Falls back to keyword scoring if
+    // either side of the comparison has no embedding.
+    async function _detectEmbedModel() {
+      if (_embedModelCached !== undefined) return _embedModelCached
+      try {
+        _embedModelCached = await window.alaude.ollamaFindEmbedModel?.() || null
+      } catch { _embedModelCached = null }
+      return _embedModelCached
+    }
+    function _cosine(a, b) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0
+      let dot = 0, na = 0, nb = 0
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]
+      }
+      if (na === 0 || nb === 0) return 0
+      return dot / (Math.sqrt(na) * Math.sqrt(nb))
+    }
+    async function _embedOne(text) {
+      try {
+        const res = await window.alaude.ollamaEmbed([String(text || '')])
+        if (res?.ok && Array.isArray(res.embeddings) && res.embeddings[0]) return res.embeddings[0]
+      } catch {}
+      return null
+    }
+    async function _embedBatch(texts) {
+      try {
+        const res = await window.alaude.ollamaEmbed(texts.map(t => String(t || '')))
+        if (res?.ok && Array.isArray(res.embeddings)) return { ok: true, vectors: res.embeddings, model: res.model }
+        return { ok: false, reason: res?.reason || 'unknown' }
+      } catch (err) {
+        return { ok: false, reason: 'error', error: err?.message }
+      }
+    }
+    // Backfill any memories missing an embedding. Runs in the background
+    // first time a semantic recall is requested. Does nothing gracefully
+    // if Ollama or the embed model aren't available.
+    let _backfilling = false
+    async function ensureMemoryEmbeddings({ force = false, onProgress } = {}) {
+      if (_backfilling) return { started: false, reason: 'already-running' }
+      const model = await _detectEmbedModel()
+      if (!model) return { started: false, reason: 'no-model' }
+      const todo = memories.filter(m => force || !Array.isArray(m.embedding) || !m.embedding.length)
+      if (!todo.length) return { started: false, reason: 'all-indexed', model }
+      _backfilling = true
+      try {
+        const CHUNK = 32  // Ollama /api/embed accepts batches
+        for (let i = 0; i < todo.length; i += CHUNK) {
+          const batch = todo.slice(i, i + CHUNK)
+          const res = await _embedBatch(batch.map(m => m.text))
+          if (!res.ok) break
+          for (let j = 0; j < batch.length; j++) {
+            batch[j].embedding = res.vectors[j]
+            batch[j].embedModel = res.model
+          }
+          saveMemories()
+          if (onProgress) onProgress({ done: i + batch.length, total: todo.length })
+        }
+        return { started: true, done: todo.length, model }
+      } finally {
+        _backfilling = false
+      }
+    }
 
     // Regex-based extraction. Runs on every user message. Very precision-biased
     // — we'd rather miss facts than hallucinate them. Each pattern captures
@@ -6537,31 +6618,73 @@
       // Cap at 500 to avoid unbounded growth; drop the oldest
       if (memories.length > 500) memories = memories.slice(-500)
       saveMemories()
+      // v0.6.0: fire-and-forget embed if a local model is available. Doesn't
+      // block the save. If Ollama / embed model are absent, recall falls
+      // back to keyword scoring so memory still works.
+      ;(async () => {
+        try {
+          const model = await _detectEmbedModel()
+          if (!model) return
+          const vec = await _embedOne(t)
+          if (vec) {
+            mem.embedding = vec
+            mem.embedModel = model
+            saveMemories()
+          }
+        } catch {}
+      })()
       return mem
     }
 
-    // Recall: simple keyword-overlap scoring. For each memory, count how
-    // many content words (≥4 chars) appear in the query. Return top N with
-    // non-zero scores.
-    function memoryRecall(queryText, topN = 5) {
-      if (!queryText || !memories.length) return []
+    // Recall. v0.6.0 adds semantic scoring on top of the original keyword
+    // overlap. Strategy:
+    //   1. If mode is 'keyword' → pure keyword overlap (legacy behavior).
+    //   2. If mode is 'semantic' or 'auto' AND an embed model is available
+    //      AND at least some memories have embeddings → cosine similarity
+    //      on the query vs each memory's embedding. Threshold 0.35 keeps
+    //      noise out. Ties broken by recency.
+    //   3. 'auto' falls back to keyword if step 2 returns nothing or is
+    //      unavailable, so users always get SOMETHING.
+    function _keywordScore(queryText) {
       const stop = new Set(['that','this','with','from','have','will','what','when','where','which','should','could','would','about','there','their','been','does','doesnt','cant','dont','just','like','some','also','been','make','makes','need','needs'])
       const qWords = new Set(
         String(queryText).toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || []
       )
       if (!qWords.size) return []
-      const scored = memories.map(m => {
+      return memories.map(m => {
         const mWords = new Set(m.text.toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || [])
         let s = 0
         for (const w of qWords) if (mWords.has(w)) s++
         return { m, s }
-      }).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, topN)
-      return scored.map(x => x.m)
+      }).filter(x => x.s > 0).sort((a, b) => b.s - a.s)
+    }
+    async function _semanticScore(queryText) {
+      const model = await _detectEmbedModel()
+      if (!model) return null
+      const embedded = memories.filter(m => Array.isArray(m.embedding) && m.embedding.length)
+      if (!embedded.length) return null
+      const qvec = await _embedOne(queryText)
+      if (!qvec) return null
+      const scored = embedded.map(m => ({ m, s: _cosine(qvec, m.embedding) }))
+      return scored
+        .filter(x => x.s > 0.35)  // noise floor — empirically keeps recall relevant
+        .sort((a, b) => b.s - a.s || b.m.createdAt - a.m.createdAt)
+    }
+    async function memoryRecall(queryText, topN = 5) {
+      if (!queryText || !memories.length) return []
+      const mode = memoryRecallMode || 'auto'
+      if (mode !== 'keyword') {
+        const sem = await _semanticScore(queryText)
+        if (sem && sem.length) return sem.slice(0, topN).map(x => x.m)
+      }
+      if (mode === 'semantic') return []  // explicit semantic-only; no fallback
+      const kw = _keywordScore(queryText)
+      return kw.slice(0, topN).map(x => x.m)
     }
 
-    function memoryInjectIntoLastUser(cleanMsgs, queryText) {
+    async function memoryInjectIntoLastUser(cleanMsgs, queryText) {
       if (!cleanMsgs || !cleanMsgs.length) return { msgs: cleanMsgs, used: [] }
-      const used = memoryRecall(queryText, 5)
+      const used = await memoryRecall(queryText, 5)
       if (!used.length) return { msgs: cleanMsgs, used: [] }
       const block = '<memory-context>\n' + used.map(m => `- ${m.text}`).join('\n') + '\n</memory-context>\n\n'
       const out = cleanMsgs.slice()
@@ -6595,6 +6718,65 @@
       }
     }
 
+    // v0.6.0 semantic memory status + reindex
+    async function refreshMemorySemanticStatus() {
+      const icon = document.getElementById('memory-semantic-icon')
+      const text = document.getElementById('memory-semantic-text')
+      const modeSel = document.getElementById('memory-recall-mode')
+      const btn = document.getElementById('memory-reindex-btn')
+      if (!icon || !text) return
+      if (modeSel) modeSel.value = memoryRecallMode
+      const model = await _detectEmbedModel()
+      if (!model) {
+        icon.textContent = '🔎'
+        text.innerHTML = 'Semantic recall unavailable — install an embedding model (<code>ollama pull nomic-embed-text</code>) for smarter memory matching.'
+        if (btn) btn.disabled = true
+        return
+      }
+      const embedded = memories.filter(m => Array.isArray(m.embedding) && m.embedding.length).length
+      const total = memories.length
+      icon.textContent = '🧭'
+      if (total === 0) {
+        text.innerHTML = `Semantic recall ready (<code>${escapeHtml(model)}</code>) — add some memories to get going.`
+      } else if (embedded === total) {
+        text.innerHTML = `<strong>Semantic recall active</strong> — ${embedded}/${total} memories indexed with <code>${escapeHtml(model)}</code>.`
+      } else {
+        text.innerHTML = `${embedded}/${total} memories indexed with <code>${escapeHtml(model)}</code>. Click Re-index to backfill the rest.`
+      }
+      if (btn) btn.disabled = false
+    }
+    function setMemoryRecallMode(mode) {
+      memoryRecallMode = mode
+      try { localStorage.setItem(LS_MEMORY_MODE, mode) } catch {}
+      showRewindToast?.(`🧠 Memory recall: ${mode}`, false)
+    }
+    async function reindexMemoryEmbeddings() {
+      const btn = document.getElementById('memory-reindex-btn')
+      const text = document.getElementById('memory-semantic-text')
+      if (!btn || btn.disabled) return
+      btn.disabled = true
+      const original = btn.textContent
+      btn.textContent = 'Indexing…'
+      try {
+        const r = await ensureMemoryEmbeddings({
+          force: true,
+          onProgress: ({ done, total }) => {
+            if (text) text.textContent = `Indexing ${done}/${total}…`
+          }
+        })
+        if (r.reason === 'no-model') {
+          showRewindToast?.('No embedding model installed', true)
+        } else {
+          showRewindToast?.(`🧭 Indexed ${memories.length} memories`, false)
+        }
+      } finally {
+        btn.disabled = false
+        btn.textContent = original
+        refreshMemorySemanticStatus()
+        renderMemoryModal()
+      }
+    }
+
     // Memory Manager modal
     function toggleMemoryModal() {
       const m = document.getElementById('memory-modal')
@@ -6606,6 +6788,7 @@
         return
       }
       renderMemoryModal()
+      refreshMemorySemanticStatus()
       m.classList.add('show')
       m.style.display = 'flex'
     }
@@ -10337,7 +10520,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // inject any relevant recalled memories as a prefix to that message.
         const memoryExtracted = memoryExtract(userText)
         for (const fact of memoryExtracted) memoryAdd(fact, { sessionId: targetSessionId })
-        const { msgs: withMemory, used: memoriesUsed } = memoryInjectIntoLastUser(cleanMsgs, userText)
+        const { msgs: withMemory, used: memoriesUsed } = await memoryInjectIntoLastUser(cleanMsgs, userText)
         // Tag the assistant streaming slot with the memories used so the chip
         // can render once the reply lands, and stash estimated input tokens
         // so the cost estimator can compute $ after streaming finishes.

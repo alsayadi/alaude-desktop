@@ -93,6 +93,10 @@ contextBridge.exposeInMainWorld('alaude', {
 
   // Ollama local runtime
   ollamaAvailable: () => ipcRenderer.invoke('ollama-available'),
+  // v0.6.0 Semantic memory — local embeddings via Ollama /api/embed.
+  // Returns { ok, model, embeddings: number[][] } or { ok:false, reason }.
+  ollamaEmbed: (texts, model) => ipcRenderer.invoke('ollama-embed', texts, model),
+  ollamaFindEmbedModel: () => ipcRenderer.invoke('ollama-find-embed-model'),
   // v0.5.0: in-app installer — no browser trip to ollama.com
   ollamaInstall: () => ipcRenderer.invoke('ollama-install'),
   onOllamaInstallProgress: (callback) => {

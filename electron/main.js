@@ -975,6 +975,25 @@ const activePulls = new Map() // model -> cancelFn
 
 ipcMain.handle('ollama-available', async () => ollama.isAvailable())
 
+// v0.6.0: Semantic memory. Thin wrapper around ollama.embed — embeds a
+// batch of strings via /api/embed. Returns [] if Ollama is down or no
+// embedding model is installed; the renderer then falls back to keyword
+// recall so memory never becomes unavailable.
+ipcMain.handle('ollama-embed', async (_e, texts, model) => {
+  try {
+    if (!(await ollama.isAvailable())) return { ok: false, reason: 'ollama-down' }
+    const m = model || (await ollama.findEmbedModel())
+    if (!m) return { ok: false, reason: 'no-embed-model' }
+    const embeddings = await ollama.embed(texts, m)
+    return { ok: true, model: m, embeddings }
+  } catch (err) {
+    return { ok: false, reason: 'error', error: String(err?.message || err) }
+  }
+})
+ipcMain.handle('ollama-find-embed-model', async () => {
+  try { return await ollama.findEmbedModel() } catch { return null }
+})
+
 ipcMain.handle('ollama-list', async () => ollama.listInstalled())
 
 // v0.5.0: in-app Ollama installer. No website trip. Progress streams back

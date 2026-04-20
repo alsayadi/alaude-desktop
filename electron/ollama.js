@@ -292,4 +292,52 @@ function _run(cmd, args) {
   })
 }
 
-module.exports = { isAvailable, listInstalled, pull, remove, installOllama, BASE }
+// v0.6.0: Semantic memory. Ollama's /api/embed lets us vectorize text
+// locally, no cloud round-trip. Defaults to nomic-embed-text (274MB,
+// 768-dim, great general-purpose). Caller can override the model.
+//
+// Accepts a single string or an array; always returns an array of
+// number[] so the caller code is uniform.
+async function embed(texts, model = 'nomic-embed-text') {
+  const input = Array.isArray(texts) ? texts : [texts]
+  if (!input.length) return []
+  try {
+    const res = await fetch(`${BASE}/api/embed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, input }),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`ollama /api/embed failed (${res.status}): ${body.slice(0, 200)}`)
+    }
+    const json = await res.json()
+    return json.embeddings || []
+  } catch (err) {
+    // Re-throw with a more actionable message when the model isn't pulled.
+    if (/not found/i.test(err.message)) {
+      throw new Error(`Embedding model "${model}" isn't pulled. Run: ollama pull ${model}`)
+    }
+    throw err
+  }
+}
+
+// Check whether ANY embedding-capable model is installed. Returns the
+// first matching name or null if none. Used by the renderer to decide
+// between semantic and keyword recall.
+async function findEmbedModel() {
+  const installed = await listInstalled()
+  const names = installed.map(m => m.name)
+  const preferred = [
+    'nomic-embed-text', 'nomic-embed-text:latest',
+    'all-minilm', 'all-minilm:latest',
+    'mxbai-embed-large', 'mxbai-embed-large:latest',
+    'bge-m3', 'bge-m3:latest',
+  ]
+  for (const p of preferred) if (names.includes(p)) return p
+  // Fallback: any model with "embed" in its name.
+  const fallback = names.find(n => /embed/i.test(n))
+  return fallback || null
+}
+
+module.exports = { isAvailable, listInstalled, pull, remove, installOllama, embed, findEmbedModel, BASE }
