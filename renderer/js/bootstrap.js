@@ -18,6 +18,7 @@ import { MemoryExtract, PROFILE_CATEGORIES } from './memory/memory-extract.js'
 import { MemoryUI } from './memory/memory-ui.js'
 import { ProfileStore } from './profile/profile-store.js'
 import { ProfileUI } from './profile/profile-ui.js'
+import { createFsBackedStorage } from './storage/fs-backed-storage.js'
 
 export function bootMemorySystem({
   getWorkspace,           // () => string | null
@@ -29,8 +30,23 @@ export function bootMemorySystem({
   persistSessions,        // () => void
 } = {}) {
   // ── data layer ────────────────────────────────────────────────
-  const store = new MemoryStore()
-  const profileStore = new ProfileStore()
+  //
+  // v0.7.59: memory + profile persistence now routes through the main
+  // process filesystem (`~/.alaude/memory.json`, `~/.alaude/profile.json`)
+  // instead of Chromium localStorage. Chromium batches localStorage
+  // writes to LevelDB asynchronously, which can drop recent writes on
+  // SIGTERM/crash — the cause of "I added a memory yesterday, it's gone
+  // now." A thin fs-backed façade keeps the Storage API so MemoryStore /
+  // ProfileStore don't have to know the difference. If the bridge is
+  // missing (quick window, dev), we fall back to plain localStorage.
+  const fsStorage = createFsBackedStorage({
+    'alaude:memory:v1':               { file: 'memory',  field: 'entries' },
+    'alaude:memory-recall-mode:v1':   { file: 'memory',  field: 'recallMode' },
+    'alaude:profile:v1':              { file: 'profile', field: 'entries' },
+    'alaude:profile:onboarded:v1':    { file: 'profile', field: 'onboarded' },
+  })
+  const store = new MemoryStore({ storage: fsStorage })
+  const profileStore = new ProfileStore({ storage: fsStorage })
   const embeddings = new MemoryEmbeddings({ store })
 
   // Incognito is a transient flag — owned by bootstrap so both MemoryUI
@@ -210,6 +226,28 @@ export function bootMemorySystem({
   } catch (err) {
     console.warn('[v0.7.33] Overlay reset failed:', err)
   }
+
+  // v0.7.58 — exit-time memory + profile flush.
+  //
+  // localStorage.setItem is synchronous from JS's perspective but Chromium
+  // batches writes to LevelDB asynchronously. A SIGTERM or crash in the
+  // narrow window between setItem() and the LevelDB flush can lose the
+  // most recent writes. Re-writing on beforeunload re-submits them to the
+  // flush queue. Cheap, effective belt-and-braces.
+  const exitPersist = () => {
+    try { store.save() } catch {}
+    try { profileStore.save() } catch {}
+  }
+  try {
+    const win = globalThis.window
+    if (win) {
+      win.addEventListener('beforeunload', exitPersist)
+      win.addEventListener('pagehide', exitPersist)
+      win.document?.addEventListener?.('visibilitychange', () => {
+        if (win.document.visibilityState === 'hidden') exitPersist()
+      })
+    }
+  } catch {}
 
   return { store, profileStore, recall, embeddings, memoryUI, profileUI, getIncognito, setIncognito }
 }

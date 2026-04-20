@@ -1506,6 +1506,9 @@
     }
     .topbar-menu.show { display: flex; }
     .topbar-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       background: transparent;
       border: none;
       color: var(--text);
@@ -1515,6 +1518,7 @@
       font-size: 12.5px;
       cursor: pointer;
       -webkit-app-region: no-drag;
+      width: 100%;
     }
     .topbar-menu-item:hover {
       background: var(--bg-hover);
@@ -1545,23 +1549,39 @@
       color: var(--text-faint);
     }
 
+    /* v0.7.54 — quieter, more modern welcome. No green glow halo, no
+       float animation. Logo is smaller + more restrained. Title sits bigger
+       with tight letter-spacing; subhead stays small + secondary. */
     .welcome-logo {
-      width: 72px;
-      height: 72px;
-      border-radius: 18px;
-      box-shadow: 0 0 40px var(--green-glow);
-      animation: welcomeFloat 4s ease-in-out infinite;
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      margin-bottom: 2px;
     }
-    @keyframes welcomeFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
-    .welcome-title { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+    .welcome-title {
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-top: 4px;
+    }
     .welcome-title .welcome-gradient {
       background: linear-gradient(135deg, var(--green) 0%, #4ad28c 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    .welcome-sub { font-size: 14px; max-width: 420px; text-align: center; line-height: 1.55; color: var(--text-dim); }
+    .welcome-sub {
+      font-size: 14px;
+      max-width: 480px;
+      text-align: center;
+      line-height: 1.55;
+      color: var(--text-dim);
+      margin-top: -4px;
+    }
 
     .welcome-spaces {
       display: grid;
@@ -1788,41 +1808,48 @@
     }
 
     /* ─── Session Templates on welcome ────────────────────────── */
-    .template-section { margin-top: 18px; }
+    /* v0.7.54 — modernized welcome template grid. Bigger, breathier cards
+       with proper typographic hierarchy + a subtle hover lift. Keeps the
+       same data model (SESSION_TEMPLATES array) — only visuals change. */
+    .template-section { margin-top: 28px; width: 100%; }
     .template-section-label {
       color: var(--text-faint);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      font-size: 12px;
+      font-weight: 500;
       text-align: center;
-      margin-bottom: 8px;
+      margin-bottom: 14px;
+      letter-spacing: -0.01em;
     }
     .template-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      max-width: 560px;
+      gap: 10px;
+      max-width: 660px;
       margin: 0 auto;
     }
     @media (max-width: 720px) { .template-grid { grid-template-columns: repeat(2, 1fr); } }
     .template-card {
+      position: relative;
       display: flex;
-      align-items: flex-start;
+      flex-direction: column;
       gap: 8px;
-      padding: 10px 12px;
+      padding: 16px 16px 18px;
       background: var(--bg-input);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 12px;
       cursor: pointer;
-      transition: border-color 0.15s, transform 0.1s;
+      transition: transform 0.15s ease, border-color 0.15s, box-shadow 0.2s;
       text-align: left;
     }
-    .template-card:hover { border-color: var(--green); transform: translateY(-1px); }
-    .template-card { position: relative; }
+    .template-card:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in oklch, var(--green) 40%, var(--border));
+      box-shadow: 0 6px 18px color-mix(in oklch, var(--green) 8%, transparent);
+    }
     .template-card .tmpl-del {
       position: absolute;
-      top: 4px;
-      right: 6px;
+      top: 6px;
+      right: 8px;
       background: transparent;
       border: 0;
       color: var(--text-faint);
@@ -1835,10 +1862,24 @@
     }
     .template-card:hover .tmpl-del { opacity: 0.7; }
     .template-card .tmpl-del:hover { opacity: 1 !important; color: #e74c3c; }
-    .template-icon { font-size: 18px; line-height: 1; flex-shrink: 0; margin-top: 1px; }
+    .template-icon {
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
     .template-body { flex: 1; min-width: 0; }
-    .template-name { color: var(--text); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
-    .template-desc { color: var(--text-faint); font-size: 11px; line-height: 1.35; }
+    .template-name {
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 3px;
+      letter-spacing: -0.01em;
+    }
+    .template-desc {
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1.45;
+    }
 
     .welcome-hints {
       display: flex;
@@ -4560,6 +4601,29 @@
       overflow: auto;
     }
     .login-screen.hidden { display: none; }
+    /* v0.7.52: circular close button top-right of the login overlay. */
+    .login-close {
+      position: absolute;
+      top: 18px;
+      right: 22px;
+      width: 32px;
+      height: 32px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-faint);
+      border-radius: 50%;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      z-index: 2;
+    }
+    .login-close:hover {
+      color: var(--text);
+      border-color: var(--green);
+      background: var(--bg);
+    }
 
     .login-card {
       width: 480px;
@@ -5120,6 +5184,10 @@
 
   <!-- Login Screen -->
   <div id="login-screen" class="login-screen">
+    <!-- v0.7.52: close button for users who opened the screen via
+         "Add Account" and want to back out without connecting. Hidden on
+         first run (checkLoginStatus reveals it when hasAny=true). -->
+    <button class="login-close" id="login-close-btn" onclick="hideLogin()" title="Close" aria-label="Close" style="display:none">×</button>
     <div class="login-card">
       <img class="login-logo" src="logo.jpg" alt="Labaik" />
       <h1 class="login-title">Welcome to Labaik</h1>
@@ -5266,6 +5334,7 @@
         <div class="topbar-menu-wrap">
           <button class="topbar-keys-btn" id="topbar-more-btn" onclick="toggleTopbarMenu(event)" title="More actions" aria-label="More">⋯</button>
           <div class="topbar-menu" id="topbar-menu" role="menu">
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('search', event)">🔍 Search all sessions <span style="color:var(--text-faint);font-size:11px;margin-left:auto">⌘F</span></button>
             <button class="topbar-menu-item" id="menu-crew" role="menuitem" onclick="runTopbarAction('crew', event)">👥 Crew</button>
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('skills', event)">⏰ Tasks</button>
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
@@ -5291,7 +5360,7 @@
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title">What can I help you with?</div>
-        <div class="welcome-sub">Drop files here, or try one of these:</div>
+        <div class="welcome-sub">Drop a file, or just start typing.</div>
         <div class="quick-actions" id="quick-actions"></div>
         <!-- First-run coach card — shown once per install, then dismissed to
              localStorage. Each prompt is clickable and demonstrates one of
@@ -6012,11 +6081,74 @@
     let customSpaces = []
     let currentSpaceId = 'general'
 
-    // Sessions persist to localStorage. On fresh launch, restore the last
-    // session's messages + id so the user lands exactly where they left off.
+    // Sessions persist to ~/.alaude/sessions.json via the fs bridge (v0.7.59).
+    // Previously used localStorage, which batches writes to LevelDB and could
+    // lose the most-recent session(s) on SIGTERM/crash — the "sometimes shows
+    // history, sometimes not" bug. Memory + profile migrated to fs in v0.7.59;
+    // sessions follow the same pattern here. Falls back to localStorage if
+    // the bridge is unavailable (dev, quick-window) so nothing breaks.
     const LS_SESSIONS = 'alaude:sessions:v1'
     const LS_ACTIVE_SESSION = 'alaude:activeSessionId:v1'
     const MAX_SESSIONS = 50  // soft cap — oldest dropped when exceeded
+
+    // Thin fs-first storage for sessions. sessions.json holds both fields
+    // under one top-level object:
+    //   { sessions: '<json string>', activeSessionId: '<string>' }
+    // Values are stored as RAW strings (exactly what the caller passed to
+    // setItem) so the surrounding code's JSON.parse contract is identical.
+    const _sessionsFsFields = {
+      [LS_SESSIONS]: 'sessions',
+      [LS_ACTIVE_SESSION]: 'activeSessionId',
+    }
+    const _sessionsCache = { data: undefined }  // undefined = unread, null = read-but-empty
+    function _sessionsBridge() {
+      const a = window.alaude
+      return (a && typeof a.fsJsonReadSync === 'function' && typeof a.fsJsonWriteSync === 'function') ? a : null
+    }
+    function _sessionsRead() {
+      const br = _sessionsBridge()
+      if (!br) return null
+      if (_sessionsCache.data !== undefined) return _sessionsCache.data
+      _sessionsCache.data = br.fsJsonReadSync('sessions')
+      return _sessionsCache.data
+    }
+    function _sessionsGetItem(key) {
+      const field = _sessionsFsFields[key]
+      if (!field) return localStorage.getItem(key)
+      const br = _sessionsBridge()
+      if (!br) return localStorage.getItem(key)
+      const data = _sessionsRead()
+      if (data && Object.prototype.hasOwnProperty.call(data, field)) {
+        const v = data[field]
+        // Mirror to localStorage so any legacy reader still sees latest.
+        try { if (v != null) localStorage.setItem(key, v) } catch {}
+        return v == null ? null : String(v)
+      }
+      // Migration: seed fs from localStorage if we find legacy data.
+      const legacy = localStorage.getItem(key)
+      if (legacy != null) {
+        const next = (data && typeof data === 'object') ? { ...data } : {}
+        next[field] = legacy
+        try {
+          br.fsJsonWriteSync('sessions', next)
+          _sessionsCache.data = next
+        } catch {}
+      }
+      return legacy
+    }
+    function _sessionsSetItem(key, value) {
+      // Always mirror to localStorage — belt & braces during the transition.
+      try { localStorage.setItem(key, value) } catch {}
+      const field = _sessionsFsFields[key]
+      if (!field) return
+      const br = _sessionsBridge()
+      if (!br) return
+      const data = _sessionsRead()
+      const next = (data && typeof data === 'object') ? { ...data } : {}
+      next[field] = value
+      br.fsJsonWriteSync('sessions', next)
+      _sessionsCache.data = next
+    }
 
     // Strip transient streaming state before persisting — otherwise a killed
     // worker or a mid-stream app crash leaves a message with
@@ -6062,6 +6194,22 @@
         return
       }
       try {
+        // v0.7.56 HARDENED safeguard: refuse to overwrite stored sessions
+        // with a clearly-fresh in-memory state (1 session titled "New
+        // session", 0 messages) if storage already contains real data.
+        // This catches the race where a beforeunload/visibilitychange
+        // handler fires before the user has generated any real content,
+        // and would otherwise nuke prior history.
+        const rawExisting = _sessionsGetItem(LS_SESSIONS)
+        const looksFresh = sessions.length === 1
+          && sessions[0]?.title === 'New session'
+          && (!Array.isArray(sessions[0]?.messages) || sessions[0].messages.length === 0)
+        if (looksFresh && rawExisting && rawExisting.length > 10) {
+          // Storage has content; memory has nothing. Likely early-in-boot
+          // event or a restore failure not caught by the lock. Bail.
+          console.warn('[persist] Refusing to overwrite non-empty storage with fresh-empty sessions (preserving history).')
+          return
+        }
         // Snapshot current session's messages before saving
         const current = sessions.find(s => s.id === currentSessionId)
         if (current) current.messages = messages
@@ -6071,16 +6219,31 @@
           ...s,
           messages: _sanitizeForPersist(s.messages),
         }))
-        localStorage.setItem(LS_SESSIONS, JSON.stringify(snapshot))
-        localStorage.setItem(LS_ACTIVE_SESSION, String(currentSessionId))
+        _sessionsSetItem(LS_SESSIONS, JSON.stringify(snapshot))
+        _sessionsSetItem(LS_ACTIVE_SESSION, String(currentSessionId))
       } catch (err) {
         console.warn('[persist] sessions failed:', err.message)
       }
     }
 
     function restoreSessions() {
-      const raw = localStorage.getItem(LS_SESSIONS)
-      if (!raw) return null                // truly empty — OK to start fresh
+      const raw = _sessionsGetItem(LS_SESSIONS)
+      // v0.7.57 HARDENED: treat ANY non-successful-array result as
+      // "possibly storage transient — lock persist until proven safe."
+      // Previous versions assumed `null` / `""` / `"[]"` meant "truly
+      // empty storage" and allowed persist to continue writing. That
+      // was wrong on rare Chromium-LevelDB transient reads — persist
+      // then overwrote real data with fresh-empty state. NEVER AGAIN.
+      if (raw == null || raw === '' || raw === '[]') {
+        // We can't distinguish "fresh install" from "transient null".
+        // Be paranoid: lock persist by default. User explicitly creating
+        // a session or taking a destructive UI action must unlock it.
+        _persistLocked = true
+        _lastRestoreError = raw == null ? 'null-getItem' : (raw === '' ? 'empty-string' : 'empty-array')
+        console.warn('[sessions] getItem returned', _lastRestoreError,
+          '— assuming fresh install or transient read. Persist LOCKED until explicit user action unlocks it. Use window.unlockPersistence() from DevTools to force-unlock.')
+        return null
+      }
       try {
         const parsed = JSON.parse(raw)
         if (!Array.isArray(parsed)) {
@@ -6090,15 +6253,17 @@
           return null
         }
         if (parsed.length === 0) {
-          // Storage literally contains "[]". Could be legitimate (user
-          // cleared all sessions) or a prior bad persist. Don't lock —
-          // empty-array persisted state is a valid state.
+          // "[]" handled above, but defensive.
+          _persistLocked = true
+          _lastRestoreError = 'parsed-empty-array'
           return null
         }
         for (const s of parsed) {
           if (Array.isArray(s?.messages)) s.messages = _sanitizeForPersist(s.messages)
         }
         console.log(`[sessions] Restored ${parsed.length} session(s) from storage.`)
+        // Successful restore — persist is SAFE to run.
+        _persistLocked = false
         return parsed
       } catch (err) {
         _persistLocked = true
@@ -6107,14 +6272,59 @@
         return null
       }
     }
+    // v0.7.57: escape hatch. If persist is locked (restore couldn't read
+    // old data), a user who's sure they want to start clean can run this
+    // in DevTools to resume normal persistence. Without this, a truly-
+    // fresh install would stay locked forever because no "successful
+    // non-empty restore" ever happens.
+    window.unlockPersistence = () => {
+      _persistLocked = false
+      _lastRestoreError = null
+      console.log('[sessions] Persist unlocked by user.')
+    }
     // Expose for DevTools debugging: run `sessionsRecoveryInfo()` in console
     // to see if the safety lock engaged and what the raw storage looks like.
     window.sessionsRecoveryInfo = () => ({
       persistLocked: _persistLocked,
       lastRestoreError: _lastRestoreError,
-      rawStorageSize: (localStorage.getItem(LS_SESSIONS) || '').length,
+      rawStorageSize: (_sessionsGetItem(LS_SESSIONS) || '').length,
       currentSessions: sessions?.length ?? 0,
     })
+
+    // v0.7.55 — close-time + periodic persistence so in-progress streams
+    // and last-turn replies don't vanish on quit.
+    //
+    // The bug: persistSessions only runs at user-action points (send done,
+    // edit, pin, tag, etc.). Streaming token updates don't persist per-token
+    // because that'd be expensive — BUT if the user closes Labaik while a
+    // reply is still streaming, or within a few seconds of the reply
+    // landing, the window can quit before the final persist runs.
+    //
+    // Fixes:
+    //   1. `beforeunload`/`pagehide` → force persist synchronously
+    //   2. Periodic persist every 10s IF a stream is active
+    function _forcePersistOnExit() {
+      try { persistSessions() } catch (err) { console.warn('[exit-persist] failed:', err) }
+    }
+    window.addEventListener('beforeunload', _forcePersistOnExit)
+    // `pagehide` fires on macOS even when beforeunload doesn't in some Electron
+    // versions (e.g. app quit via dock). Belt + suspenders.
+    window.addEventListener('pagehide', _forcePersistOnExit)
+    // Also persist on visibility change to hidden — user switched to another
+    // app or minimized. Cheap insurance against the "I clicked another app
+    // and Labaik crashed in the background" case.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') _forcePersistOnExit()
+    })
+    // Periodic safety persist during streaming. When a turn is streaming, we
+    // can't afford per-token persist (hundreds of ops/sec), but 10s snapshots
+    // bound data loss to at most the last ~10s of a reply.
+    setInterval(() => {
+      try {
+        const streaming = Array.isArray(messages) && messages.some(m => m?.streaming)
+        if (streaming) persistSessions()
+      } catch {}
+    }, 10_000)
 
     let currentSessionId, sessions
     const _restored = restoreSessions()
@@ -6127,16 +6337,35 @@
     } else {
       currentSessionId = Date.now()
       sessions = [{ id: currentSessionId, title: 'New session', messages: [] }]
-      // v0.7.35: if restore failed with a parse error (not "no data"), warn
-      // the user immediately so they don't assume history is really gone.
-      // The lock prevents overwrite; the raw value is still in storage.
+      // v0.7.58 — late-restore retry. Chromium's LevelDB sometimes returns
+      // null on the first synchronous getItem() of a session while its
+      // backing store is still warming up after an unclean shutdown.
+      // Retry a few times over ~1.5s — if storage becomes readable, swap
+      // the fresh-empty state out for the real sessions. Silent on failure.
       if (_persistLocked) {
-        setTimeout(() => {
-          showRewindToast?.(
-            `⚠️ History didn't load (parse error) — saves paused to preserve raw data. Check DevTools → sessionsRecoveryInfo()`,
-            true
-          )
-        }, 800)
+        let retries = 0
+        const maxRetries = 6
+        const retryRestore = () => {
+          retries++
+          const late = restoreSessions()  // also unlocks _persistLocked on success
+          if (late && late.length) {
+            sessions = late
+            const savedActive = parseInt(localStorage.getItem(LS_ACTIVE_SESSION), 10)
+            const active = sessions.find(s => s.id === savedActive) || sessions[0]
+            // Only swap currentSessionId if the user hasn't started a fresh
+            // chat in the meantime (messages still empty).
+            if (messages.length === 0) {
+              currentSessionId = active.id
+              messages = Array.isArray(active.messages) ? active.messages : []
+            }
+            try { renderSessions?.(); renderMessages?.() } catch {}
+            console.log(`[sessions] Late-restore succeeded on retry ${retries} — ${late.length} sessions recovered.`)
+            return
+          }
+          if (retries < maxRetries) setTimeout(retryRestore, 250)
+          else console.warn('[sessions] Late-restore gave up after', retries, 'retries — treating as fresh install.')
+        }
+        setTimeout(retryRestore, 200)
       }
     }
 
@@ -9737,6 +9966,7 @@ footer a { color: var(--accent); text-decoration: none; }
       if (ev) ev.stopPropagation()
       closeTopbarMenu()
       const targets = {
+        search:      () => (typeof openGlobalSearch === 'function') && openGlobalSearch(),
         crew:        () => (typeof toggleCrewMode === 'function') && toggleCrewMode(),
         skills:      () => (typeof toggleSkillsModal === 'function') && toggleSkillsModal(),
         keys:        () => (typeof toggleKeysModal === 'function') && toggleKeysModal(),
@@ -10502,6 +10732,14 @@ footer a { color: var(--accent); text-decoration: none; }
         renderMessages()
         // Voice conversation mode: read the reply + auto-listen for next turn.
         maybeAutoSpeakReply?.()
+      }
+      // v0.7.57: a successful send+reply is unambiguous user intent. If
+      // persist was locked (fresh install or restoreSessions was paranoid),
+      // unlock now so the user's real work survives the next relaunch.
+      if (typeof _persistLocked !== 'undefined' && _persistLocked) {
+        console.log('[sessions] Unlocking persist after successful chat turn.')
+        _persistLocked = false
+        _lastRestoreError = null
       }
       persistSessions()
       // Auto-title via AI: after the 2nd assistant reply lands, ask the
@@ -11377,6 +11615,9 @@ Title:`
       inp.value = ''
       gsearchActiveIdx = 0
       renderGlobalSearch('')
+      // v0.7.51 defensive: clear any stale inline display before relying
+      // on the .show class. Matches the v0.7.49 modal-visibility fix.
+      overlay.style.removeProperty('display')
       overlay.classList.add('show')
       requestAnimationFrame(() => inp.focus())
     }
@@ -12826,7 +13067,7 @@ Title:`
       }).join('')
       return `
         <div class="template-section">
-          <div class="template-section-label">Or start from a template</div>
+          <div class="template-section-label">Quick starts</div>
           <div class="template-grid">${cards}</div>
         </div>`
     }
@@ -12855,6 +13096,13 @@ Title:`
     }
 
     function newSession() {
+      // v0.7.57: user explicitly creating a session = intent to use the app.
+      // If persist was paranoid-locked by restoreSessions (transient read),
+      // we stay locked until they PROVE they want to keep data — a successful
+      // chat reply does that (see callAI). newSession alone isn't enough;
+      // we don't unlock here because "opened an empty session" ≠ "created
+      // content worth persisting".
+
       // callAI captures its target session's messages array at entry, so any
       // in-flight turn from the previous session continues in the background
       // and writes into that session's array — not the new empty one.
@@ -13521,7 +13769,34 @@ Title:`
     }
 
     function showLogin() {
-      document.getElementById('login-screen').classList.remove('hidden')
+      // v0.7.51: clear the inline `display:none` that checkLoginStatus sets
+      // (line ~13367). Without this, removing the .hidden class alone does
+      // nothing — inline styles beat class-level `.login-screen.hidden`
+      // display rules, so the screen never re-appears.
+      const el = document.getElementById('login-screen')
+      if (!el) return
+      el.classList.remove('hidden')
+      el.style.removeProperty('display')
+      // v0.7.52: reveal the close (×) button only if the user already has
+      // at least one account set. On a fresh install they must connect at
+      // least one before they can dismiss — preserves first-run onboarding.
+      const closeBtn = document.getElementById('login-close-btn')
+      if (closeBtn) {
+        window.alaude?.getKeyStatuses?.().then(s => {
+          const hasAny = s && Object.values(s).some(v => v === 'set')
+          closeBtn.style.display = hasAny ? '' : 'none'
+        }).catch(() => { closeBtn.style.display = 'none' })
+      }
+    }
+    // v0.7.52: user dismisses the login screen without connecting. Only
+    // meaningful when they already have one account (close button is hidden
+    // otherwise). Uses both .hidden class AND inline display:none so we
+    // don't leak between the two visibility systems.
+    function hideLogin() {
+      const el = document.getElementById('login-screen')
+      if (!el) return
+      el.classList.add('hidden')
+      el.style.display = 'none'
     }
 
     window.alaude.onLoginSuccess((provider) => {
@@ -14647,11 +14922,14 @@ Title:`
       document.getElementById('space-icon').textContent = space.icon
       document.getElementById('space-name').textContent = space.name
 
-      // Update welcome screen
+      // v0.7.54: welcome stays generic, always. Spaces are disabled
+      // (SPACES_ENABLED = false) so showing "⚖️ Legal Assistant" etc. is
+      // confusing — the user never explicitly picked "Legal", it's just
+      // leftover session state. Keep the welcome inviting + modern.
       const welcomeTitle = document.querySelector('.welcome-title')
       const welcomeSub = document.querySelector('.welcome-sub')
-      if (welcomeTitle) welcomeTitle.textContent = space.id === 'general' ? 'What can I help you with?' : `${space.icon} ${space.name} Assistant`
-      if (welcomeSub) welcomeSub.textContent = space.description
+      if (welcomeTitle) welcomeTitle.textContent = 'What can I help you with?'
+      if (welcomeSub) welcomeSub.textContent = 'Drop a file, or just start typing.'
 
       // Update input placeholder
       document.getElementById('input').placeholder = space.placeholder || 'Message Labaik...'

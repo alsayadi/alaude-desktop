@@ -99,6 +99,18 @@ contextBridge.exposeInMainWorld('alaude', {
     return () => ipcRenderer.removeListener('mcp-ready', h)
   },
 
+  // Durable JSON store (v0.7.59) — localStorage-compatible semantics but
+  // writes go to ~/.alaude/{name}.json with atomic tmp+rename in the main
+  // process, so they survive SIGTERM/crash windows that lose batched
+  // LevelDB writes. Used by memory + profile stores. Sync on purpose:
+  // small files, fast, and matches the existing call-site assumptions.
+  fsJsonReadSync: (name) => {
+    try { return ipcRenderer.sendSync('fs-json-read-sync', name) } catch { return null }
+  },
+  fsJsonWriteSync: (name, data) => {
+    try { return ipcRenderer.sendSync('fs-json-write-sync', name, data) } catch { return false }
+  },
+
   // Cron Skills (v0.5.4)
   skillsList: () => ipcRenderer.invoke('skills-list'),
   skillsUpsert: (skill) => ipcRenderer.invoke('skills-upsert', skill),

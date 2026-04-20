@@ -39,6 +39,7 @@ const ooda = require('./ooda')
 const permissions = require('./permissions')
 const skills = require('./skills')
 const mcp = require('./mcp')
+const jsonStore = require('./json-store')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
 // Stored in ~/.alaude/permissions.json so it survives reinstalls. This
@@ -980,6 +981,20 @@ ipcMain.handle('skills-list', () => skills.list())
 ipcMain.handle('skills-upsert', (_e, skill) => skills.upsert(skill))
 ipcMain.handle('skills-remove', (_e, id) => { skills.remove(id); return true })
 ipcMain.handle('skills-set-enabled', (_e, id, enabled) => skills.setEnabled(id, enabled))
+
+// ── IPC: durable JSON store (v0.7.59) ─────────────────────────────────────
+// Renderer-side stores (memory, profile, eventually sessions) used to live
+// in Chromium localStorage, which batches writes to LevelDB asynchronously
+// and can lose the most recent writes on SIGTERM/crash. These sync channels
+// write through to `~/.alaude/{name}.json` with an atomic tmp+rename so
+// data is durable by the time setItem returns. Small files, <5ms each —
+// the sync block is a fair price for not losing users' memories.
+ipcMain.on('fs-json-read-sync', (e, name) => {
+  try { e.returnValue = jsonStore.read(name) } catch { e.returnValue = null }
+})
+ipcMain.on('fs-json-write-sync', (e, name, data) => {
+  try { e.returnValue = jsonStore.write(name, data) } catch { e.returnValue = false }
+})
 
 // ── IPC: MCP (v0.5.6) ─────────────────────────────────────────────────────
 ipcMain.handle('mcp-status', () => mcp.listStatus())
