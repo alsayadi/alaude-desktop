@@ -724,6 +724,17 @@
       pointer-events: none;
       overflow: hidden;
     }
+    /* When the sidebar is gone the topbar has to:
+       (a) reserve ~80px at the left so the macOS traffic-light buttons
+           and the sidebar-peek chevron don't collide with content
+       (b) give the model/version group the full remaining width, instead
+           of the narrow slot tuned for the with-sidebar layout */
+    body.sidebar-collapsed .topbar {
+      padding-left: 84px;
+    }
+    body.sidebar-collapsed .topbar-leading {
+      max-width: calc(100% - 500px);
+    }
     .sidebar-peek {
       position: fixed;
       top: 50%;
