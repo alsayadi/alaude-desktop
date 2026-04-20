@@ -2107,6 +2107,38 @@
       color: #9b59b6;
       background: color-mix(in oklch, #9b59b6 10%, var(--bg-input));
     }
+    /* v0.5.20: Crew per-role model picker as a fixed floating bar pinned
+       just below the topbar. Does NOT take flex space — previous in-flow
+       version was pushing the workspace-bar off-screen on short windows.
+       position:fixed + viewport coords so sidebar collapse/resize doesn't
+       move the popover around. */
+    .crew-slots-float {
+      position: fixed;
+      top: 50px;
+      right: 16px;
+      z-index: 15;
+      display: flex;
+      gap: 6px;
+      padding: 6px 8px;
+      background: color-mix(in oklch, #9b59b6 10%, var(--bg-input));
+      border: 1px solid #9b59b6;
+      border-radius: 7px;
+      max-width: min(560px, calc(100vw - 40px));
+      flex-wrap: wrap;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    }
+    .crew-slots-float select {
+      flex: 1;
+      min-width: 150px;
+      padding: 5px 8px;
+      font-size: 11px;
+      font-family: inherit;
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      outline: none;
+    }
 
     /* ─── Permission mode dropdown (v0.4.0) ────────────────────────────────── */
     /* Sits in the workspace bar next to the folder chooser. Color-coded per
@@ -5199,10 +5231,9 @@
     </div>
 
     <div class="council-slots" id="council-slots" style="display:none"></div>
-    <!-- v0.5.19 Crew mode — one model per specialist role. Each dropdown
-         picks independently; empty falls back to the currently-selected
-         model in the sidebar. -->
-    <div class="council-slots" id="crew-slots" style="display:none"></div>
+    <!-- v0.5.19 Crew mode — one model per specialist role. Floats below
+         the topbar so it doesn't push the composer or workspace-bar. -->
+    <div class="crew-slots-float" id="crew-slots" style="display:none"></div>
 
     <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none">
       <span class="radar-item"><span class="radar-icon">💬</span><span id="radar-msgs">0</span></span>
