@@ -2209,19 +2209,61 @@
     }
     .council-slot-add:hover { border-color: var(--green); color: var(--green); }
 
-    /* Council message: multiple lanes side-by-side */
+    /* v0.5.21 Council / Crew message: multi-lane layout that uses more
+       horizontal room and lets users focus one lane at a time.
+
+       Goals:
+       - Break out of the 720px chat column so 3 lanes can breathe
+       - Lanes have a minimum width; fewer columns than wanted + overflow-x
+         auto beats the old mobile-style stack-to-1-column
+       - Click a lane header to expand that lane (others compress) — good
+         for reading one specialist in depth without losing the others. */
+    .msg.msg-council {
+      /* Break out of the default 720px message column — a 3-lane message
+         looks cramped inside it. Allow up to 1200px centered instead. */
+      max-width: 1200px !important;
+    }
     .msg.msg-council .msg-content {
       padding: 0;
     }
     .council-lanes {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       margin-top: 4px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      padding-bottom: 6px;  /* room for the horizontal scrollbar */
     }
-    .council-lanes.n2 { grid-template-columns: 1fr 1fr; }
-    .council-lanes.n3 { grid-template-columns: 1fr 1fr 1fr; }
-    .council-lanes.n4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-    @media (max-width: 900px) { .council-lanes { grid-template-columns: 1fr !important; } }
+    .council-lanes.n2 { grid-template-columns: repeat(2, minmax(320px, 1fr)); }
+    .council-lanes.n3 { grid-template-columns: repeat(3, minmax(300px, 1fr)); }
+    .council-lanes.n4 { grid-template-columns: repeat(4, minmax(280px, 1fr)); }
+    /* Narrow windows: keep lanes side-by-side but let them scroll */
+    @media (max-width: 900px) {
+      .council-lanes {
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(280px, 90%);
+      }
+      .council-lanes.n2, .council-lanes.n3, .council-lanes.n4 {
+        grid-template-columns: none;
+      }
+    }
+    /* Focus mode — click a lane header to expand. Others compress but
+       stay visible so the user can still scan. */
+    .council-lanes.has-focus .council-lane:not(.focused) {
+      flex: 0 0 220px;
+    }
+    .council-lanes.has-focus .council-lane.focused {
+      flex: 2 1 520px;
+      border-color: #9b59b6;
+      box-shadow: 0 0 0 2px color-mix(in oklch, #9b59b6 30%, transparent);
+    }
+    /* Use flex rather than grid when focus mode is on so flex weights
+       take effect */
+    .council-lanes.has-focus {
+      display: flex;
+      flex-direction: row;
+      grid-template-columns: none !important;
+    }
     .council-lane {
       background: var(--bg-input);
       border: 1.5px solid var(--border);
@@ -2248,7 +2290,11 @@
       margin-bottom: 8px;
       padding-bottom: 6px;
       border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
     }
+    .council-lane-header:hover { border-bottom-color: #9b59b6; }
+    .council-lane-role { font-size: 14px; line-height: 1; }
     .council-lane-model {
       font-size: 11px;
       font-family: 'SF Mono', Menlo, monospace;
@@ -9614,6 +9660,25 @@ footer a { color: var(--accent); text-decoration: none; }
       }
     }
 
+    // v0.5.21: click a lane to focus it (expands, compresses siblings).
+    // Clicking the same lane again (or clicking another lane) toggles.
+    // Clicks inside the body don't propagate so selecting / copying text
+    // doesn't accidentally focus / unfocus.
+    function toggleLaneFocus(ev, laneEl) {
+      // Ignore clicks on buttons / links inside the lane.
+      if (ev.target?.closest?.('button, a, input, select, textarea, code, pre')) return
+      const lanes = laneEl.parentElement
+      if (!lanes) return
+      const wasFocused = laneEl.classList.contains('focused')
+      for (const n of lanes.querySelectorAll('.council-lane.focused')) n.classList.remove('focused')
+      if (!wasFocused) {
+        laneEl.classList.add('focused')
+        lanes.classList.add('has-focus')
+      } else {
+        lanes.classList.remove('has-focus')
+      }
+    }
+
     // ── Crew call: Architect + Critic + Researcher in parallel, auto-synth ─
     async function callCrew(userText, uxMeta) {
       // Per-role model: prefer the crew-slots pick, fall back to the sidebar
@@ -10185,14 +10250,18 @@ Title:`
             <button class="council-copy-btn" onclick="navigator.clipboard.writeText(${JSON.stringify(lane.content || '').replace(/"/g, '&quot;')}); this.textContent='✓'; setTimeout(()=>this.textContent='📋',1200)">📋</button>
           </div>` : ''
 
-        return `<div class="council-lane${picked}${errored}">
+        // v0.5.21: click the header to focus this lane (expands it, compresses
+        // the others). Click again to un-focus. Lets users deep-read one
+        // specialist without losing the other two.
+        const roleBadge = lane.roleIcon ? `<span class="council-lane-role" title="${escapeHtml(lane.roleName || '')}">${lane.roleIcon}</span>` : ''
+        return `<div class="council-lane${picked}${errored}" onclick="toggleLaneFocus(event, this)">
           <div class="council-lane-header">
-            ${spinner}
-            <span class="council-lane-model">${escapeHtml(lane.model)}</span>
+            ${roleBadge}${spinner}
+            <span class="council-lane-model">${escapeHtml(lane.roleName ? lane.roleName + ' · ' + lane.model : lane.model)}</span>
             ${tokens}
             ${elapsed}
           </div>
-          <div class="council-lane-body">${body}</div>
+          <div class="council-lane-body" onclick="event.stopPropagation()">${body}</div>
           ${actions}
         </div>`
       }).join('')
