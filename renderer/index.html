@@ -5671,13 +5671,53 @@
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a skill</div>
         <input id="skill-name" type="text" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
         <textarea id="skill-prompt" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center">
-          <input id="skill-cron" type="text" placeholder="Cron — e.g. 0 8 * * *" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace)" />
-          <select id="skill-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px"></select>
-          <button class="key-save-btn" onclick="addSkill()">Add</button>
+        <!-- v0.5.23 friendly schedule picker. Converts to cron internally; -->
+        <!-- raw cron input hidden but kept for advanced/custom mode. -->
+        <div style="background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select id="skill-freq" onchange="onSkillFreqChange()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;flex:1;min-width:180px">
+              <optgroup label="Daily / weekly">
+                <option value="daily">Every day</option>
+                <option value="weekday">Every weekday (Mon–Fri)</option>
+                <option value="weekend">Every weekend (Sat–Sun)</option>
+                <option value="mon">Every Monday</option>
+                <option value="tue">Every Tuesday</option>
+                <option value="wed">Every Wednesday</option>
+                <option value="thu">Every Thursday</option>
+                <option value="fri">Every Friday</option>
+                <option value="sat">Every Saturday</option>
+                <option value="sun">Every Sunday</option>
+              </optgroup>
+              <optgroup label="Intervals">
+                <option value="every-15min">Every 15 minutes</option>
+                <option value="every-30min">Every 30 minutes</option>
+                <option value="every-hour">Every hour</option>
+                <option value="every-2h">Every 2 hours</option>
+                <option value="every-4h">Every 4 hours</option>
+                <option value="every-6h">Every 6 hours</option>
+                <option value="every-12h">Every 12 hours</option>
+              </optgroup>
+              <optgroup label="Advanced">
+                <option value="custom">Custom cron…</option>
+              </optgroup>
+            </select>
+            <!-- Only shown for daily / weekly modes -->
+            <div id="skill-time-wrap" style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:12px;color:var(--text-dim)">at</span>
+              <input id="skill-time" type="time" value="08:00" onchange="updateSkillCronPreview()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+            </div>
+            <!-- Only shown in custom mode -->
+            <input id="skill-cron-custom" type="text" placeholder="Cron — e.g. 0 8 * * *" oninput="updateSkillCronPreview()" style="display:none;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace);flex:1;min-width:160px" />
+          </div>
+          <div id="skill-cron-preview" style="font-size:11px;color:var(--text-faint);margin-top:6px;font-family:var(--mono,ui-monospace,monospace)"></div>
+          <!-- Hidden: holds the final cron string we submit. -->
+          <input id="skill-cron" type="hidden" />
         </div>
-        <div style="font-size:10.5px;color:var(--text-faint);margin-top:6px;line-height:1.5">
-          Cron examples: <code>0 8 * * *</code> daily 8am · <code>*/15 * * * *</code> every 15 min · <code>0 9 * * 1-5</code> weekday 9am · <code>0 */2 * * *</code> every 2 hours
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="skill-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
+          <button class="key-save-btn" onclick="addSkill()">Add</button>
         </div>
       </div>
 
@@ -7286,10 +7326,147 @@ SUMMARY:`
       if (!t) return
       document.getElementById('skill-name').value = t.name
       document.getElementById('skill-prompt').value = t.prompt
-      document.getElementById('skill-cron').value = t.cron
-      // Scroll the form into view if modal is long
+      // Load the template's cron into the friendly picker.
+      _loadCronIntoPicker(t.cron)
       document.getElementById('skill-name').focus()
       document.getElementById('skill-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    // ── v0.5.23 friendly cron builder ───────────────────────────────────
+    // Users pick from presets ("Every weekday at 09:00"); we synthesize
+    // the cron string under the hood. Advanced users can fall back to
+    // raw cron via the "Custom cron…" option.
+    const DOW_MAP = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
+    const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    // Turn a cron string back into plain English ("every weekday at 9am").
+    // Used both to render each skill's schedule in the list and as a
+    // fallback when the picker can't parse a shape.
+    function _cronToHuman(cron) {
+      if (!cron) return ''
+      const fmt = (h, m) => {
+        const hr12 = ((h % 12) || 12)
+        const ampm = h < 12 ? 'am' : 'pm'
+        return m === 0 ? `${hr12}${ampm}` : `${hr12}:${String(m).padStart(2,'0')}${ampm}`
+      }
+      if (cron === '*/15 * * * *') return 'every 15 minutes'
+      if (cron === '*/30 * * * *') return 'every 30 minutes'
+      if (cron === '0 * * * *')    return 'every hour'
+      if (cron === '0 */2 * * *')  return 'every 2 hours'
+      if (cron === '0 */4 * * *')  return 'every 4 hours'
+      if (cron === '0 */6 * * *')  return 'every 6 hours'
+      if (cron === '0 */12 * * *') return 'every 12 hours'
+      const m = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(.+)$/)
+      if (m) {
+        const [, min, hour, dow] = m
+        const at = fmt(Number(hour), Number(min))
+        if (dow === '*') return `every day at ${at}`
+        if (dow === '1-5') return `every weekday at ${at}`
+        if (dow === '0,6' || dow === '6,0') return `every Sat & Sun at ${at}`
+        if (/^\d$/.test(dow)) return `every ${DOW_NAMES[Number(dow)]} at ${at}`
+      }
+      return cron  // unrecognised — show the raw cron
+    }
+    function _buildCronFromPicker() {
+      const freq = document.getElementById('skill-freq')?.value
+      if (freq === 'custom') {
+        return document.getElementById('skill-cron-custom')?.value?.trim() || ''
+      }
+      if (freq === 'every-15min') return '*/15 * * * *'
+      if (freq === 'every-30min') return '*/30 * * * *'
+      if (freq === 'every-hour')  return '0 * * * *'
+      if (freq === 'every-2h')    return '0 */2 * * *'
+      if (freq === 'every-4h')    return '0 */4 * * *'
+      if (freq === 'every-6h')    return '0 */6 * * *'
+      if (freq === 'every-12h')   return '0 */12 * * *'
+      // Daily / weekday / weekend / specific-day — need time input
+      const time = document.getElementById('skill-time')?.value || '08:00'
+      const [h, m] = time.split(':').map(Number)
+      const hh = isFinite(h) ? h : 8
+      const mm = isFinite(m) ? m : 0
+      if (freq === 'daily')    return `${mm} ${hh} * * *`
+      if (freq === 'weekday')  return `${mm} ${hh} * * 1-5`
+      if (freq === 'weekend')  return `${mm} ${hh} * * 0,6`
+      if (DOW_MAP[freq] != null) return `${mm} ${hh} * * ${DOW_MAP[freq]}`
+      return ''
+    }
+    function _describeFrequency() {
+      const freq = document.getElementById('skill-freq')?.value
+      const timeVal = document.getElementById('skill-time')?.value || '08:00'
+      const formatTime = () => {
+        const [h, m] = timeVal.split(':').map(Number)
+        const hr12 = ((h % 12) || 12)
+        const ampm = h < 12 ? 'am' : 'pm'
+        return m === 0 ? `${hr12}${ampm}` : `${hr12}:${String(m).padStart(2,'0')}${ampm}`
+      }
+      if (freq === 'custom') return 'custom'
+      if (freq === 'every-15min') return 'every 15 minutes'
+      if (freq === 'every-30min') return 'every 30 minutes'
+      if (freq === 'every-hour')  return 'every hour'
+      if (freq === 'every-2h')    return 'every 2 hours'
+      if (freq === 'every-4h')    return 'every 4 hours'
+      if (freq === 'every-6h')    return 'every 6 hours'
+      if (freq === 'every-12h')   return 'every 12 hours'
+      const at = formatTime()
+      if (freq === 'daily')   return `every day at ${at}`
+      if (freq === 'weekday') return `every weekday at ${at}`
+      if (freq === 'weekend') return `every Saturday and Sunday at ${at}`
+      const dayNames = { sun:'Sunday', mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday' }
+      if (dayNames[freq]) return `every ${dayNames[freq]} at ${at}`
+      return ''
+    }
+    function onSkillFreqChange() {
+      const freq = document.getElementById('skill-freq')?.value
+      const needsTime = ['daily','weekday','weekend','mon','tue','wed','thu','fri','sat','sun'].includes(freq)
+      const isCustom = freq === 'custom'
+      document.getElementById('skill-time-wrap').style.display = needsTime ? '' : 'none'
+      document.getElementById('skill-cron-custom').style.display = isCustom ? '' : 'none'
+      updateSkillCronPreview()
+    }
+    function updateSkillCronPreview() {
+      const cron = _buildCronFromPicker()
+      document.getElementById('skill-cron').value = cron
+      const desc = _describeFrequency()
+      const preview = document.getElementById('skill-cron-preview')
+      if (preview) {
+        preview.textContent = cron ? `${desc}   ·   cron: ${cron}` : 'Pick a schedule above.'
+      }
+    }
+    // Parse a cron string back into the picker state — used when editing
+    // or when a starter template is loaded.
+    function _loadCronIntoPicker(cron) {
+      const freqEl = document.getElementById('skill-freq')
+      const timeEl = document.getElementById('skill-time')
+      const customEl = document.getElementById('skill-cron-custom')
+      if (!freqEl) return
+      const tryMatch = (pattern, freq) => cron === pattern && (freqEl.value = freq, true)
+      if (tryMatch('*/15 * * * *', 'every-15min')
+        || tryMatch('*/30 * * * *', 'every-30min')
+        || tryMatch('0 * * * *',    'every-hour')
+        || tryMatch('0 */2 * * *',  'every-2h')
+        || tryMatch('0 */4 * * *',  'every-4h')
+        || tryMatch('0 */6 * * *',  'every-6h')
+        || tryMatch('0 */12 * * *', 'every-12h')) {
+        onSkillFreqChange(); return
+      }
+      // Time-based pattern: "M H * * DOW"
+      const m = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(.+)$/)
+      if (m) {
+        const [, min, hour, dow] = m
+        timeEl.value = `${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`
+        if (dow === '*') freqEl.value = 'daily'
+        else if (dow === '1-5') freqEl.value = 'weekday'
+        else if (dow === '0,6' || dow === '6,0') freqEl.value = 'weekend'
+        else if (/^\d$/.test(dow)) {
+          const byNum = Object.entries(DOW_MAP).find(([,v]) => v === Number(dow))
+          freqEl.value = byNum ? byNum[0] : 'custom'
+          if (!byNum) customEl.value = cron
+        } else { freqEl.value = 'custom'; customEl.value = cron }
+        onSkillFreqChange(); return
+      }
+      // Fallback: stuff it in the custom input
+      freqEl.value = 'custom'
+      customEl.value = cron
+      onSkillFreqChange()
     }
 
     function toggleSkillsModal() {
@@ -7299,6 +7476,10 @@ SUMMARY:`
         renderSkillTemplates()
         refreshSkillsList()
         populateSkillModelSelect()
+        // Initialise the friendly schedule picker (shows/hides the time
+        // input + custom-cron field based on the default selection) and
+        // renders the human-readable preview.
+        onSkillFreqChange?.()
         m.classList.add('show')
       } else {
         m.classList.remove('show')
@@ -7331,7 +7512,7 @@ SUMMARY:`
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(s.name)}</div>
-                <div style="font-family:var(--mono,ui-monospace,monospace);font-size:11px;color:var(--text-dim)">${escapeHtml(s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
+                <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
               </div>
               <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
                 <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSkillEnabled('${s.id}', this.checked)" />
@@ -7351,17 +7532,23 @@ SUMMARY:`
     async function addSkill() {
       const name = document.getElementById('skill-name').value.trim()
       const prompt = document.getElementById('skill-prompt').value.trim()
+      // Always synthesise fresh from the picker on submit so editing the
+      // time/frequency after loading a template takes effect.
+      updateSkillCronPreview()
       const cron = document.getElementById('skill-cron').value.trim()
       const model = document.getElementById('skill-model').value
       if (!name || !prompt || !cron) {
-        showRewindToast?.('Fill name, prompt, and cron', true)
+        showRewindToast?.('Fill name, prompt, and schedule', true)
         return
       }
       await window.alaude.skillsUpsert({ name, prompt, cron, model })
       document.getElementById('skill-name').value = ''
       document.getElementById('skill-prompt').value = ''
-      document.getElementById('skill-cron').value = ''
+      document.getElementById('skill-cron-custom').value = ''
+      document.getElementById('skill-freq').value = 'daily'
+      document.getElementById('skill-time').value = '08:00'
       document.getElementById('skill-model').value = ''
+      onSkillFreqChange()
       await refreshSkillsList()
       showRewindToast?.(`⏰ Skill "${name}" scheduled`, false)
     }
