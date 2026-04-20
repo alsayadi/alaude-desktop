@@ -675,7 +675,47 @@
       flex-direction: column;
       -webkit-app-region: drag;
       transition: width 0.2s ease, min-width 0.2s ease, opacity 0.15s ease;
+      position: relative;
     }
+    /* While the user is actively dragging the resize handle, disable the
+       transition so the sidebar follows the cursor 1:1 instead of easing. */
+    body.sidebar-resizing .sidebar { transition: none; }
+    body.sidebar-resizing { cursor: ew-resize; user-select: none; }
+    /* 5px-wide invisible strip pinned to the right edge — the actual hit
+       target. Shows a thin green line on hover so users know it's draggable. */
+    .sidebar-resize-handle {
+      position: absolute;
+      top: 0;
+      right: -2px;
+      width: 5px;
+      height: 100%;
+      cursor: ew-resize;
+      z-index: 5;
+      -webkit-app-region: no-drag;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    .sidebar-resize-handle:hover,
+    body.sidebar-resizing .sidebar-resize-handle {
+      background: color-mix(in oklch, var(--green) 40%, transparent);
+    }
+    body.sidebar-collapsed .sidebar-resize-handle { display: none; }
+
+    /* Collapse-in-sidebar button (complement to the peek chevron that
+       shows when collapsed). no-drag so the user can actually click it. */
+    .sidebar-collapse-btn {
+      margin-left: auto;
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      -webkit-app-region: no-drag;
+    }
+    .sidebar-collapse-btn:hover { color: var(--text); background: var(--bg-hover); }
     body.sidebar-collapsed .sidebar {
       width: 0;
       min-width: 0;
@@ -4999,7 +5039,10 @@
     <div class="sidebar-header">
       <img class="sidebar-logo" id="logo" />
       <span class="sidebar-title">Labaik</span>
+      <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar (⌘\)">‹</button>
     </div>
+    <!-- Drag handle on the right edge — resizes sidebar between 200–480px -->
+    <div class="sidebar-resize-handle" id="sidebar-resize-handle" title="Drag to resize"></div>
     <div class="space-selector">
       <button class="space-btn" onclick="toggleSpaceDropdown()">
         <span class="space-icon" id="space-icon">⚙️</span>
@@ -9016,17 +9059,60 @@ footer a { color: var(--accent); text-decoration: none; }
     // Apply saved theme immediately (runs before most of the UI renders)
     applyTheme(localStorage.getItem(LS_THEME))
 
-    // ── Sidebar collapse ───────────────────────────────────────────
+    // ── Sidebar collapse + resize ─────────────────────────────────
     const LS_SIDEBAR = 'alaude:sidebar-collapsed:v1'
+    const LS_SIDEBAR_W = 'alaude:sidebar-width:v1'
+    const SIDEBAR_MIN = 200
+    const SIDEBAR_MAX = 480
     function applySidebarState() {
       const collapsed = localStorage.getItem(LS_SIDEBAR) === '1'
       document.body.classList.toggle('sidebar-collapsed', collapsed)
+      // Restore the user's preferred width (if set). Falls back to the CSS
+      // default of 260px otherwise.
+      const savedW = parseInt(localStorage.getItem(LS_SIDEBAR_W) || '', 10)
+      if (savedW >= SIDEBAR_MIN && savedW <= SIDEBAR_MAX) {
+        document.documentElement.style.setProperty('--sidebar-w', savedW + 'px')
+      }
     }
     function toggleSidebar() {
       const collapsed = document.body.classList.toggle('sidebar-collapsed')
       localStorage.setItem(LS_SIDEBAR, collapsed ? '1' : '0')
     }
     applySidebarState()
+
+    // Drag-to-resize. Pointer events on the handle, mutate the CSS var on
+    // each move. Clamps to [MIN, MAX]. Persists on mouseup only so we don't
+    // thrash localStorage.
+    ;(() => {
+      const handle = document.getElementById('sidebar-resize-handle')
+      if (!handle) return
+      let startX = 0
+      let startW = 0
+      const onMove = (e) => {
+        const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (e.clientX - startX)))
+        document.documentElement.style.setProperty('--sidebar-w', w + 'px')
+      }
+      const onUp = (e) => {
+        document.body.classList.remove('sidebar-resizing')
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+        // Persist the final width so it survives restart.
+        const finalW = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim()
+        const n = parseInt(finalW, 10)
+        if (n >= SIDEBAR_MIN && n <= SIDEBAR_MAX) localStorage.setItem(LS_SIDEBAR_W, String(n))
+      }
+      handle.addEventListener('pointerdown', (e) => {
+        // Double-click collapses. Single-drag resizes.
+        if (e.detail === 2) { toggleSidebar(); return }
+        e.preventDefault()
+        startX = e.clientX
+        const sb = document.querySelector('.sidebar')
+        startW = sb ? sb.getBoundingClientRect().width : 260
+        document.body.classList.add('sidebar-resizing')
+        document.addEventListener('pointermove', onMove)
+        document.addEventListener('pointerup', onUp, { once: true })
+      })
+    })()
 
     // ── Living Document mode ──────────────────────────────────────
     // A reader-style layout that treats the conversation as a flowing
