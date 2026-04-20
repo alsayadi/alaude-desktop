@@ -11,6 +11,44 @@ const os = require('os')
 const dns = require('dns')
 const https = require('https')
 
+// ── v0.7.39 — Scope boundary check for shell commands ─────────────────
+//
+// Tools with `cwd: workspacePath` (run_command, start_dev_server) would
+// otherwise be trivially bypassed by a command string that names an
+// absolute path or `cd ..`s out of scope. This helper does a best-effort
+// check:
+//   1. Reject `cd ..` / `cd /absolute` patterns
+//   2. Reject absolute paths (start with /) that resolve outside workspace
+//      UNLESS they point to system-neutral dirs like /tmp, /usr, /etc,
+//      /var, /bin, /opt, /Library (read-only system locations are fine for
+//      most tool invocations — e.g. `cp /tmp/foo .` is legit).
+// Returns { ok: true } or { ok: false, reason: string }.
+function checkCommandScope(command, workspacePath) {
+  if (!command || !workspacePath) return { ok: true }
+  const root = path.resolve(workspacePath)
+  // 1. cd escape attempts
+  if (/\bcd\s+(?:\.\.(?:\/|$|\s)|\/)/i.test(command)) {
+    return { ok: false, reason: '`cd ..` or `cd /` attempts to escape the scope' }
+  }
+  // 2. Absolute path mentions. Extract anything that starts with `/` preceded
+  //    by word boundary or quote/space. Ignore URLs (http://) and system dirs.
+  const systemDirs = ['/tmp', '/usr', '/etc', '/var', '/bin', '/sbin', '/opt', '/Library', '/System', '/dev', '/private']
+  const absMatches = [...command.matchAll(/(?:^|[\s'"`;|&()<>])(\/(?:[^\s'"`;|&()<>]|\\ )+)/g)]
+  for (const m of absMatches) {
+    const p = m[1]
+    // URL fragments like /api/foo after a hostname — ignore (caller's tool should have validated)
+    if (p.match(/^\/\w+:\/\//)) continue
+    // System dirs are always fine
+    if (systemDirs.some(d => p === d || p.startsWith(d + '/'))) continue
+    // Resolve and check containment
+    let resolved
+    try { resolved = path.resolve(p) } catch { continue }
+    if (resolved === root || resolved.startsWith(root + path.sep)) continue
+    return { ok: false, reason: `absolute path ${p} is outside ${workspacePath}` }
+  }
+  return { ok: true }
+}
+
 // ── Crash handlers ─────────────────────────────────────────────────────────
 // The worker is a request loop serving one chat at a time. A single bad
 // request (e.g. the OpenAI SDK emits a sync `error` event inside a stream
@@ -209,8 +247,23 @@ function detectRichIntent(userText) {
 
 function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
   let sys = 'You are Labaik, a helpful AI assistant.'
+  // v0.7.42 — ambiguity nudge. Without this, a one-word prompt like "test"
+  // got interpreted by the model as "run my tests" because of the workspace
+  // + tools context. Tell the model to clarify instead of guessing.
+  sys += ' If the user\'s message is vague or a single ambiguous word (e.g. "test", "fix", "go", "run"), ASK what they mean before touching any file or running any command. Don\'t assume workspace-related intent for every message.'
   if (workspacePath) {
     sys += ` Workspace: ${workspacePath}. Use tools to read/write files, list dirs, run commands. Always explain what you do.`
+    // v0.7.38 — hard boundary hint. The renderer may pass a task-scope
+    // subfolder here instead of the real workspace root; the model should
+    // treat this path as its entire universe, not reach ../ or absolute
+    // paths to escape. Worker-level containedPath() enforces this for
+    // read_file/write_file/list_directory; the prompt exists to stop the
+    // model from using absolute paths in run_command/open_in_browser.
+    sys += ` IMPORTANT: All file operations — reads, writes, shell commands, browser opens — must stay inside ${workspacePath}. Use relative paths, not absolute paths. If a file you need isn't in this directory, tell the user it's missing; do NOT reach up into parent folders or use absolute paths to find it.`
+    // v0.7.38 — python3 vs python. On modern macOS, only `python3` is
+    // installed by default. The model often reaches for `python` which
+    // fails with ENOENT. Tell it up front.
+    sys += ` When running Python, use \`python3\` (not \`python\`) — plain \`python\` is not installed on modern macOS.`
   }
   // Local models: stay quiet unless the user clearly wants a rich block. Small
   // open-weight models process every token slowly, and they often ignore the
@@ -490,15 +543,42 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
       return { entries: entries.filter(e => !e.name.startsWith('.')).slice(0, 100).map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`).join('\n') }
     }
     if (name === 'run_command') {
+      // v0.7.39: reject commands that reference paths outside the current
+      // scope. The command still runs with cwd=workspacePath, but the
+      // command STRING itself can encode absolute paths (`python3 -m
+      // http.server -d /other/path`) or cd-out-of-scope tricks that
+      // bypass cwd. This check catches both.
+      const scopeCheck = checkCommandScope(args.command, workspacePath)
+      if (!scopeCheck.ok) return { error: `Blocked by scope: ${scopeCheck.reason}. Use relative paths inside ${workspacePath}.` }
       const out = execSync(args.command, { cwd: workspacePath, timeout: 30000, maxBuffer: 1024 * 1024, encoding: 'utf8', env: { ...process.env, PATH: `${path.join(os.homedir(), '.bun', 'bin')}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}` } })
       return { output: out.slice(0, 20000) }
     }
     if (name === 'open_in_browser') {
       const url = args.url
       let target = url
-      // If it's a relative path, resolve to workspace
-      if (!url.startsWith('http') && !url.startsWith('/')) {
-        target = path.resolve(workspacePath, url)
+      // v0.7.39: block absolute paths + file:// URLs outside scope.
+      // http://, https://, and localhost URLs always pass — that's how
+      // dev servers get opened. Relative paths resolve against workspace.
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        if (url.startsWith('file://')) {
+          const fp = url.slice(7)
+          const resolved = path.resolve(fp)
+          const root = path.resolve(workspacePath)
+          if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+            return { error: `Blocked by scope: file:// URL escapes ${workspacePath}` }
+          }
+          target = url
+        } else if (url.startsWith('/')) {
+          const resolved = path.resolve(url)
+          const root = path.resolve(workspacePath)
+          if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+            return { error: `Blocked by scope: absolute path ${url} is outside ${workspacePath}` }
+          }
+          target = resolved
+        } else {
+          // Relative path — resolve against workspace (already in scope)
+          target = path.resolve(workspacePath, url)
+        }
       }
       const { exec } = require('child_process')
       exec(`open "${target}"`) // macOS; use xdg-open on Linux, start on Windows
@@ -506,6 +586,10 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
     }
 
     if (name === 'start_dev_server') {
+      // v0.7.39: same scope guard as run_command. A `python3 -m http.server`
+      // cannot be tricked into serving a different directory via args.
+      const scopeCheck = checkCommandScope(args.command, workspacePath)
+      if (!scopeCheck.ok) return { error: `Blocked by scope: ${scopeCheck.reason}. Use relative paths inside ${workspacePath}.` }
       const { spawn } = require('child_process')
       const parts = args.command.split(' ')
       const child = spawn(parts[0], parts.slice(1), {
@@ -516,6 +600,10 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
       })
       child.unref()
       const port = args.port || 3000
+      // v0.7.40: report the PID back up to main.js so it can track the
+      // server and kill it on session end / window close. Worker talks to
+      // main via stdout JSON lines, not IPC.
+      try { process.stdout.write(JSON.stringify({ type: 'server_started', pid: child.pid, port, command: args.command, workspacePath }) + '\n') } catch {}
       return { success: true, pid: child.pid, message: `Server started (PID ${child.pid}). Open http://localhost:${port}` }
     }
 

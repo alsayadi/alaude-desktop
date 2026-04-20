@@ -1,15 +1,25 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
-// App version — read at preload time so the renderer can show it without
-// round-tripping through IPC. Falls back gracefully if package.json isn't
-// resolvable at runtime.
+// App version — passed via additionalArguments from main.js (sandboxed
+// preloads can't require('../package.json')). Previous require-based fallback
+// silently returned 'dev' which led to "vdev" in the topbar.
 let appVersion = 'dev'
 let appHomepage = 'https://github.com/alsayadi/alaude-desktop'
-try {
-  const pkg = require('../package.json')
-  appVersion = pkg.version || 'dev'
-  if (pkg.homepage) appHomepage = pkg.homepage
-} catch {}
+for (const arg of process.argv) {
+  if (arg.startsWith('--alaude-version=')) appVersion = arg.slice('--alaude-version='.length) || 'dev'
+  else if (arg.startsWith('--alaude-homepage=') && arg.length > '--alaude-homepage='.length) {
+    appHomepage = arg.slice('--alaude-homepage='.length)
+  }
+}
+// Secondary fallback: if argv didn't carry it (e.g. quick-window), try the
+// require path — harmless when sandboxed (returns 'dev' anyway).
+if (appVersion === 'dev') {
+  try {
+    const pkg = require('../package.json')
+    if (pkg.version) appVersion = pkg.version
+    if (pkg.homepage) appHomepage = pkg.homepage
+  } catch {}
+}
 
 contextBridge.exposeInMainWorld('alaude', {
   version: appVersion,
@@ -36,6 +46,21 @@ contextBridge.exposeInMainWorld('alaude', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   listFiles: (path) => ipcRenderer.invoke('list-files', path),
   workspaceList: (path) => ipcRenderer.invoke('workspace-list', path),
+
+  // v0.7.31 Task Scope — create a subfolder inside the picked workspace for
+  // the current session, keeping generated files out of the workspace root.
+  // Returns { ok, path?, existed?, reason? }.
+  taskScopeCreateFolder: (parent, name) => ipcRenderer.invoke('task-scope-create-folder', parent, name),
+  // v0.7.32 — heuristic project detector. True = existing project (auto-scope off).
+  taskScopeLooksLikeProject: (folderPath) => ipcRenderer.invoke('task-scope-looks-like-project', folderPath),
+
+  // v0.7.40 — dev server lifecycle.
+  // killTrackedServers()  → { killed, pids } — kill every server Labaik started this process
+  // listTrackedServers()  → array of { pid, port, startedAt, workspacePath }
+  // portInUse(port)       → { occupied, pid? } — quick check via lsof
+  killTrackedServers: () => ipcRenderer.invoke('kill-tracked-servers'),
+  listTrackedServers: () => ipcRenderer.invoke('list-tracked-servers'),
+  portInUse: (port) => ipcRenderer.invoke('port-in-use', port),
 
   // File handling
   // Electron 32+ removed File.path with contextIsolation on — webUtils is the

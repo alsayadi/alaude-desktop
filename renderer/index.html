@@ -1481,6 +1481,50 @@
     }
     .topbar-keys-btn:hover { border-color: var(--green); color: var(--green); }
 
+    /* v0.7.46 — topbar "more" dropdown. The ⋯ button toggles the menu.
+       It sits absolutely-positioned under the button so it doesn't steal
+       flex space. Click-outside closes it via a document listener. */
+    .topbar-menu-wrap {
+      position: relative;
+      display: inline-flex;
+      -webkit-app-region: no-drag;
+    }
+    .topbar-menu {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.18);
+      padding: 4px;
+      min-width: 180px;
+      z-index: 150;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .topbar-menu.show { display: flex; }
+    .topbar-menu-item {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      text-align: left;
+      padding: 6px 10px;
+      border-radius: 5px;
+      font-size: 12.5px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .topbar-menu-item:hover {
+      background: var(--bg-hover);
+      color: var(--green);
+    }
+    .topbar-menu-item.active {
+      color: var(--green);
+      font-weight: 500;
+    }
+
     /* ─── Messages ──────────────────────────────────────────────────────── */
     .messages {
       flex: 1;
@@ -2620,11 +2664,12 @@
       background: var(--bg-input);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 8px 12px;
+      padding: 11px 14px;        /* v0.7.44: +3px vertical, +2px horizontal for a bit more breathing room */
       transition: border-color 0.15s;
       position: relative;
     }
-    .input-wrap:focus-within { border-color: var(--green); }
+    /* v0.7.44: removed the green :focus-within border change — it was
+       distracting as soon as the user started typing. Border stays neutral. */
 
     /* ── Slash Snippet Menu ────────────────────────────────────────── */
     .slash-menu {
@@ -2796,14 +2841,16 @@
       background: none;
       border: none;
       color: var(--text);
-      font-size: 14px;
+      font-size: 15px;           /* v0.7.44: 14 → 15 */
       font-family: inherit;
       resize: none;
       outline: none;
-      max-height: 200px;
-      line-height: 1.5;
-      padding: 4px 0;
+      box-shadow: none;          /* v0.7.44: kill any focus ring in any theme */
+      max-height: 260px;         /* v0.7.44: 200 → 260 — grows a bit more before scrolling */
+      line-height: 1.55;         /* v0.7.44: 1.5 → 1.55 for a touch more breathing */
+      padding: 6px 0;            /* v0.7.44: 4 → 6 */
     }
+    .input-field:focus { outline: none; box-shadow: none; }
     .input-field::placeholder { color: var(--text-faint); }
 
     /* Workspace bar */
@@ -3182,6 +3229,7 @@
       border-radius: 3px;
       flex-shrink: 0;
     }
+    /* v0.7.0 memory + profile styles moved to renderer/css/memory.css (v0.7.1 refactor). */
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
     /* Save button on messages */
@@ -4732,6 +4780,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+  <!-- v0.7.1: memory/profile styles extracted to their own stylesheet. -->
+  <link rel="stylesheet" href="css/memory.css">
+  <!-- v0.7.31: task-scope styles (workspace-bar breadcrumb + create button). -->
+  <link rel="stylesheet" href="css/task-scope.css">
   <style>
     /* ───── Design tokens (OKLCH-based, from alaude-design) ───── */
     :root {
@@ -4958,14 +5010,17 @@
       background: var(--bg-panel);
       box-shadow: 0 4px 20px color-mix(in oklch, var(--bg) 40%, transparent);
     }
+    /* v0.7.44: neutralized the :focus-within green tint — kept the rule so
+       later themes can re-enable if desired, but it now matches the static
+       border color (no visible change on focus). */
     .input-wrap:focus-within {
-      border-color: color-mix(in oklch, var(--green) 40%, var(--border));
+      border-color: var(--border);
     }
     .input-field {
       font-family: var(--sans);
-      font-size: 14.5px;
+      font-size: 15.5px;         /* v0.7.44: 14.5 → 15.5 — slightly larger */
       font-weight: 450;
-      line-height: 1.55;
+      line-height: 1.6;          /* v0.7.44: 1.55 → 1.6 */
     }
     .input-field::placeholder { color: var(--text-faint); }
     .send-btn {
@@ -5147,15 +5202,9 @@
     <div class="sidebar-label">Recent</div>
     <div class="tag-filter-row" id="tag-filter-row" style="display:none"></div>
     <div class="sidebar-sessions" id="sessions"></div>
-    <div class="sidebar-files" id="sidebar-files" style="display:none">
-      <div class="sidebar-files-header">
-        <span class="sidebar-label" style="padding:0;flex:1;cursor:pointer" onclick="toggleFilesPanel()">
-          <span id="files-chevron">▾</span> Files <span id="files-folder-name" style="color:var(--text-faint);font-weight:normal"></span>
-        </span>
-        <button class="files-refresh-btn" onclick="refreshWorkspaceFiles()" title="Refresh">↻</button>
-      </div>
-      <div class="sidebar-files-list" id="files-list"></div>
-    </div>
+    <!-- v0.7.37: workspace files sidebar removed. It added visual clutter
+         without much value — the AI can list/read files via its own tools,
+         and the user sees file paths in the chat when the AI edits them. -->
     <div class="sidebar-footer">
       <button class="sidebar-new-btn" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
@@ -5191,8 +5240,12 @@
       <div class="topbar-leading">
         <span class="topbar-model" id="topbar-model" title="Current model">GPT-4o</span>
         <span class="version-badge" id="version-badge" title="Labaik version — click to view release notes">v–</span>
-        <span class="cost-session-total" id="topbar-cost" title="Estimated API cost for this session"></span>
-        <span class="model-slots" id="model-slots"></span>
+        <!-- v0.7.47: cost + model-slots spans hidden when empty so they don't
+             leave phantom "invisible icons" in the topbar. The code that
+             populates them (renderSessionCost, renderModelSlots) should
+             reveal them when they have content. -->
+        <span class="cost-session-total" id="topbar-cost" title="Estimated API cost for this session" style="display:none"></span>
+        <span class="model-slots" id="model-slots" style="display:none"></span>
       </div>
       <div class="topbar-actions">
         <!-- Council (multi-model parallel) button hidden in v0.4.2 — returns in a later release once the flow is polished.
@@ -5200,20 +5253,34 @@
         <button class="topbar-keys-btn council-toggle" id="council-toggle" onclick="toggleCouncilMode()" title="Council mode — multiple models in parallel (⌘⇧C)" style="display:none">
           🎭 <span id="council-label">Council</span>
         </button>
+        <!-- v0.7.50: tighter topbar. Only theme + memory visible; everything
+             else (including Crew) lives in the ⋯ dropdown. Crew's active
+             state is reflected in the menu item via a class hook. -->
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
         <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Labaik remembers across sessions">🧠 Memory</button>
-        <button class="topbar-keys-btn" onclick="toggleThinkingGraph()" title="Thinking Graph — visual map of every branch (⌘⇧M)">🌳 Map</button>
-        <button class="topbar-keys-btn" onclick="toggleUxInsightsModal()" title="UX insights — local only">📊 Insights</button>
-        <button class="topbar-keys-btn" onclick="toggleSkillsModal()" title="Scheduled skills — run prompts on a cron">⏰ Skills</button>
-        <button class="topbar-keys-btn crew-toggle" id="crew-toggle" onclick="toggleCrewMode()" title="Crew mode — send every turn through 3 specialists (Architect + Critic + Researcher) and auto-synthesize">👥 Crew</button>
-        <button class="topbar-keys-btn" onclick="toggleLocalModelsModal()">🦙 Local Models</button>
-        <button class="topbar-keys-btn" onclick="toggleKeysModal()">API Keys</button>
+        <!-- Hidden-but-present so toggleCrewMode() can still find the element
+             to flip its .active class. Visual state lives in the menu item. -->
+        <button class="topbar-keys-btn crew-toggle" id="crew-toggle" onclick="toggleCrewMode()" style="display:none" title="Crew mode">👥 Crew</button>
+        <div class="topbar-menu-wrap">
+          <button class="topbar-keys-btn" id="topbar-more-btn" onclick="toggleTopbarMenu(event)" title="More actions" aria-label="More">⋯</button>
+          <div class="topbar-menu" id="topbar-menu" role="menu">
+            <button class="topbar-menu-item" id="menu-crew" role="menuitem" onclick="runTopbarAction('crew', event)">👥 Crew</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('skills', event)">⏰ Tasks</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('insights', event)">📊 UX insights</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump"></div>
+    <!-- v0.7.46: conv-minimap (timeline dots above messages) hidden —
+         decorative only, rarely used. Kept in DOM so renderConvMinimap()
+         calls don't need guards. Flip the inline display:none to re-enable. -->
+    <div class="conv-minimap conv-minimap-empty" id="conv-minimap" title="Conversation timeline — click any dot to jump" style="display:none !important"></div>
     <div class="pin-tray" id="pin-tray"></div>
     <div class="session-goal" id="session-goal"></div>
     <div class="session-summary" id="session-summary"></div>
@@ -5281,7 +5348,12 @@
          the topbar so it doesn't push the composer or workspace-bar. -->
     <div class="crew-slots-float" id="crew-slots" style="display:none"></div>
 
-    <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none">
+    <!-- v0.7.45: context radar (💬 · 📎 · 🧮 tokens + bar) removed above
+         the input. It showed raw counts that were noisy and rarely useful
+         at a glance. Elements kept in DOM (hidden) so code that updates
+         them (renderContextRadar etc.) doesn't throw on null lookups.
+         Re-enable by removing `display:none !important` from the CSS. -->
+    <div class="context-radar" id="context-radar" onclick="toggleRadarDetail()" style="display:none !important">
       <span class="radar-item"><span class="radar-icon">💬</span><span id="radar-msgs">0</span></span>
       <span class="radar-dot">·</span>
       <span class="radar-item"><span class="radar-icon">📎</span><span id="radar-files">0</span></span>
@@ -5290,7 +5362,7 @@
       <span class="radar-bar"><span id="radar-bar-fill"></span></span>
       <span class="radar-chevron" id="radar-chevron">▾</span>
     </div>
-    <div class="context-detail" id="context-detail" style="display:none"></div>
+    <div class="context-detail" id="context-detail" style="display:none !important"></div>
 
     <div class="file-chips" id="file-chips"></div>
     <div class="img-chips" id="img-chips"></div>
@@ -5306,22 +5378,27 @@
           </svg>
         </button>
         <textarea class="input-field" id="input" rows="1" placeholder="Message Labaik..." autofocus></textarea>
-        <!-- v0.6.0 Screen Vision: snap a region, attach to composer, send to vision model. ⌘⇧V. -->
-        <button class="icon-btn" id="shot-btn" onclick="captureScreenForChat('region')" title="Screen Vision — snap a region to send (⌘⇧V)">
+        <!-- v0.6.0 Screen Vision: snap a region, attach to composer, send to vision model. ⌘⇧V.
+             v0.7.43: hidden — another composer icon trimmed for clarity.
+             Still callable via ⌘⇧V shortcut if ever needed. -->
+        <button class="icon-btn" id="shot-btn" onclick="captureScreenForChat('region')" title="Screen Vision — snap a region to send (⌘⇧V)" style="display:none">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
         </button>
         <!-- v0.5.3 Voice conversation mode: auto-reads replies + auto-listens. -->
-        <button class="icon-btn" id="voice-mode-btn" onclick="toggleVoiceMode()" title="Voice conversation (auto-read replies + auto-listen)">
+        <!-- v0.7.2: voice icons hidden — duplicate entry points confused users.
+             Still functional: Hold Space (outside input) for push-to-talk.
+             Voice-mode toggle still reachable via command palette if needed. -->
+        <button class="icon-btn" id="voice-mode-btn" onclick="toggleVoiceMode()" title="Voice conversation (auto-read replies + auto-listen)" style="display:none">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
             <path d="M11 5L6 9H2v6h4l5 4V5z"/>
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
           </svg>
         </button>
-        <button class="icon-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input">
+        <button class="icon-btn" id="mic-btn" onclick="toggleVoice()" title="Voice input" style="display:none">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
@@ -5341,6 +5418,12 @@
           <span id="folder-label">Choose folder</span>
         </button>
         <span class="workspace-path" id="folder-path"></span>
+        <!-- v0.7.37 Task Scope — passive breadcrumb only.
+             Appears when the app auto-creates a subfolder (based on prompt
+             context) or when the user explicitly asks for one ("save this
+             in a folder called X"). No manual create button — decisions
+             are automatic. × clears scope and marks session as opt-out. -->
+        <span class="task-scope-breadcrumb" id="task-scope-breadcrumb" style="display:none"></span>
         <!-- Permission mode dropdown — sits beside the folder chooser because
              the two together define "what Labaik is allowed to touch". ⌘⇧A still cycles. -->
         <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Labaik is allowed to do without asking. ⌘⇧A to cycle.">
@@ -5361,6 +5444,36 @@
     <span class="ptt-hint">Esc cancels</span>
   </div>
 
+  <!-- v0.7.0 Profile Onboarding Modal — fires once on first Memory Lens open -->
+  <div class="modal-overlay" id="profile-onboard-modal">
+    <div class="modal" style="max-width:540px;width:92vw">
+      <h2 style="margin-bottom:4px">👋 Teach Labaik about you</h2>
+      <div style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">
+        A few facts go a long way. These ship with <strong>every</strong> conversation,
+        so Labaik stops re-asking what you code in, what you prefer, or what you're building.
+        Skippable — you can add or edit anything later in Memory Lens.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="font-size:12px;color:var(--text)">👤 What should Labaik call you?
+          <input id="onb-name" type="text" placeholder="Ahmed" maxlength="100" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        </label>
+        <label style="font-size:12px;color:var(--text)">🛠️ Main stack / languages / frameworks?
+          <input id="onb-tools" type="text" placeholder="Electron, JavaScript, Python" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        </label>
+        <label style="font-size:12px;color:var(--text)">💡 A coding preference or two?
+          <input id="onb-prefs" type="text" placeholder="Prefer async/await, avoid classes when possible" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        </label>
+        <label style="font-size:12px;color:var(--text)">📌 Anything else I should always know?
+          <textarea id="onb-context" placeholder="I'm building a desktop AI app. Timezone UTC+3." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+        <button class="msg-action-btn" onclick="profileOnboardingClose(false)">Skip</button>
+        <button class="msg-action-btn" onclick="profileOnboardingClose(true)" style="border-color:var(--green);color:var(--green)">Save & continue</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Memory Lens Modal -->
   <div class="modal-overlay" id="memory-modal">
     <div class="modal" style="max-width:720px;width:94vw;max-height:82vh;display:flex;flex-direction:column">
@@ -5368,9 +5481,31 @@
         🧠 Memory Lens
         <button class="modal-close" onclick="toggleMemoryModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
-        Labaik remembers key facts about you across all sessions. Relevant memories
-        are silently attached to each prompt so responses feel less amnesic.
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span>Labaik remembers key facts about you across all sessions. Relevant memories
+        are silently attached to each prompt so responses feel less amnesic.</span>
+        <label id="memory-incognito-toggle" title="Suppress profile + memories for the next turn" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;padding:3px 8px;border-radius:5px;border:1px solid var(--border)">
+          <input type="checkbox" id="memory-incognito-check" onchange="setMemoryIncognito(this.checked)" style="margin:0" />
+          🕶️ Incognito
+        </label>
+      </div>
+      <!-- v0.7.0 About You — always-on profile -->
+      <div id="profile-section" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:var(--bg-input)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <strong style="font-size:13px">👤 About You <span id="profile-count" style="font-size:10px;color:var(--text-faint);font-weight:normal">0/20</span></strong>
+          <span style="font-size:10px;color:var(--text-faint)">Sent with every turn</span>
+        </div>
+        <div id="profile-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+        <div id="profile-add-row" style="display:flex;gap:6px">
+          <select id="profile-add-cat" style="padding:5px 7px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+            <option value="identity">👤 Identity</option>
+            <option value="preferences">💡 Preferences</option>
+            <option value="tools">🛠️ Tools</option>
+            <option value="context">📌 Context</option>
+          </select>
+          <input id="profile-add-text" type="text" placeholder="Add a fact — e.g. I prefer Vue over React" maxlength="200" onkeydown="if(event.key==='Enter') profileAddFromUI()" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px" />
+          <button class="msg-action-btn" onclick="profileAddFromUI()" style="font-size:11px;border-color:var(--green);color:var(--green)">+ Add</button>
+        </div>
       </div>
       <!-- v0.6.0 Semantic recall status + controls -->
       <div id="memory-semantic-status" style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:7px;margin-bottom:10px;font-size:12px">
@@ -5382,6 +5517,12 @@
           <option value="keyword">Keyword only</option>
         </select>
         <button class="msg-action-btn" id="memory-reindex-btn" onclick="reindexMemoryEmbeddings()" style="font-size:11px">Re-index</button>
+      </div>
+      <!-- v0.7.0: scope filter tabs -->
+      <div class="memory-tabs" style="display:flex;gap:4px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px">
+        <button id="memory-tab-all" class="memory-tab active" onclick="setMemoryScopeFilter('all')">All <span class="tab-count">0</span></button>
+        <button id="memory-tab-global" class="memory-tab" onclick="setMemoryScopeFilter('global')">🌐 Global <span class="tab-count">0</span></button>
+        <button id="memory-tab-workspace" class="memory-tab" onclick="setMemoryScopeFilter('workspace')">📁 This workspace <span class="tab-count">0</span></button>
       </div>
       <!-- Search + stats row -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
@@ -5399,8 +5540,12 @@
         <div style="padding:0 12px 12px">
           <textarea id="memory-bulk-input" placeholder="Paste one fact per line. Example:&#10;I prefer TypeScript over JavaScript.&#10;My co-founder is Sara.&#10;I'm based in Dubai." rows="5" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;margin:8px 0"></textarea>
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <select id="memory-bulk-scope" title="Scope for new entries" style="padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+              <option value="workspace">📁 This workspace</option>
+              <option value="global">🌐 Global</option>
+            </select>
             <button class="msg-action-btn" onclick="memoryAddBulk()" style="border-color:var(--green);color:var(--green)">+ Add these</button>
-            <button class="msg-action-btn" onclick="memoryImportFile()" title="Pick a .txt or .md file — each non-blank line becomes a memory">📥 Import .txt / .md</button>
+            <button class="msg-action-btn" onclick="memoryImportFile()" title="Pick a .txt / .md / .json file — imported as global so it's available in every workspace">📥 Import</button>
             <button class="msg-action-btn" onclick="memoryExport()" title="Download all memories as plain text for backup">📤 Export</button>
             <input type="file" id="memory-import-input" accept=".txt,.md,.json" style="display:none" onchange="memoryImportFromInput(event)" />
           </div>
@@ -5890,7 +6035,32 @@
       })
     }
 
+    // v0.7.35 — history-preservation lock.
+    //
+    // Root cause of the intermittent "history disappears on launch" bug:
+    //   restoreSessions() returned null on ANY error (parse exception,
+    //   truncated read, etc.). The caller then fell through to creating a
+    //   fresh empty sessions array. The NEXT persistSessions() call would
+    //   overwrite the still-good raw storage with that empty array →
+    //   permanent history loss.
+    //
+    // Fix: distinguish three states
+    //   - truly empty storage  → safe to start fresh, persist unlocked
+    //   - unparseable storage  → parse FAILED but data exists → LOCK persist
+    //   - valid storage        → restore, persist unlocked
+    //
+    // When locked: persistSessions() becomes a no-op, preserving whatever
+    // raw value is on disk so the user (or a future version) can recover.
+    // The lock is logged loudly so DevTools shows exactly what happened.
+    let _persistLocked = false
+    let _lastRestoreError = null
+
     function persistSessions() {
+      if (_persistLocked) {
+        // Safety net: prior restore failed. Do NOT overwrite the raw
+        // localStorage value; it still contains recoverable data.
+        return
+      }
       try {
         // Snapshot current session's messages before saving
         const current = sessions.find(s => s.id === currentSessionId)
@@ -5909,22 +6079,42 @@
     }
 
     function restoreSessions() {
+      const raw = localStorage.getItem(LS_SESSIONS)
+      if (!raw) return null                // truly empty — OK to start fresh
       try {
-        const raw = localStorage.getItem(LS_SESSIONS)
-        if (!raw) return null
         const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed) || parsed.length === 0) return null
-        // Defensive: older builds wrote `streaming: true` into storage.
-        // Clear those so a session restored from disk doesn't look like
-        // it's still generating and trap the session switcher.
+        if (!Array.isArray(parsed)) {
+          _persistLocked = true
+          _lastRestoreError = 'not-an-array'
+          console.error('[sessions] Stored value is not an array. Persist LOCKED to prevent data loss. Raw (first 200 chars):', raw.slice(0, 200))
+          return null
+        }
+        if (parsed.length === 0) {
+          // Storage literally contains "[]". Could be legitimate (user
+          // cleared all sessions) or a prior bad persist. Don't lock —
+          // empty-array persisted state is a valid state.
+          return null
+        }
         for (const s of parsed) {
           if (Array.isArray(s?.messages)) s.messages = _sanitizeForPersist(s.messages)
         }
+        console.log(`[sessions] Restored ${parsed.length} session(s) from storage.`)
         return parsed
-      } catch {
+      } catch (err) {
+        _persistLocked = true
+        _lastRestoreError = err?.message || String(err)
+        console.error('[sessions] FAILED to parse stored sessions. Persist LOCKED to prevent data loss. Raw (first 200 chars):', raw.slice(0, 200), err)
         return null
       }
     }
+    // Expose for DevTools debugging: run `sessionsRecoveryInfo()` in console
+    // to see if the safety lock engaged and what the raw storage looks like.
+    window.sessionsRecoveryInfo = () => ({
+      persistLocked: _persistLocked,
+      lastRestoreError: _lastRestoreError,
+      rawStorageSize: (localStorage.getItem(LS_SESSIONS) || '').length,
+      currentSessions: sessions?.length ?? 0,
+    })
 
     let currentSessionId, sessions
     const _restored = restoreSessions()
@@ -5937,6 +6127,17 @@
     } else {
       currentSessionId = Date.now()
       sessions = [{ id: currentSessionId, title: 'New session', messages: [] }]
+      // v0.7.35: if restore failed with a parse error (not "no data"), warn
+      // the user immediately so they don't assume history is really gone.
+      // The lock prevents overwrite; the raw value is still in storage.
+      if (_persistLocked) {
+        setTimeout(() => {
+          showRewindToast?.(
+            `⚠️ History didn't load (parse error) — saves paused to preserve raw data. Check DevTools → sessionsRecoveryInfo()`,
+            true
+          )
+        }, 800)
+      }
     }
 
     // ── OODA UX tracking state ───────────────────────────────────────────
@@ -6484,480 +6685,11 @@
       renderTagAutosuggest()
     }
 
-    // ── Shared Memory Lens ──────────────────────────────────────────
-    // Cross-session memory of facts about the user. On send, we scan the
-    // user's latest prompt and pull memories whose keywords overlap with
-    // the query. Selected memories are prepended to the user message as a
-    // <memory> block so both OpenAI-style and Anthropic APIs see them
-    // (Anthropic's messages[] rejects 'system' role, so we prefix the user
-    // turn instead of injecting a separate system message).
-    //
-    // Extraction is heuristic (regex patterns for "I am / I use / my name
-    // is / I prefer / I work at / I'm building"), plus an explicit
-    // "🧠 Remember" button on user messages.
-    const LS_MEMORY = 'alaude:memory:v1'
-    const LS_MEMORY_MODE = 'alaude:memory-recall-mode:v1' // 'auto' | 'semantic' | 'keyword'
-    function loadMemories() {
-      try {
-        const raw = localStorage.getItem(LS_MEMORY)
-        if (!raw) return []
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed) ? parsed : []
-      } catch { return [] }
-    }
-    function saveMemories() {
-      try { localStorage.setItem(LS_MEMORY, JSON.stringify(memories)) } catch {}
-    }
-    let memories = loadMemories()
-    let memoryRecallMode = localStorage.getItem(LS_MEMORY_MODE) || 'auto'
-    let _embedModelCached = undefined  // undefined = not checked yet; string | null afterward
-
-    // v0.6.0: Semantic memory. Each memory carries an optional `embedding`
-    // (number[]). We compute it on write if Ollama + an embedding model
-    // are available. For backfill (existing memories) and first-run we
-    // lazily embed up to N at a time. Falls back to keyword scoring if
-    // either side of the comparison has no embedding.
-    async function _detectEmbedModel() {
-      if (_embedModelCached !== undefined) return _embedModelCached
-      try {
-        _embedModelCached = await window.alaude.ollamaFindEmbedModel?.() || null
-      } catch { _embedModelCached = null }
-      return _embedModelCached
-    }
-    function _cosine(a, b) {
-      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return 0
-      let dot = 0, na = 0, nb = 0
-      for (let i = 0; i < a.length; i++) {
-        dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]
-      }
-      if (na === 0 || nb === 0) return 0
-      return dot / (Math.sqrt(na) * Math.sqrt(nb))
-    }
-    async function _embedOne(text) {
-      try {
-        const res = await window.alaude.ollamaEmbed([String(text || '')])
-        if (res?.ok && Array.isArray(res.embeddings) && res.embeddings[0]) return res.embeddings[0]
-      } catch {}
-      return null
-    }
-    async function _embedBatch(texts) {
-      try {
-        const res = await window.alaude.ollamaEmbed(texts.map(t => String(t || '')))
-        if (res?.ok && Array.isArray(res.embeddings)) return { ok: true, vectors: res.embeddings, model: res.model }
-        return { ok: false, reason: res?.reason || 'unknown' }
-      } catch (err) {
-        return { ok: false, reason: 'error', error: err?.message }
-      }
-    }
-    // Backfill any memories missing an embedding. Runs in the background
-    // first time a semantic recall is requested. Does nothing gracefully
-    // if Ollama or the embed model aren't available.
-    let _backfilling = false
-    async function ensureMemoryEmbeddings({ force = false, onProgress } = {}) {
-      if (_backfilling) return { started: false, reason: 'already-running' }
-      const model = await _detectEmbedModel()
-      if (!model) return { started: false, reason: 'no-model' }
-      const todo = memories.filter(m => force || !Array.isArray(m.embedding) || !m.embedding.length)
-      if (!todo.length) return { started: false, reason: 'all-indexed', model }
-      _backfilling = true
-      try {
-        const CHUNK = 32  // Ollama /api/embed accepts batches
-        for (let i = 0; i < todo.length; i += CHUNK) {
-          const batch = todo.slice(i, i + CHUNK)
-          const res = await _embedBatch(batch.map(m => m.text))
-          if (!res.ok) break
-          for (let j = 0; j < batch.length; j++) {
-            batch[j].embedding = res.vectors[j]
-            batch[j].embedModel = res.model
-          }
-          saveMemories()
-          if (onProgress) onProgress({ done: i + batch.length, total: todo.length })
-        }
-        return { started: true, done: todo.length, model }
-      } finally {
-        _backfilling = false
-      }
-    }
-
-    // Regex-based extraction. Runs on every user message. Very precision-biased
-    // — we'd rather miss facts than hallucinate them. Each pattern captures
-    // the whole claim so the memory reads as the user wrote it.
-    const MEMORY_PATTERNS = [
-      { re: /\b(?:my name is|i(?:'m| am) called|call me)\s+([A-Z][a-zA-Z' -]{1,30})/i, tpl: (m) => `Name: ${m[1].trim()}` },
-      { re: /\bi(?:'m| am)\s+(a|an)\s+([a-z][a-z\s]{2,40}?)(?:[.,]|$| who | and | working | at )/i, tpl: (m) => `Is ${m[1]} ${m[2].trim()}` },
-      { re: /\bi\s+(?:use|work with|code in|write)\s+((?:Python|JavaScript|TypeScript|Rust|Go|Ruby|Java|C\+\+|C#|Swift|Kotlin|PHP|Elixir|Clojure|Haskell|Zig|React|Vue|Svelte|Next\.js|Django|Rails|Flask|Electron|Node\.js|Deno|Bun|Postgres|MySQL|SQLite|Redis)(?:(?:,|\s+and\s+)\s*(?:Python|JavaScript|TypeScript|Rust|Go|Ruby|Java|C\+\+|C#|Swift|Kotlin|PHP|Elixir|Clojure|Haskell|Zig|React|Vue|Svelte|Next\.js|Django|Rails|Flask|Electron|Node\.js|Deno|Bun|Postgres|MySQL|SQLite|Redis)){0,4})/i, tpl: (m) => `Uses ${m[1].trim()}` },
-      { re: /\bi\s+(?:prefer|like|love|favor)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Prefers ${m[1].trim()}` },
-      { re: /\bi(?:'m| am)\s+(?:working on|building|developing|shipping)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Working on ${m[1].trim()}` },
-      { re: /\bi\s+work\s+(?:at|for)\s+([A-Z][a-zA-Z0-9& .'-]{1,40}?)(?:[.,]|$)/i, tpl: (m) => `Works at ${m[1].trim()}` },
-      { re: /\b(?:my|our)\s+(?:team|company|project|stack)\s+(?:is|uses)\s+([a-zA-Z0-9][^.?!]{3,80}?)(?:[.?!]|$)/i, tpl: (m) => `Team/project: ${m[1].trim()}` },
-    ]
-    const MEMORY_IMPERATIVE = /^\s*(?:remember(?:\s+that)?|note(?:\s+that)?|keep in mind|fyi)[,:\s]+(.{4,200})$/i
-
-    function memoryExtract(userText) {
-      if (!userText) return []
-      const found = []
-      // Imperative catches "Remember that I like X" — highest priority
-      const imp = userText.match(MEMORY_IMPERATIVE)
-      if (imp) found.push(imp[1].trim().replace(/[.!?]+$/, ''))
-      for (const p of MEMORY_PATTERNS) {
-        const m = userText.match(p.re)
-        if (m) found.push(p.tpl(m))
-      }
-      return found
-    }
-    function memoryAdd(text, source) {
-      const t = String(text || '').trim()
-      // v0.5.22: bumped per-entry cap from 240 → 1000 so users can paste
-      // richer context (a short paragraph) without hitting the limit.
-      if (!t || t.length > 1000) return null
-      // De-dupe by normalized text
-      const norm = t.toLowerCase().replace(/\s+/g, ' ')
-      if (memories.some(m => m.text.toLowerCase().replace(/\s+/g, ' ') === norm)) return null
-      const mem = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: t, createdAt: Date.now(), source: source || null }
-      memories.push(mem)
-      // Cap at 500 to avoid unbounded growth; drop the oldest
-      if (memories.length > 500) memories = memories.slice(-500)
-      saveMemories()
-      // v0.6.0: fire-and-forget embed if a local model is available. Doesn't
-      // block the save. If Ollama / embed model are absent, recall falls
-      // back to keyword scoring so memory still works.
-      ;(async () => {
-        try {
-          const model = await _detectEmbedModel()
-          if (!model) return
-          const vec = await _embedOne(t)
-          if (vec) {
-            mem.embedding = vec
-            mem.embedModel = model
-            saveMemories()
-          }
-        } catch {}
-      })()
-      return mem
-    }
-
-    // Recall. v0.6.0 adds semantic scoring on top of the original keyword
-    // overlap. Strategy:
-    //   1. If mode is 'keyword' → pure keyword overlap (legacy behavior).
-    //   2. If mode is 'semantic' or 'auto' AND an embed model is available
-    //      AND at least some memories have embeddings → cosine similarity
-    //      on the query vs each memory's embedding. Threshold 0.35 keeps
-    //      noise out. Ties broken by recency.
-    //   3. 'auto' falls back to keyword if step 2 returns nothing or is
-    //      unavailable, so users always get SOMETHING.
-    function _keywordScore(queryText) {
-      const stop = new Set(['that','this','with','from','have','will','what','when','where','which','should','could','would','about','there','their','been','does','doesnt','cant','dont','just','like','some','also','been','make','makes','need','needs'])
-      const qWords = new Set(
-        String(queryText).toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || []
-      )
-      if (!qWords.size) return []
-      return memories.map(m => {
-        const mWords = new Set(m.text.toLowerCase().match(/[a-z]{4,}/g)?.filter(w => !stop.has(w)) || [])
-        let s = 0
-        for (const w of qWords) if (mWords.has(w)) s++
-        return { m, s }
-      }).filter(x => x.s > 0).sort((a, b) => b.s - a.s)
-    }
-    async function _semanticScore(queryText) {
-      const model = await _detectEmbedModel()
-      if (!model) return null
-      const embedded = memories.filter(m => Array.isArray(m.embedding) && m.embedding.length)
-      if (!embedded.length) return null
-      const qvec = await _embedOne(queryText)
-      if (!qvec) return null
-      const scored = embedded.map(m => ({ m, s: _cosine(qvec, m.embedding) }))
-      return scored
-        .filter(x => x.s > 0.35)  // noise floor — empirically keeps recall relevant
-        .sort((a, b) => b.s - a.s || b.m.createdAt - a.m.createdAt)
-    }
-    async function memoryRecall(queryText, topN = 5) {
-      if (!queryText || !memories.length) return []
-      const mode = memoryRecallMode || 'auto'
-      if (mode !== 'keyword') {
-        const sem = await _semanticScore(queryText)
-        if (sem && sem.length) return sem.slice(0, topN).map(x => x.m)
-      }
-      if (mode === 'semantic') return []  // explicit semantic-only; no fallback
-      const kw = _keywordScore(queryText)
-      return kw.slice(0, topN).map(x => x.m)
-    }
-
-    async function memoryInjectIntoLastUser(cleanMsgs, queryText) {
-      if (!cleanMsgs || !cleanMsgs.length) return { msgs: cleanMsgs, used: [] }
-      const used = await memoryRecall(queryText, 5)
-      if (!used.length) return { msgs: cleanMsgs, used: [] }
-      const block = '<memory-context>\n' + used.map(m => `- ${m.text}`).join('\n') + '\n</memory-context>\n\n'
-      const out = cleanMsgs.slice()
-      // Find the last user message to prefix. Handles both plain-string content
-      // and multimodal content arrays (prepend a text part rather than mashing
-      // the string into the array).
-      for (let i = out.length - 1; i >= 0; i--) {
-        if (out[i].role === 'user') {
-          if (Array.isArray(out[i].content)) {
-            out[i] = { ...out[i], content: [{ type: 'text', text: block }, ...out[i].content] }
-          } else {
-            out[i] = { ...out[i], content: block + out[i].content }
-          }
-          break
-        }
-      }
-      return { msgs: out, used }
-    }
-
-    // Explicit capture: adds the selected user message to memory verbatim.
-    function memoryRememberMessage(idx) {
-      const m = messages[idx]
-      if (!m || m.role !== 'user' || !m.content) return
-      // Trim: if it's long, truncate and mark
-      const t = m.content.length > 220 ? m.content.slice(0, 217) + '…' : m.content
-      const added = memoryAdd(t, { sessionId: currentSessionId, msgIdx: idx })
-      if (added) {
-        showRewindToast('🧠 Remembered: "' + added.text.slice(0, 60) + (added.text.length > 60 ? '…' : '') + '"', false)
-      } else {
-        showRewindToast('Already remembered (or empty/too long)', false)
-      }
-    }
-
-    // v0.6.0 semantic memory status + reindex
-    async function refreshMemorySemanticStatus() {
-      const icon = document.getElementById('memory-semantic-icon')
-      const text = document.getElementById('memory-semantic-text')
-      const modeSel = document.getElementById('memory-recall-mode')
-      const btn = document.getElementById('memory-reindex-btn')
-      if (!icon || !text) return
-      if (modeSel) modeSel.value = memoryRecallMode
-      const model = await _detectEmbedModel()
-      if (!model) {
-        icon.textContent = '🔎'
-        // Offer one-click install of the TINY (45MB) embedding model so
-        // users don't have to remember the cli command or the model name.
-        // Larger heavier models (nomic-embed-text 274MB, mxbai-embed-large
-        // 669MB) remain an option via `ollama pull` for power users.
-        text.innerHTML = `Semantic recall off — install <code>all-minilm</code> (≈45 MB, runs locally) for smarter memory matching. <button class="msg-action-btn" onclick="installSemanticEmbedModel()" style="margin-left:8px;font-size:11px">Install (45 MB)</button>`
-        if (btn) btn.disabled = true
-        return
-      }
-      const embedded = memories.filter(m => Array.isArray(m.embedding) && m.embedding.length).length
-      const total = memories.length
-      icon.textContent = '🧭'
-      if (total === 0) {
-        text.innerHTML = `Semantic recall ready (<code>${escapeHtml(model)}</code>) — add some memories to get going.`
-      } else if (embedded === total) {
-        text.innerHTML = `<strong>Semantic recall active</strong> — ${embedded}/${total} memories indexed with <code>${escapeHtml(model)}</code>.`
-      } else {
-        text.innerHTML = `${embedded}/${total} memories indexed with <code>${escapeHtml(model)}</code>. Click Re-index to backfill the rest.`
-      }
-      if (btn) btn.disabled = false
-    }
-    async function installSemanticEmbedModel() {
-      if (!await window.alaude.ollamaAvailable?.()) {
-        showRewindToast?.('Ollama isn\'t running. Open Local Models to install it first.', true)
-        return
-      }
-      const text = document.getElementById('memory-semantic-text')
-      if (text) text.textContent = 'Downloading all-minilm (~45 MB)…'
-      try {
-        await window.alaude.ollamaPull?.('all-minilm')
-        _embedModelCached = undefined  // re-detect
-        await refreshMemorySemanticStatus()
-        showRewindToast?.('🧭 Embedding model installed. Indexing…', false)
-        // Kick off a background index of existing memories now that a model
-        // is available.
-        if (memories.length) {
-          await reindexMemoryEmbeddings()
-        }
-      } catch (err) {
-        showRewindToast?.(`Install failed: ${err.message || err}`, true)
-        refreshMemorySemanticStatus()
-      }
-    }
-    function setMemoryRecallMode(mode) {
-      memoryRecallMode = mode
-      try { localStorage.setItem(LS_MEMORY_MODE, mode) } catch {}
-      showRewindToast?.(`🧠 Memory recall: ${mode}`, false)
-    }
-    async function reindexMemoryEmbeddings() {
-      const btn = document.getElementById('memory-reindex-btn')
-      const text = document.getElementById('memory-semantic-text')
-      if (!btn || btn.disabled) return
-      btn.disabled = true
-      const original = btn.textContent
-      btn.textContent = 'Indexing…'
-      try {
-        const r = await ensureMemoryEmbeddings({
-          force: true,
-          onProgress: ({ done, total }) => {
-            if (text) text.textContent = `Indexing ${done}/${total}…`
-          }
-        })
-        if (r.reason === 'no-model') {
-          showRewindToast?.('No embedding model installed', true)
-        } else {
-          showRewindToast?.(`🧭 Indexed ${memories.length} memories`, false)
-        }
-      } finally {
-        btn.disabled = false
-        btn.textContent = original
-        refreshMemorySemanticStatus()
-        renderMemoryModal()
-      }
-    }
-
-    // Memory Manager modal
-    function toggleMemoryModal() {
-      const m = document.getElementById('memory-modal')
-      if (!m) return
-      const isOpen = m.classList.contains('show') || m.style.display === 'flex'
-      if (isOpen) {
-        m.classList.remove('show')
-        m.style.display = 'none'
-        return
-      }
-      renderMemoryModal()
-      refreshMemorySemanticStatus()
-      m.classList.add('show')
-      m.style.display = 'flex'
-    }
-    function renderMemoryModal() {
-      const list = document.getElementById('memory-modal-list')
-      const count = document.getElementById('memory-count')
-      if (!list) return
-      const searchEl = document.getElementById('memory-search')
-      const q = (searchEl?.value || '').trim().toLowerCase()
-
-      const ordered = [...memories].sort((a, b) => b.createdAt - a.createdAt)
-      const filtered = q ? ordered.filter(m => m.text.toLowerCase().includes(q)) : ordered
-      if (count) count.textContent = q
-        ? `${filtered.length} of ${memories.length}`
-        : `${memories.length} / 500`
-
-      if (!memories.length) {
-        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, type "Remember that I prefer X" in chat, or use the Add/Import panel below.</div>`
-        return
-      }
-      if (!filtered.length) {
-        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories match "${escapeHtml(q)}".</div>`
-        return
-      }
-      list.innerHTML = filtered.map(m => {
-        const when = new Date(m.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
-        const src = m.source ? 'session' : 'manual'
-        return `<div class="memory-row">
-          <div style="flex:1;min-width:0">
-            <div class="memory-row-text">${escapeHtml(m.text)}</div>
-            <div class="memory-row-meta">${when} · ${src}</div>
-          </div>
-          <button class="msg-action-btn" onclick="memoryEdit('${escapeHtml(m.id)}')">Edit</button>
-          <button class="msg-action-btn" onclick="memoryDelete('${escapeHtml(m.id)}')">×</button>
-        </div>`
-      }).join('')
-    }
-
-    // v0.5.22 bulk add: textarea with one fact per line, each becomes its
-    // own memory entry. Blank lines and super-long lines get skipped.
-    function memoryAddBulk() {
-      const ta = document.getElementById('memory-bulk-input')
-      if (!ta) return
-      const raw = ta.value || ''
-      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
-      let added = 0, skipped = 0
-      for (const line of lines) {
-        const ok = memoryAdd(line, null)
-        if (ok) added++
-        else skipped++
-      }
-      ta.value = ''
-      renderMemoryModal()
-      showRewindToast?.(`🧠 Added ${added} memories${skipped ? ` (${skipped} skipped — duplicate or too long)` : ''}`, false)
-    }
-    function memoryImportFile() {
-      document.getElementById('memory-import-input')?.click()
-    }
-    async function memoryImportFromInput(ev) {
-      const file = ev.target?.files?.[0]
-      if (!file) return
-      try {
-        const text = await file.text()
-        let added = 0, skipped = 0
-        // JSON shape: array of strings OR array of {text, createdAt?}
-        if (file.name.endsWith('.json')) {
-          try {
-            const parsed = JSON.parse(text)
-            if (Array.isArray(parsed)) {
-              for (const item of parsed) {
-                const t = typeof item === 'string' ? item : item?.text
-                if (t && memoryAdd(t, null)) added++; else skipped++
-              }
-            }
-          } catch {
-            showRewindToast?.('❌ Invalid JSON', true)
-            return
-          }
-        } else {
-          // Plain text / markdown — one fact per non-empty line. Markdown list
-          // bullets (-, *, +) and numbered-list prefixes get stripped.
-          const lines = text.split(/\r?\n/)
-            .map(l => l.trim().replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, ''))
-            .filter(Boolean)
-          for (const line of lines) {
-            if (memoryAdd(line, null)) added++; else skipped++
-          }
-        }
-        renderMemoryModal()
-        showRewindToast?.(`🧠 Imported ${added} memories from ${file.name}${skipped ? ` (${skipped} skipped)` : ''}`, false)
-      } catch (err) {
-        showRewindToast?.(`❌ Import failed: ${err.message}`, true)
-      } finally {
-        ev.target.value = ''  // allow re-selecting the same file
-      }
-    }
-    function memoryExport() {
-      if (!memories.length) { showRewindToast?.('No memories to export', false); return }
-      const content = [...memories]
-        .sort((a, b) => a.createdAt - b.createdAt)
-        .map(m => m.text)
-        .join('\n')
-      const blob = new Blob([content], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `labaik-memories-${new Date().toISOString().slice(0, 10)}.txt`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      showRewindToast?.(`📤 Exported ${memories.length} memories`, false)
-    }
-    function memoryEdit(id) {
-      const m = memories.find(x => x.id === id)
-      if (!m) return
-      const edited = prompt('Edit memory:', m.text)
-      if (edited == null) return
-      const t = edited.trim()
-      if (!t) return
-      m.text = t.slice(0, 240)
-      saveMemories()
-      renderMemoryModal()
-    }
-    function memoryDelete(id) {
-      if (!confirm('Delete this memory?')) return
-      memories = memories.filter(x => x.id !== id)
-      saveMemories()
-      renderMemoryModal()
-    }
-    function memoryClearAll() {
-      if (!confirm('Delete ALL memories? This can\'t be undone.')) return
-      memories = []
-      saveMemories()
-      renderMemoryModal()
-    }
-    function memoryAddManual() {
-      const t = prompt('New memory (short fact about you):')
-      if (!t) return
-      const added = memoryAdd(t.trim(), null)
-      if (added) renderMemoryModal()
-      else alert('Already stored (or empty / too long).')
-    }
+    // Memory + Profile subsystems — extracted to renderer/js/* modules in the
+    // v0.7.1 refactor. Wiring happens in the <script type="module"> tag near
+    // the end of this file, which calls bootMemorySystem() and exposes the
+    // window.* bridges the rest of this inline script (and onclick handlers)
+    // still use: memoryAdd, toggleMemoryModal, memoryRememberMessage, etc.
 
     // ── Focus Mode ──────────────────────────────────────────────────────
     // Zen pass: press F (outside inputs) or use the command palette to
@@ -7422,6 +7154,10 @@ SUMMARY:`
       renderMessages()
     }
     function toggleReadAloud(idx) {
+      // v0.7.41 kill-switch — TTS is part of voice, disabled in this build.
+      if (typeof VOICE_ENABLED !== 'undefined' && !VOICE_ENABLED) {
+        showRewindToast?.('🔇 Voice is disabled in this build.', false); return
+      }
       if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
         showRewindToast?.('TTS not available in this environment', true)
         return
@@ -7786,6 +7522,18 @@ SUMMARY:`
       })
     } catch {}
 
+    // ── v0.7.41 — GLOBAL VOICE KILL-SWITCH ──────────────────────────────
+    // Single feature flag that disables every voice entry point. Flip to
+    // true to re-enable voice input (dictate) + voice output (TTS) + Siri-
+    // style conversation mode. When false:
+    //   - loadVoiceMode() no-ops
+    //   - toggleVoice() / toggleVoiceMode() show a toast + return
+    //   - maybeAutoSpeakReply() no-ops (no reply gets spoken)
+    //   - Push-to-talk Space key does nothing
+    //   - Voice icons in composer already hidden (v0.7.2); untouched here
+    // No code deleted — one line flip re-enables everything.
+    const VOICE_ENABLED = false
+
     // ── v0.5.3 Voice conversation mode ───────────────────────────────────
     // When enabled: every completed assistant reply auto-reads via TTS, and
     // once speaking finishes we auto-start listening so the user can speak
@@ -7794,6 +7542,8 @@ SUMMARY:`
     const LS_VOICE_MODE = 'alaude:voiceMode:v1'
     let voiceMode = false
     function loadVoiceMode() {
+      // v0.7.41 kill-switch: don't load or reveal voice UI at all.
+      if (!VOICE_ENABLED) { voiceMode = false; return }
       try { voiceMode = localStorage.getItem(LS_VOICE_MODE) === '1' } catch {}
       refreshVoiceModeUi()
     }
@@ -7807,6 +7557,8 @@ SUMMARY:`
         : 'Voice conversation (auto-read replies + auto-listen)'
     }
     function toggleVoiceMode() {
+      // v0.7.41 kill-switch.
+      if (!VOICE_ENABLED) { showRewindToast?.('🔇 Voice is disabled in this build.', false); return }
       voiceMode = !voiceMode
       try { localStorage.setItem(LS_VOICE_MODE, voiceMode ? '1' : '0') } catch {}
       refreshVoiceModeUi()
@@ -7821,6 +7573,8 @@ SUMMARY:`
     // the one the user is looking at AND voice mode is on AND the reply is a
     // real non-error message, speak it + auto-listen for the next turn.
     function maybeAutoSpeakReply() {
+      // v0.7.41 kill-switch.
+      if (!VOICE_ENABLED) return
       if (!voiceMode) return
       if (!Array.isArray(messages) || messages.length === 0) return
       const last = messages[messages.length - 1]
@@ -9439,6 +9193,13 @@ footer a { color: var(--accent); text-decoration: none; }
     function refreshCrewUi() {
       const btn = document.getElementById('crew-toggle')
       if (btn) btn.classList.toggle('on', crewMode)
+      // v0.7.50: reflect crew on/off state in the menu item label so users
+      // can see it at a glance before opening the menu.
+      const menuItem = document.getElementById('menu-crew')
+      if (menuItem) {
+        menuItem.textContent = crewMode ? '👥 Crew · on' : '👥 Crew'
+        menuItem.classList.toggle('active', crewMode)
+      }
       const slots = document.getElementById('crew-slots')
       if (slots) {
         slots.style.display = crewMode ? '' : 'none'
@@ -9762,8 +9523,12 @@ footer a { color: var(--accent); text-decoration: none; }
       localStorage.setItem(LS_THEME, next)
       applyTheme(next)
     }
-    // Apply saved theme immediately (runs before most of the UI renders)
-    applyTheme(localStorage.getItem(LS_THEME))
+    // v0.7.47: default to LIGHT, not system-follow.
+    // Old behavior: theme=null → follow system (dark on most macOS setups).
+    // New behavior: theme=null → light. Users can still flip to dark via the
+    // 🌙 button; the choice persists via LS_THEME. `null` in storage means
+    // "never chose" and now means light.
+    applyTheme(localStorage.getItem(LS_THEME) || 'light')
 
     // ── Sidebar collapse + resize ─────────────────────────────────
     const LS_SIDEBAR = 'alaude:sidebar-collapsed:v1'
@@ -9952,16 +9717,87 @@ footer a { color: var(--accent); text-decoration: none; }
       if (!localStorage.getItem(LS_THEME)) applyTheme(null)
     })
 
+    // v0.7.46 — topbar "more" dropdown handlers.
+    // Open/close + click-outside-to-close. The button's event.stopPropagation
+    // keeps the outside-click listener from immediately closing it.
+    function toggleTopbarMenu(ev) {
+      if (ev) ev.stopPropagation()
+      const m = document.getElementById('topbar-menu')
+      if (!m) return
+      m.classList.toggle('show')
+    }
+    function closeTopbarMenu() {
+      const m = document.getElementById('topbar-menu')
+      if (m) m.classList.remove('show')
+    }
+    // v0.7.47: single dispatch so menu-item clicks 1) don't race with the
+    // click-outside listener, 2) log what they did so we can debug if any
+    // target function is missing at runtime.
+    function runTopbarAction(which, ev) {
+      if (ev) ev.stopPropagation()
+      closeTopbarMenu()
+      const targets = {
+        crew:        () => (typeof toggleCrewMode === 'function') && toggleCrewMode(),
+        skills:      () => (typeof toggleSkillsModal === 'function') && toggleSkillsModal(),
+        keys:        () => (typeof toggleKeysModal === 'function') && toggleKeysModal(),
+        localModels: () => (typeof toggleLocalModelsModal === 'function') && toggleLocalModelsModal(),
+        map:         () => (typeof toggleThinkingGraph === 'function') && toggleThinkingGraph(),
+        insights:    () => (typeof toggleUxInsightsModal === 'function') && toggleUxInsightsModal(),
+      }
+      const fn = targets[which]
+      if (!fn) { console.warn('[topbar-menu] unknown action:', which); return }
+      try {
+        const ok = fn()
+        if (ok === false) console.warn('[topbar-menu] handler for', which, 'not found at runtime')
+      } catch (err) {
+        console.error('[topbar-menu] handler threw:', which, err)
+        showRewindToast?.(`Menu action failed: ${which}`, true)
+      }
+    }
+    document.addEventListener('click', (ev) => {
+      const m = document.getElementById('topbar-menu')
+      if (!m || !m.classList.contains('show')) return
+      // Click was inside the wrap or on the trigger? Let the menu decide.
+      if (ev.target.closest?.('.topbar-menu-wrap')) return
+      m.classList.remove('show')
+    })
+
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Esc → close any open overlay (modal, command palette, shortcuts, thinking graph, global search)
+      // Esc → close any open overlay (modal, command palette, shortcuts, thinking graph, global search).
+      // v0.7.33: now closes ALL open overlays in one press, not just the
+      // first found — previously a stuck invisible overlay could survive an
+      // Esc press if it wasn't the first match.
       if (e.key === 'Escape') {
-        const open = document.querySelector('.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show, .gsearch-overlay.show')
-        if (open) {
-          open.classList.remove('show')
-          if (open.style.display === 'flex') open.style.display = 'none'
+        const SEL = '.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show, .gsearch-overlay.show, .drop-overlay.show, .ptt-overlay.show'
+        const open = document.querySelectorAll(SEL)
+        if (open.length) {
+          open.forEach(el => {
+            el.classList.remove('show')
+            if (el.style && el.style.display === 'flex') el.style.display = 'none'
+          })
           e.preventDefault()
         }
+        return
+      }
+      // v0.7.33: Cmd+Esc (or Ctrl+Esc) → NUCLEAR overlay clear. If the user
+      // ever ends up with an invisible overlay blocking clicks (the
+      // recurring "can't click workspace-bar" bug), this is the rescue
+      // hatch: it force-clears EVERY overlay in the DOM, visible or not.
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Escape') {
+        e.preventDefault()
+        const SEL = '.modal-overlay, .cmd-palette-overlay, .shortcuts-overlay, .tgraph-overlay, .gsearch-overlay, .drop-overlay, .ptt-overlay'
+        let n = 0
+        document.querySelectorAll(SEL).forEach(el => {
+          if (el.classList.contains('show') || (el.style && el.style.display === 'flex')) n++
+          el.classList.remove('show')
+          // v0.7.48 FIX: removeProperty (not set='none') so class-based
+          // modals can re-open via classList.add('show') afterwards.
+          if (el.style) el.style.removeProperty('display')
+        })
+        const lb = document.getElementById('alaude-lightbox')
+        if (lb) { lb.remove(); n++ }
+        showRewindToast?.(n ? `🧹 Cleared ${n} stuck overlay${n === 1 ? '' : 's'}` : '✓ No stuck overlays', false)
         return
       }
       // Cmd/Ctrl+K → focus message input
@@ -10544,9 +10380,57 @@ footer a { color: var(--accent); text-decoration: none; }
         const cleanMsgs = sanitizeHistoryForApi(target.slice(0, -1))
         // Memory Lens: extract facts from the user's latest message, then
         // inject any relevant recalled memories as a prefix to that message.
-        const memoryExtracted = memoryExtract(userText)
-        for (const fact of memoryExtracted) memoryAdd(fact, { sessionId: targetSessionId })
-        const { msgs: withMemory, used: memoriesUsed } = await memoryInjectIntoLastUser(cleanMsgs, userText)
+        // v0.7.1: memory + profile code lives in renderer/js/* modules. The
+        // inline script here calls into the bootstrap-installed window bridges.
+        // Incognito pauses BOTH capture and send. Manual Remember still works —
+        // incognito is a "don't auto-record this session" mode.
+        const _mSys = window.__memSys
+        const _incog = _mSys?.getIncognito?.() || false
+        // v0.7.32 Task Scope — auto-create a subfolder when:
+        //   - workspace is set, AND
+        //   - session has no scope yet AND user hasn't opted out, AND
+        //   - prompt isn't trivial (filters "hi", "thanks", "yes"), AND
+        //   - workspace doesn't look like an existing project.
+        // All of those checks live inside ScopeAutoCreator.maybeAutoCreate —
+        // we just call it on every send. It's a no-op once a scope is set
+        // or the user clears it via the × on the breadcrumb.
+        // v0.7.33 fix: dropped the old userMsgsBefore<=1 gate — it stopped
+        // auto-create from firing when the user asked to build something
+        // mid-conversation in an existing session.
+        try {
+          if (window.__taskScopeMaybeAutoCreate) {
+            const result = await window.__taskScopeMaybeAutoCreate(userText)
+            console.log('[task-scope] auto-create:', result)
+            try { window.taskScopeRender?.() } catch {}
+          }
+        } catch (err) { console.warn('[task-scope] auto-create failed:', err) }
+        const memoryExtracted = _incog ? [] : (window.__memExtract?.(userText) || [])
+        // Auto-extracted facts default to 'workspace' scope — they came from
+        // project conversation so they probably describe the project. If no
+        // workspace is active, scope falls through to 'global'.
+        const _autoScope = workspacePath ? 'workspace' : 'global'
+        for (const fact of memoryExtracted) {
+          window.memoryAdd?.(fact, { sessionId: targetSessionId }, { scope: _autoScope, workspacePath: workspacePath || null })
+        }
+        // Stash profile-candidate facts on the user message so the approval
+        // chip offers to promote them to always-on profile. Skipped during
+        // incognito. Dismissed/accepted chips set flags (not persisted) so
+        // they don't re-show on subsequent renders.
+        if (!_incog) {
+          try {
+            const lastUserIdx = (() => {
+              for (let i = target.length - 1; i >= 0; i--) if (target[i].role === 'user') return i
+              return -1
+            })()
+            if (lastUserIdx >= 0) {
+              const cands = window.__memExtractProfileCandidates?.(userText) || []
+              if (cands.length) {
+                target[lastUserIdx].profileCandidates = cands
+              }
+            }
+          } catch {}
+        }
+        const { msgs: withMemory, used: memoriesUsed } = await window.__memInjectIntoLastUser(cleanMsgs, userText)
         // Tag the assistant streaming slot with the memories used so the chip
         // can render once the reply lands, and stash estimated input tokens
         // so the cost estimator can compute $ after streaming finishes.
@@ -10555,8 +10439,29 @@ footer a { color: var(--accent); text-decoration: none; }
           if (memoriesUsed.length) streamingSlot.memoriesUsed = memoriesUsed.map(m => ({ id: m.id, text: m.text }))
           streamingSlot.inputTokens = estimateInputTokensForCall(withMemory)
         }
-        console.log('[callAI] model:', model, 'msgs:', withMemory.length, 'memories:', memoriesUsed.length, 'session:', targetSessionId)
-        const response = await window.alaude.chat(withMemory, model, workspacePath, currentSpaceId, uxMeta)
+        // v0.7.31 Task Scope: if the current session has an active scope
+        // subfolder, swap it in for workspacePath so the worker only sees
+        // that dir. Also inject a <task-scope> hint into the last user
+        // message so the model knows where to put new files.
+        const _scopePath = (window.__taskScopeActive?.() || null)
+        const _effectiveWs = _scopePath || workspacePath
+        if (_scopePath) {
+          const hint = window.__taskScopeSystemPromptHint?.()
+          if (hint) {
+            for (let i = withMemory.length - 1; i >= 0; i--) {
+              if (withMemory[i].role === 'user') {
+                if (Array.isArray(withMemory[i].content)) {
+                  withMemory[i] = { ...withMemory[i], content: [{ type: 'text', text: hint }, ...withMemory[i].content] }
+                } else {
+                  withMemory[i] = { ...withMemory[i], content: hint + '\n\n' + withMemory[i].content }
+                }
+                break
+              }
+            }
+          }
+        }
+        console.log('[callAI] model:', model, 'msgs:', withMemory.length, 'memories:', memoriesUsed.length, 'session:', targetSessionId, 'scope:', _scopePath || 'none')
+        const response = await window.alaude.chat(withMemory, model, _effectiveWs, currentSpaceId, uxMeta)
         // Remember which messageId produced this assistant response so save/copy events
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
@@ -10893,18 +10798,18 @@ Title:`
         const compareClass = compareArmedHere ? ' active' : ''
         const compareLabel = compareArmedHere ? '⚖ Armed…' : '⚖ Compare'
         const noteBtnLabel = msg.note ? '📝 Note ✓' : '📝 Note'
+        // v0.7.46: message-action trim. Kept only the four most-used
+        // actions: Copy, Pin, Branch, Regenerate (Regenerate is added
+        // later, only on the last assistant message). Hidden:
+        //   👍 👎 (reactions), 🔊 (TTS — was already voice-gated),
+        //   ⚖ Compare, 📝 Note, ↪ Refine, 💾 Save, ↶ Rewind.
+        // The functions still exist — reachable via command palette or
+        // shortcuts — they're just not cluttering the per-message action
+        // row every time you get a reply.
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
-              <button class="msg-action-btn reaction-btn${upActive}" data-kind="up" onclick="setReaction(${i}, 'up')" title="Mark as a good response">👍</button>
-              <button class="msg-action-btn reaction-btn${downActive}" data-kind="down" onclick="setReaction(${i}, 'down')" title="Mark as a poor response (you'll be asked for a note)">👎</button>
-              <button class="msg-action-btn tts-btn${ttsActive}" onclick="toggleReadAloud(${i})" title="Read this reply aloud (Esc to stop)">${ttsIcon}</button>
-              <button class="msg-action-btn compare-btn${compareClass}" onclick="armCompare(${i})" title="Pick two assistant messages to compare side-by-side">${compareLabel}</button>
-              <button class="msg-action-btn" onclick="editMessageNote(${i})" title="${msg.note ? 'Edit your note' : 'Attach a personal note to this reply'}">${noteBtnLabel}</button>
-              <button class="msg-action-btn" onclick="refineWithPicker(${i}, this)" title="Refine this reply using a pinned model (⌘1..⌘6)">↪ Refine</button>
               <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
-              ${(msg.content || '').length > 50 ? `<button class="msg-action-btn" onclick="saveMessage(${i})" title="Save to file">💾 Save</button>` : ''}
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
-              ${i < messages.length - 1 ? `<button class="msg-action-btn" onclick="rewindTo(${i})" title="Rewind conversation to this point — the rest is saved as a branch">↶ Rewind</button>` : ''}
               <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">⎇ Branch</button>
              </div>`
           : ''
@@ -10985,10 +10890,18 @@ Title:`
         // Remember → long-term facts memory. Save-as-Snippet → reusable prompt template.
         const userRememberBtn = (msg.role === 'user' && (msg.content || '').length > 2)
           ? `<div class="msg-actions">
-               <button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i})" title="Save this to long-term memory">🧠 Remember</button>
+               <button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i}, event)" title="Save to this workspace's memory — Shift-click to save globally">🧠 Remember</button>
                <button class="msg-action-btn" onclick="snippetFromMessage(${i})" title="Turn this prompt into a reusable snippet">✨ Save as snippet</button>
              </div>`
           : ''
+        // v0.7.0: profile-promote approval chip — offered when an identity/
+        // tool/preference pattern was detected in this user message and the
+        // fact isn't already in the profile. Dismiss = not-now (session only).
+        const pcList = (msg.role === 'user' && Array.isArray(msg.profileCandidates)) ? msg.profileCandidates : []
+        const profilePromoteChips = pcList.filter(c => !c._dismissed && !c._accepted).map((c, cIdx) => {
+          const catLabel = (window.PROFILE_CATEGORIES?.find(k => k.id === c.category)?.label || c.category)
+          return `<span class="profile-promote-chip" onclick="profilePromoteAccept(${i}, ${cIdx})" title="Add to About You so Labaik always knows this">👤 Add to profile: <strong>${escapeHtml(c.text)}</strong> <span style="color:var(--text-faint);font-size:10px">(${escapeHtml(catLabel)})</span><span class="pc-dismiss" onclick="event.stopPropagation(); profilePromoteDismiss(${i}, ${cIdx})" title="Not now">×</span></span>`
+        }).join('')
         const statsPanel = (msg.statsFinal && msg.statsPanelOpen)
           ? renderStatsPanel(msg.statsFinal)
           : ''
@@ -11011,6 +10924,7 @@ Title:`
           ${personalNote}
           ${statsPanel}
           ${memChip}
+          ${profilePromoteChips ? `<div class="profile-promote-row" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">${profilePromoteChips}</div>` : ''}
           ${actionsFull || userRememberBtn}
         </div>`
       }
@@ -12947,6 +12861,12 @@ Title:`
       // UX: session_end for previous
       logUx({ kind: 'session_end', sessionId: ux.sessionId, messagesCount: messages.length })
 
+      // v0.7.40: kill any dev servers the previous session started. Without
+      // this, a leftover python3 -m http.server sits on port 8000 forever
+      // and the new session's server can't bind. Fire-and-forget — don't
+      // block session creation on the IPC.
+      try { window.alaude?.killTrackedServers?.().catch(() => {}) } catch {}
+
       // Save current messages by SAME reference — see switchSession note.
       // If the previous session had a turn in flight, keeping the reference
       // means tokens still land in the session.messages the user will see
@@ -13097,6 +13017,9 @@ Title:`
       renderSummaryCard?.()
       renderTodosCard?.()
       resetPromptHistory?.()
+      // v0.7.31 — new session, new scope. The breadcrumb switches to this
+      // session's taskScope (if any), or hides if none.
+      try { window.taskScopeRender?.() } catch {}
       persistSessions()
     }
 
@@ -13289,7 +13212,9 @@ Title:`
       const slots = loadModelSlots()
       const current = document.getElementById('model-select')?.value
       const entries = Object.entries(slots)
-      if (!entries.length) { row.innerHTML = ''; return }
+      // v0.7.47: hide empty row so it doesn't leave a phantom span in the topbar.
+      if (!entries.length) { row.innerHTML = ''; row.style.display = 'none'; return }
+      row.style.display = ''
       const chips = []
       for (let n = 1; n <= 6; n++) {
         const modelId = slots[n]
@@ -13782,13 +13707,18 @@ Title:`
       const el = document.getElementById('topbar-cost')
       if (el) {
         const current = sessions.find(s => s.id === currentSessionId)
-        if (!current) { el.textContent = ''; return }
+        if (!current) { el.textContent = ''; el.style.display = 'none'; return }
         // Count the in-memory `messages` array since the session snapshot may
         // not have persisted the latest turn yet.
         const synthetic = { ...current, messages }
         const c = computeSessionCost(synthetic)
-        if (c.fromMessages === 0) el.textContent = ''
-        else el.textContent = c.anyLocal && c.usd === 0 ? 'free (local)' : formatUsd(c.usd)
+        if (c.fromMessages === 0) {
+          el.textContent = ''
+          el.style.display = 'none'  // v0.7.47: hide when no data
+        } else {
+          el.textContent = c.anyLocal && c.usd === 0 ? 'free (local)' : formatUsd(c.usd)
+          el.style.display = ''
+        }
         el.title = `Session cost: ${formatUsd(c.usd)} across ${c.fromMessages} reply${c.fromMessages === 1 ? '' : 's'}\n(rough estimate — 4 chars ≈ 1 token)`
       }
     }
@@ -14485,6 +14415,8 @@ Title:`
     }
 
     function toggleVoice() {
+      // v0.7.41 kill-switch.
+      if (!VOICE_ENABLED) { showRewindToast?.('🔇 Voice is disabled in this build.', false); return }
       if (isRecording) { stopVoice(false); return }
       startVoice({ pushToTalk: false })
     }
@@ -14493,6 +14425,8 @@ Title:`
     let spacePressed = false
     document.addEventListener('keydown', (e) => {
       if (e.code !== 'Space') return
+      // v0.7.41 kill-switch — don't hijack Space at all when voice is off.
+      if (!VOICE_ENABLED) return
       // Only engage PTT when not typing and input is empty
       const typing = e.target.matches?.('input, textarea, [contenteditable]')
       if (typing) return
@@ -14523,13 +14457,25 @@ Title:`
       if (folder) {
         workspacePath = folder
         const shortName = folder.split('/').pop()
-        document.getElementById('folder-label').textContent = shortName
-        document.getElementById('folder-path').textContent = folder
-        document.getElementById('folder-btn').classList.add('active')
-        document.getElementById('open-btn').style.display = 'flex'
-        refreshWorkspaceHint()
-        refreshWorkspaceFiles()
-        refreshPermModeUi()  // mode is per-workspace
+        // v0.7.35 defensive: getElementById() can return null (removed DOM
+        // elements, renamed IDs). Guard each write so one missing node
+        // doesn't abort the whole workspace setup — which was the root
+        // cause of "I picked a folder but nothing reacted" reports.
+        const byId = (id) => document.getElementById(id)
+        const set = (id, prop, val) => { const el = byId(id); if (el) el[prop] = val }
+        set('folder-label', 'textContent', shortName)
+        set('folder-path', 'textContent', folder)
+        byId('folder-btn')?.classList?.add('active')
+        // open-btn was removed from the DOM some time ago but this line
+        // was kept. That's what threw `Cannot read properties of null` on
+        // every pickWorkspace(), silently aborting the rest of the setup.
+        const openBtn = byId('open-btn')
+        if (openBtn) openBtn.style.display = 'flex'
+        refreshWorkspaceHint?.()
+        // v0.7.37: workspace file browser removed, no refresh needed.
+        refreshPermModeUi?.()  // mode is per-workspace
+        // v0.7.31 — reveal the "📁+" button now that a workspace is set.
+        try { window.taskScopeRender?.() } catch {}
       }
     }
 
@@ -14854,6 +14800,25 @@ Title:`
     let lmInstalled = []
     let lmDownloading = null // model name currently downloading
 
+    // v0.7.2: Ollama embedding-only models (used by the Memory Lens for
+    // semantic recall via /api/embed). These CANNOT do chat — /api/chat
+    // rejects them — so they must be filtered out of the chat picker
+    // while still being visible in the Local Models installer.
+    // Canonical list mirrors electron/ollama.js findEmbedModel().
+    const EMBED_ONLY_MODELS = new Set([
+      'all-minilm', 'all-minilm:latest',
+      'nomic-embed-text', 'nomic-embed-text:latest',
+      'mxbai-embed-large', 'mxbai-embed-large:latest',
+      'bge-m3', 'bge-m3:latest',
+    ])
+    function isEmbedOnlyModel(name) {
+      if (!name) return false
+      if (EMBED_ONLY_MODELS.has(name)) return true
+      // Fallback: anything whose name contains "embed" is treated as embed-only.
+      // Catches future models (e.g. "snowflake-arctic-embed") without a code change.
+      return /embed/i.test(name)
+    }
+
     function toggleLocalModelsModal() {
       const modal = document.getElementById('local-models-modal')
       const opening = modal.style.display !== 'flex'
@@ -15033,8 +14998,13 @@ Title:`
     function refreshLocalOptgroup() {
       const og = document.getElementById('model-select-local')
       if (!og) return
-      og.innerHTML = lmInstalled.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')
-      og.style.display = lmInstalled.length ? '' : 'none'
+      // v0.7.2: filter out embedding-only models (all-minilm, nomic-embed-text,
+      // etc.) — they only do /api/embed, not /api/chat, so putting them in the
+      // chat picker just confuses the user. They still show in Local Models
+      // modal + Memory Lens for install/management.
+      const chatModels = lmInstalled.filter(m => !isEmbedOnlyModel(m.name))
+      og.innerHTML = chatModels.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('')
+      og.style.display = chatModels.length ? '' : 'none'
       // New local tags need the ⚡ marker + dataset.connected so the readiness
       // auto-switch / visual cue stay consistent after a pull / remove.
       refreshModelReadiness?.()
@@ -15706,7 +15676,10 @@ Title:`
 
     // ── Init ─────────────────────────────────────────────────────────────
     // Paint the version badge ASAP so the user always knows what build they're on.
-    ;(function populateVersionBadge() {
+    // v0.7.47: defensive — if window.alaude or the DOM element isn't ready
+    // on the first pass, retry once on DOMContentLoaded. Fixes reports of
+    // "v–" staying in the topbar forever.
+    function populateVersionBadge() {
       const v = (window.alaude && window.alaude.version) || 'dev'
       const releasesUrl = (window.alaude && window.alaude.releasesUrl) || 'https://github.com/alsayadi/alaude-desktop/releases'
       const el = document.getElementById('version-badge')
@@ -15717,6 +15690,16 @@ Title:`
           try { window.alaude.openExternal(releasesUrl) } catch {}
         }
       }
+    }
+    ;(function initVersionBadge() {
+      populateVersionBadge()
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', populateVersionBadge, { once: true })
+      }
+      // Belt+braces: one more retry after other init functions have run.
+      setTimeout(populateVersionBadge, 100)
+      const v = (window.alaude && window.alaude.version) || 'dev'
+      const releasesUrl = (window.alaude && window.alaude.releasesUrl) || 'https://github.com/alsayadi/alaude-desktop/releases'
       // "What's new" — show a one-time toast when the running version differs
       // from the last-seen version in localStorage. Makes rapid releases
       // discoverable without spamming on every launch.
@@ -15771,6 +15754,54 @@ Title:`
     loadVoiceMode()
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
+  </script>
+
+  <!-- v0.7.1 refactor: memory + profile subsystems live in renderer/js/*.
+       This module bootstraps them and exposes window.* bridges that the
+       inline script above (and inline onclick handlers) still call. Module
+       scripts are deferred by default, so this runs after the inline script
+       parses — any app-init functions declared above are available via
+       globals at the time bootMemorySystem() resolves. -->
+  <script type="module">
+    import { bootMemorySystem } from './js/bootstrap.js'
+    try {
+      bootMemorySystem({
+        getWorkspace:         () => (typeof workspacePath !== 'undefined' ? workspacePath : null),
+        getMessages:          () => (typeof messages !== 'undefined' ? messages : []),
+        getCurrentSessionId:  () => (typeof currentSessionId !== 'undefined' ? currentSessionId : null),
+        toast:                (msg, err) => { try { showRewindToast?.(msg, err) } catch {} },
+        escapeHtml:           (s) => { try { return escapeHtml(s) } catch { return String(s ?? '') } },
+        renderMessages:       () => { try { renderMessages?.() } catch {} },
+        persistSessions:      () => { try { persistSessions?.() } catch {} },
+      })
+      console.log('[v0.7.1] Memory + Profile modules booted.')
+    } catch (err) {
+      console.error('[v0.7.1] Failed to boot memory modules:', err)
+    }
+  </script>
+
+  <!-- v0.7.31 Task Scope — independent subsystem: per-session subfolder
+       enforcement so file writes don't pile up in the workspace root. -->
+  <script type="module">
+    import { bootTaskScope } from './js/task-scope/bootstrap.js'
+    try {
+      bootTaskScope({
+        getSession:     () => {
+          try { return (sessions || []).find(s => s.id === currentSessionId) || null } catch { return null }
+        },
+        getWorkspace:   () => (typeof workspacePath !== 'undefined' ? workspacePath : null),
+        toast:          (msg, err) => { try { showRewindToast?.(msg, err) } catch {} },
+        onChange:       () => {
+          try { persistSessions?.() } catch {}
+          try { window.__taskScopeUI?.render?.() } catch {}
+        },
+      })
+      // Initial render after DOM + inline bindings are in place.
+      setTimeout(() => { try { window.__taskScopeUI?.render?.() } catch {} }, 0)
+      console.log('[v0.7.31] Task Scope booted.')
+    } catch (err) {
+      console.error('[v0.7.31] Failed to boot task-scope:', err)
+    }
   </script>
 </body>
 </html>

@@ -18,6 +18,9 @@ npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+# LibreOffice / Office lock + temp files
+.~lock.*
+.~*
 
 # Local-only state (never commit user credentials or telemetry)
 .env

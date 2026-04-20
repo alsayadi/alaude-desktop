@@ -137,6 +137,13 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      // v0.7.48: pass the app version + homepage via argv because sandboxed
+      // preloads can't require('../package.json'). Preload parses these out
+      // of process.argv and exposes them on window.alaude.
+      additionalArguments: [
+        `--alaude-version=${app.getVersion()}`,
+        `--alaude-homepage=${(() => { try { return require(path.join(__dirname, '..', 'package.json')).homepage || '' } catch { return '' } })()}`,
+      ],
     },
     icon: path.join(__dirname, '..', 'build', 'icons', 'icon.png'),
   })
@@ -430,6 +437,37 @@ function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
 // ── API Worker (runs in plain Node.js to avoid Electron network issues) ──────
 
 const { spawn: spawnChild } = require('child_process')
+
+// ── v0.7.40 — dev server lifecycle tracking ──────────────────────────
+// Servers started via the worker's start_dev_server tool live as detached
+// child processes. Without tracking them, they accumulate across sessions:
+// closing Labaik doesn't stop them, so the next test that picks the same
+// port silently collides with a zombie server (the recurring "localhost
+// serves old files" bug). We store PIDs here and kill them on:
+//   - window close (before quit)
+//   - new session (renderer sends 'kill-tracked-servers')
+// Tracking is lossy across Labaik restarts (servers from a previous run
+// are orphaned) — mostly that's fine since they die with the shell; the
+// stuck ones are the ones we started in THIS process.
+let trackedServers = []
+function killAllTrackedServers(reason = 'cleanup') {
+  const killed = []
+  for (const s of trackedServers) {
+    try {
+      // Detached children started by `spawn(..., {detached: true})` run as
+      // their own process group; -pid kills the whole group.
+      try { process.kill(-s.pid, 'SIGTERM') } catch { process.kill(s.pid, 'SIGTERM') }
+      killed.push(s.pid)
+    } catch (err) {
+      // Already dead / permission denied — ignore, continue to next.
+    }
+  }
+  if (killed.length) console.log(`[server-cleanup] killed ${killed.length} tracked server(s) (${reason}):`, killed)
+  trackedServers = []
+  return killed
+}
+// Last-chance cleanup when Labaik itself is quitting.
+app?.on?.('before-quit', () => killAllTrackedServers('app-quit'))
 let apiWorker = null
 let requestId = 0
 const pendingRequests = new Map()
@@ -497,6 +535,23 @@ function getWorker() {
           // Each activity tick resets the "no progress" idle timer. Long
           // website-builds etc. that stream for minutes now stay alive.
           try { pendingForActivity?.onActivity?.() } catch {}
+          continue
+        }
+        // v0.7.40: worker spawned a dev server via start_dev_server. Track
+        // its PID so we can kill it on window close / new session — avoids
+        // the "stale Python server holding port 8000" bug where every new
+        // test started a new server on top of a zombie one.
+        if (resp.type === 'server_started' && typeof resp.pid === 'number') {
+          trackedServers.push({
+            pid: resp.pid,
+            port: resp.port,
+            command: resp.command,
+            workspacePath: resp.workspacePath,
+            startedAt: Date.now(),
+          })
+          // Cap memory: keep the last 20 (oldest dropped, but still killed
+          // as part of killAllTrackedServers on app quit).
+          if (trackedServers.length > 20) trackedServers = trackedServers.slice(-20)
           continue
         }
         // v0.5.6: MCP tool bridge. Worker asks main for the current MCP
@@ -1358,6 +1413,115 @@ ipcMain.handle('pick-folder', async () => {
   })
   if (result.canceled || !result.filePaths[0]) return null
   return result.filePaths[0]
+})
+
+// v0.7.32 — "Looks like existing project" detector.
+// Returns true if the given folder has any of the markers that a
+// human developer would recognize as an established project. When it
+// does, auto-scope stays off — the user is presumably editing that
+// project, not scratching a new one beside it.
+//
+// Signals checked (any single hit = project):
+//   - .git / directory
+//   - Common build/package manifests: package.json, Cargo.toml,
+//     pyproject.toml, go.mod, Gemfile, composer.json, pnpm-lock.yaml,
+//     deno.json, mix.exs
+//   - Xcode / iOS projects: *.xcodeproj / *.xcworkspace
+//   - README.md AND >10 other files at root (existing prose project)
+//
+// Errors (unreadable dir, missing, etc.) → treated as "not a project"
+// so auto-scope can still kick in on a best-effort basis.
+ipcMain.handle('task-scope-looks-like-project', async (_e, folderPath) => {
+  const fs = require('fs')
+  try {
+    if (typeof folderPath !== 'string' || !folderPath) return false
+    const st = fs.statSync(folderPath)
+    if (!st.isDirectory()) return false
+    const entries = fs.readdirSync(folderPath, { withFileTypes: true })
+    const names = entries.map(e => e.name)
+    // Hot-exit markers
+    const markers = new Set([
+      '.git', 'package.json', 'Cargo.toml', 'pyproject.toml',
+      'go.mod', 'Gemfile', 'composer.json', 'pnpm-lock.yaml',
+      'yarn.lock', 'deno.json', 'mix.exs', 'pubspec.yaml',
+      'CMakeLists.txt', 'Makefile', 'build.gradle', 'pom.xml',
+    ])
+    for (const n of names) {
+      if (markers.has(n)) return true
+      if (n.endsWith('.xcodeproj') || n.endsWith('.xcworkspace')) return true
+    }
+    // README + substantive contents — looks like something already going on.
+    const hasReadme = names.some(n => /^README(\.md|\.txt)?$/i.test(n))
+    if (hasReadme && names.filter(n => !n.startsWith('.')).length > 10) return true
+    return false
+  } catch {
+    return false
+  }
+})
+
+// v0.7.40 — server lifecycle IPC.
+// Renderer calls these on new-session / explicit cleanup action.
+ipcMain.handle('kill-tracked-servers', async () => {
+  const killed = killAllTrackedServers('renderer-request')
+  return { killed: killed.length, pids: killed }
+})
+ipcMain.handle('list-tracked-servers', async () => {
+  // Return a shallow copy — renderer uses this to show a warning before
+  // starting a new server on a port it's about to conflict with.
+  return trackedServers.map(s => ({ pid: s.pid, port: s.port, startedAt: s.startedAt, workspacePath: s.workspacePath }))
+})
+ipcMain.handle('port-in-use', async (_e, port) => {
+  // Cheap check via `lsof -i :PORT`. Returns the PID if occupied, null if free.
+  const { execSync } = require('child_process')
+  try {
+    const out = execSync(`lsof -nP -i :${port} -t 2>/dev/null | head -1`, { encoding: 'utf8', timeout: 2000 }).trim()
+    return out ? { occupied: true, pid: parseInt(out, 10) } : { occupied: false }
+  } catch {
+    // lsof missing or exec failed — assume free
+    return { occupied: false }
+  }
+})
+
+// v0.7.31 — Task Scope.
+// Creates a subfolder under `parent`, returns the absolute path.
+// Hardened against three classes of abuse:
+//   1. `name` must not contain path separators or parent refs ("..")
+//   2. resolved target must stay strictly inside `parent` (symlink trap)
+//   3. max 80 chars for the folder name (sane filesystem limit)
+// If a folder of the exact name already exists, returns its path — idempotent,
+// no error. If the name collides but would overwrite a non-directory, errors.
+ipcMain.handle('task-scope-create-folder', async (_e, parent, name) => {
+  const fs = require('fs')
+  try {
+    if (typeof parent !== 'string' || !parent) return { ok: false, reason: 'no-parent' }
+    if (typeof name !== 'string' || !name) return { ok: false, reason: 'no-name' }
+    const cleanName = String(name).trim()
+    if (!cleanName || cleanName.length > 80) return { ok: false, reason: 'bad-name' }
+    // No separators, no '..', no reserved names on macOS
+    if (/[\\\/]|\.\./.test(cleanName)) return { ok: false, reason: 'unsafe-name' }
+    if (/^(\.DS_Store|Icon\r)$/.test(cleanName)) return { ok: false, reason: 'reserved-name' }
+    const target = path.resolve(parent, cleanName)
+    const parentResolved = path.resolve(parent)
+    // Belt + suspenders: ensure target is inside parent after resolution
+    if (!target.startsWith(parentResolved + path.sep) && target !== parentResolved) {
+      return { ok: false, reason: 'escape' }
+    }
+    // Parent must exist and be a directory
+    if (!fs.existsSync(parentResolved)) return { ok: false, reason: 'parent-missing' }
+    const parentStat = fs.statSync(parentResolved)
+    if (!parentStat.isDirectory()) return { ok: false, reason: 'parent-not-dir' }
+    // Target: create if absent, allow if already a directory (idempotent),
+    // fail if a non-directory exists at the path.
+    if (fs.existsSync(target)) {
+      const st = fs.statSync(target)
+      if (!st.isDirectory()) return { ok: false, reason: 'exists-not-dir' }
+      return { ok: true, path: target, existed: true }
+    }
+    fs.mkdirSync(target, { recursive: true })
+    return { ok: true, path: target, existed: false }
+  } catch (err) {
+    return { ok: false, reason: 'error', error: String(err?.message || err) }
+  }
 })
 
 ipcMain.handle('list-files', async (_, folderPath) => {
