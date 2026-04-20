@@ -5363,19 +5363,41 @@
 
   <!-- Memory Lens Modal -->
   <div class="modal-overlay" id="memory-modal">
-    <div class="modal" style="max-width:640px;width:92vw">
+    <div class="modal" style="max-width:720px;width:94vw;max-height:82vh;display:flex;flex-direction:column">
       <h2>
         🧠 Memory Lens
         <button class="modal-close" onclick="toggleMemoryModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
+      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
         Labaik remembers key facts about you across all sessions. Relevant memories
         are silently attached to each prompt so responses feel less amnesic.
       </div>
-      <div class="memory-modal-list" id="memory-modal-list"></div>
-      <div style="display:flex;justify-content:space-between;margin-top:12px;gap:8px">
-        <button class="msg-action-btn" onclick="memoryClearAll()" title="Delete all stored memories">↺ Clear all</button>
-        <button class="msg-action-btn" onclick="memoryAddManual()" style="border-color:var(--green);color:var(--green)">+ Add memory</button>
+      <!-- Search + stats row -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <input id="memory-search" type="text" placeholder="🔍 Search memories…" oninput="renderMemoryModal()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <span id="memory-count" style="font-size:11px;color:var(--text-faint);font-family:var(--mono,monospace)"></span>
+      </div>
+      <!-- Scrollable list -->
+      <div class="memory-modal-list" id="memory-modal-list" style="flex:1;min-height:120px;overflow-y:auto"></div>
+
+      <!-- Bulk add / import / export -->
+      <details style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:0">
+        <summary style="padding:10px 12px;cursor:pointer;font-size:12.5px;color:var(--text);font-weight:600;list-style:none">
+          ＋ Add memories — paste, import, or export
+        </summary>
+        <div style="padding:0 12px 12px">
+          <textarea id="memory-bulk-input" placeholder="Paste one fact per line. Example:&#10;I prefer TypeScript over JavaScript.&#10;My co-founder is Sara.&#10;I'm based in Dubai." rows="5" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;margin:8px 0"></textarea>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button class="msg-action-btn" onclick="memoryAddBulk()" style="border-color:var(--green);color:var(--green)">+ Add these</button>
+            <button class="msg-action-btn" onclick="memoryImportFile()" title="Pick a .txt or .md file — each non-blank line becomes a memory">📥 Import .txt / .md</button>
+            <button class="msg-action-btn" onclick="memoryExport()" title="Download all memories as plain text for backup">📤 Export</button>
+            <input type="file" id="memory-import-input" accept=".txt,.md,.json" style="display:none" onchange="memoryImportFromInput(event)" />
+          </div>
+        </div>
+      </details>
+
+      <div style="margin-top:12px;display:flex;justify-content:flex-end">
+        <button class="msg-action-btn" onclick="memoryClearAll()" title="Delete all stored memories" style="color:#c66">↺ Clear all</button>
       </div>
     </div>
   </div>
@@ -5638,6 +5660,13 @@
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
         Labaik runs a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
       </div>
+
+      <!-- Starter templates — click one to pre-fill the Add form. -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Starter templates</div>
+        <div id="skills-templates" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+
       <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
         <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a skill</div>
         <input id="skill-name" type="text" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
@@ -5651,6 +5680,8 @@
           Cron examples: <code>0 8 * * *</code> daily 8am · <code>*/15 * * * *</code> every 15 min · <code>0 9 * * 1-5</code> weekday 9am · <code>0 */2 * * *</code> every 2 hours
         </div>
       </div>
+
+      <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your skills</div>
       <div id="skills-list"></div>
     </div>
   </div>
@@ -6455,14 +6486,16 @@
     }
     function memoryAdd(text, source) {
       const t = String(text || '').trim()
-      if (!t || t.length > 240) return null
+      // v0.5.22: bumped per-entry cap from 240 → 1000 so users can paste
+      // richer context (a short paragraph) without hitting the limit.
+      if (!t || t.length > 1000) return null
       // De-dupe by normalized text
       const norm = t.toLowerCase().replace(/\s+/g, ' ')
       if (memories.some(m => m.text.toLowerCase().replace(/\s+/g, ' ') === norm)) return null
       const mem = { id: 'mem_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), text: t, createdAt: Date.now(), source: source || null }
       memories.push(mem)
-      // Cap at 200 to avoid unbounded growth; drop the oldest
-      if (memories.length > 200) memories = memories.slice(-200)
+      // Cap at 500 to avoid unbounded growth; drop the oldest
+      if (memories.length > 500) memories = memories.slice(-500)
       saveMemories()
       return mem
     }
@@ -6538,14 +6571,26 @@
     }
     function renderMemoryModal() {
       const list = document.getElementById('memory-modal-list')
+      const count = document.getElementById('memory-count')
       if (!list) return
+      const searchEl = document.getElementById('memory-search')
+      const q = (searchEl?.value || '').trim().toLowerCase()
+
+      const ordered = [...memories].sort((a, b) => b.createdAt - a.createdAt)
+      const filtered = q ? ordered.filter(m => m.text.toLowerCase().includes(q)) : ordered
+      if (count) count.textContent = q
+        ? `${filtered.length} of ${memories.length}`
+        : `${memories.length} / 500`
+
       if (!memories.length) {
-        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, or type "Remember that I prefer X" — Labaik will capture it automatically.</div>`
+        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories yet. Click "🧠 Remember" on any user message, type "Remember that I prefer X" in chat, or use the Add/Import panel below.</div>`
         return
       }
-      // Newest first
-      const ordered = [...memories].sort((a, b) => b.createdAt - a.createdAt)
-      list.innerHTML = ordered.map(m => {
+      if (!filtered.length) {
+        list.innerHTML = `<div style="color:var(--text-faint);font-size:13px;padding:20px;text-align:center">No memories match "${escapeHtml(q)}".</div>`
+        return
+      }
+      list.innerHTML = filtered.map(m => {
         const when = new Date(m.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })
         const src = m.source ? 'session' : 'manual'
         return `<div class="memory-row">
@@ -6557,6 +6602,82 @@
           <button class="msg-action-btn" onclick="memoryDelete('${escapeHtml(m.id)}')">×</button>
         </div>`
       }).join('')
+    }
+
+    // v0.5.22 bulk add: textarea with one fact per line, each becomes its
+    // own memory entry. Blank lines and super-long lines get skipped.
+    function memoryAddBulk() {
+      const ta = document.getElementById('memory-bulk-input')
+      if (!ta) return
+      const raw = ta.value || ''
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      let added = 0, skipped = 0
+      for (const line of lines) {
+        const ok = memoryAdd(line, null)
+        if (ok) added++
+        else skipped++
+      }
+      ta.value = ''
+      renderMemoryModal()
+      showRewindToast?.(`🧠 Added ${added} memories${skipped ? ` (${skipped} skipped — duplicate or too long)` : ''}`, false)
+    }
+    function memoryImportFile() {
+      document.getElementById('memory-import-input')?.click()
+    }
+    async function memoryImportFromInput(ev) {
+      const file = ev.target?.files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        let added = 0, skipped = 0
+        // JSON shape: array of strings OR array of {text, createdAt?}
+        if (file.name.endsWith('.json')) {
+          try {
+            const parsed = JSON.parse(text)
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                const t = typeof item === 'string' ? item : item?.text
+                if (t && memoryAdd(t, null)) added++; else skipped++
+              }
+            }
+          } catch {
+            showRewindToast?.('❌ Invalid JSON', true)
+            return
+          }
+        } else {
+          // Plain text / markdown — one fact per non-empty line. Markdown list
+          // bullets (-, *, +) and numbered-list prefixes get stripped.
+          const lines = text.split(/\r?\n/)
+            .map(l => l.trim().replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, ''))
+            .filter(Boolean)
+          for (const line of lines) {
+            if (memoryAdd(line, null)) added++; else skipped++
+          }
+        }
+        renderMemoryModal()
+        showRewindToast?.(`🧠 Imported ${added} memories from ${file.name}${skipped ? ` (${skipped} skipped)` : ''}`, false)
+      } catch (err) {
+        showRewindToast?.(`❌ Import failed: ${err.message}`, true)
+      } finally {
+        ev.target.value = ''  // allow re-selecting the same file
+      }
+    }
+    function memoryExport() {
+      if (!memories.length) { showRewindToast?.('No memories to export', false); return }
+      const content = [...memories]
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .map(m => m.text)
+        .join('\n')
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `labaik-memories-${new Date().toISOString().slice(0, 10)}.txt`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showRewindToast?.(`📤 Exported ${memories.length} memories`, false)
     }
     function memoryEdit(id) {
       const m = memories.find(x => x.id === id)
@@ -7126,10 +7247,56 @@ SUMMARY:`
     // Cron-driven prompts. UI modal mirrors Keys/Memory — list current
     // skills, add new ones with { name, prompt, cron, model }, toggle
     // enabled state. Firing happens in main.js; we just display.
+    // v0.5.22: starter skill templates. Clicking one pre-fills the Add form
+    // so the user can tweak + save. These aren't automatically scheduled —
+    // they're examples to copy and customize.
+    const SKILL_TEMPLATES = [
+      { icon: '📰', name: 'Morning HN digest', cron: '0 8 * * *',
+        prompt: 'Summarize the top 10 Hacker News stories from the last 24 hours. For each: 1-line takeaway + URL. Cluster by theme. Stay terse.' },
+      { icon: '🗓️', name: 'Weekday standup prep', cron: '0 9 * * 1-5',
+        prompt: "Draft a 3-line daily standup update: Yesterday / Today / Blockers. Be specific. If you don't know what I did, ask one clarifying question." },
+      { icon: '🌐', name: 'World news, 5-sentence', cron: '0 8 * * *',
+        prompt: 'Summarize the top 5 world news stories from the last 24 hours in 3 sentences each. Neutral framing. Cite sources.' },
+      { icon: '💹', name: 'Crypto price check', cron: '0 */2 * * *',
+        prompt: 'Get the current BTC, ETH, and SOL prices. Flag any >5% move vs 24 hours ago. Short reply.' },
+      { icon: '📊', name: 'Weekly Friday review', cron: '0 17 * * 5',
+        prompt: 'Summarize what I shipped this week across my sessions and workspaces. Identify 2 wins and 1 challenge. Propose 3 goals for next week.' },
+      { icon: '✅', name: 'Tomorrow prep', cron: '0 17 * * *',
+        prompt: 'Review my open TODOs across all sessions. Prioritize the top 3 for tomorrow. Format as a checklist.' },
+      { icon: '📧', name: 'Inbox triage', cron: '0 9 * * 1-5',
+        prompt: 'Using my inbox MCP (if connected), list unread emails from the last 24 hours grouped by: needs-reply / FYI / newsletters. Flag anything urgent.' },
+      { icon: '🧠', name: 'Memory review', cron: '0 20 * * 0',
+        prompt: 'Review my stored memories. Flag any that contradict each other, are stale, or could be merged. Propose edits.' },
+      { icon: '🐛', name: 'Production health', cron: '*/15 * * * *',
+        prompt: 'Check the status page at https://status.mysite.com. If anything is not "operational", tell me with a short reason.' },
+      { icon: '✍️', name: 'Writing prompt', cron: '0 7 * * *',
+        prompt: 'Give me one interesting writing prompt for today. Vary the genre (essay, short story, journal, reflection).' },
+    ]
+    function renderSkillTemplates() {
+      const container = document.getElementById('skills-templates')
+      if (!container) return
+      container.innerHTML = SKILL_TEMPLATES.map((t, i) => `
+        <button class="msg-action-btn" onclick="useSkillTemplate(${i})" title="${escapeHtml(t.prompt)}" style="font-size:11.5px">
+          ${t.icon} ${escapeHtml(t.name)}
+        </button>
+      `).join('')
+    }
+    function useSkillTemplate(idx) {
+      const t = SKILL_TEMPLATES[idx]
+      if (!t) return
+      document.getElementById('skill-name').value = t.name
+      document.getElementById('skill-prompt').value = t.prompt
+      document.getElementById('skill-cron').value = t.cron
+      // Scroll the form into view if modal is long
+      document.getElementById('skill-name').focus()
+      document.getElementById('skill-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
     function toggleSkillsModal() {
       const m = document.getElementById('skills-modal')
       const opening = !m.classList.contains('show')
       if (opening) {
+        renderSkillTemplates()
         refreshSkillsList()
         populateSkillModelSelect()
         m.classList.add('show')
