@@ -494,6 +494,9 @@ function getWorker() {
             if (sender && !sender.isDestroyed()) sender.send('tool-activity', resp.activity)
             else mainWindow?.webContents?.send('tool-activity', resp.activity)
           } catch {}
+          // Each activity tick resets the "no progress" idle timer. Long
+          // website-builds etc. that stream for minutes now stay alive.
+          try { pendingForActivity?.onActivity?.() } catch {}
           continue
         }
         // v0.5.6: MCP tool bridge. Worker asks main for the current MCP
@@ -644,10 +647,56 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
   }
 
   return new Promise((resolve, reject) => {
+    // Activity-based idle timeout. Previous design was a hard wall-clock
+    // cap (2 min cloud / 10 min local) that killed legit long workflows
+    // like 'build me a website' — models that tool-call + stream for 3+
+    // min would get cut off even though every turn was making progress.
+    // Now: each activity event (token chunk, tool_start, tool_end,
+    // file_edit, thinking) resets the timer. Only a genuinely silent
+    // provider/worker bails out.
+    const isLocalModel = provider === 'ollama'
+    // Shorter idle cap because "no activity for N seconds" is a much
+    // stronger signal than total elapsed time. Local gets longer to
+    // account for weight loading on first call.
+    const IDLE_MS = isLocalModel ? 5 * 60 * 1000 : 90 * 1000
+    // Absolute ceiling so a model in an infinite tool-loop doesn't burn
+    // credits forever even if it keeps emitting activity.
+    const ABS_MS = isLocalModel ? 30 * 60 * 1000 : 15 * 60 * 1000
+    let idleTimer = null
+    const absTimer = setTimeout(() => {
+      if (pendingRequests.has(id)) {
+        pendingRequests.delete(id)
+        const err = new Error(`Request exceeded hard cap (${Math.round(ABS_MS / 60000)} min). The model was still producing but hit the overall safety ceiling — split the task into smaller turns.`)
+        finalize(false, err); reject(err)
+      }
+    }, ABS_MS)
+    const armIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        if (pendingRequests.has(id)) {
+          pendingRequests.delete(id)
+          clearTimeout(absTimer)
+          const secs = Math.round(IDLE_MS / 1000)
+          const err = new Error(`No activity for ${secs}s. ${isLocalModel
+            ? 'Local model may be stuck — check Ollama is running and try a shorter prompt.'
+            : 'Provider is silent — could be rate-limit, a dead socket, or network trouble.'}`)
+          finalize(false, err); reject(err)
+        }
+      }, IDLE_MS)
+    }
     pendingRequests.set(id, {
       sender: senderWebContents,
-      resolve: (result) => { finalize(true, null, String(result || '').length); resolve(result) },
-      reject: (err) => { finalize(false, err); reject(err) },
+      resolve: (result) => {
+        clearTimeout(absTimer); if (idleTimer) clearTimeout(idleTimer)
+        finalize(true, null, String(result || '').length); resolve(result)
+      },
+      reject: (err) => {
+        clearTimeout(absTimer); if (idleTimer) clearTimeout(idleTimer)
+        finalize(false, err); reject(err)
+      },
+      // Called from the activity forwarder whenever the worker emits a
+      // token / tool_start / tool_end / file_edit / thinking event.
+      onActivity: armIdle,
     })
     // Pass the current permission mode for this workspace so the worker can
     // gate tool execution before the OS-level tool call actually runs.
@@ -655,24 +704,7 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
-
-    // Per-provider timeouts. Local models (Ollama) need room to (a) load
-    // multi-GB weights into RAM on the first call and (b) generate long
-    // responses on slower hardware. Cloud models should fail fast so users
-    // aren't stuck waiting on a dead API call.
-    const isLocalModel = provider === 'ollama'
-    const TIMEOUT_MS = isLocalModel ? 10 * 60 * 1000 : 2 * 60 * 1000
-    setTimeout(() => {
-      if (pendingRequests.has(id)) {
-        pendingRequests.delete(id)
-        const mins = Math.round(TIMEOUT_MS / 60000)
-        const err = new Error(`Request timed out (${mins} min). ${isLocalModel
-          ? 'Local model may be loading weights or generating a long response — try a smaller model or a shorter prompt.'
-          : 'Provider may be slow or unreachable.'}`)
-        finalize(false, err)
-        reject(err)
-      }
-    }, TIMEOUT_MS)
+    armIdle()
   })
 })
 
