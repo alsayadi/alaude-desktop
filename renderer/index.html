@@ -6729,7 +6729,11 @@
       const model = await _detectEmbedModel()
       if (!model) {
         icon.textContent = '🔎'
-        text.innerHTML = 'Semantic recall unavailable — install an embedding model (<code>ollama pull nomic-embed-text</code>) for smarter memory matching.'
+        // Offer one-click install of the TINY (45MB) embedding model so
+        // users don't have to remember the cli command or the model name.
+        // Larger heavier models (nomic-embed-text 274MB, mxbai-embed-large
+        // 669MB) remain an option via `ollama pull` for power users.
+        text.innerHTML = `Semantic recall off — install <code>all-minilm</code> (≈45 MB, runs locally) for smarter memory matching. <button class="msg-action-btn" onclick="installSemanticEmbedModel()" style="margin-left:8px;font-size:11px">Install (45 MB)</button>`
         if (btn) btn.disabled = true
         return
       }
@@ -6744,6 +6748,28 @@
         text.innerHTML = `${embedded}/${total} memories indexed with <code>${escapeHtml(model)}</code>. Click Re-index to backfill the rest.`
       }
       if (btn) btn.disabled = false
+    }
+    async function installSemanticEmbedModel() {
+      if (!await window.alaude.ollamaAvailable?.()) {
+        showRewindToast?.('Ollama isn\'t running. Open Local Models to install it first.', true)
+        return
+      }
+      const text = document.getElementById('memory-semantic-text')
+      if (text) text.textContent = 'Downloading all-minilm (~45 MB)…'
+      try {
+        await window.alaude.ollamaPull?.('all-minilm')
+        _embedModelCached = undefined  // re-detect
+        await refreshMemorySemanticStatus()
+        showRewindToast?.('🧭 Embedding model installed. Indexing…', false)
+        // Kick off a background index of existing memories now that a model
+        // is available.
+        if (memories.length) {
+          await reindexMemoryEmbeddings()
+        }
+      } catch (err) {
+        showRewindToast?.(`Install failed: ${err.message || err}`, true)
+        refreshMemorySemanticStatus()
+      }
     }
     function setMemoryRecallMode(mode) {
       memoryRecallMode = mode

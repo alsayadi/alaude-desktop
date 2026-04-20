@@ -293,12 +293,14 @@ function _run(cmd, args) {
 }
 
 // v0.6.0: Semantic memory. Ollama's /api/embed lets us vectorize text
-// locally, no cloud round-trip. Defaults to nomic-embed-text (274MB,
-// 768-dim, great general-purpose). Caller can override the model.
+// locally, no cloud round-trip. Default is all-minilm (~45MB, 384-dim —
+// plenty good for memory recall). Caller can override the model with
+// something heavier (nomic-embed-text 274MB, mxbai-embed-large 669MB)
+// if they want higher quality.
 //
 // Accepts a single string or an array; always returns an array of
 // number[] so the caller code is uniform.
-async function embed(texts, model = 'nomic-embed-text') {
+async function embed(texts, model = 'all-minilm') {
   const input = Array.isArray(texts) ? texts : [texts]
   if (!input.length) return []
   try {
@@ -325,14 +327,19 @@ async function embed(texts, model = 'nomic-embed-text') {
 // Check whether ANY embedding-capable model is installed. Returns the
 // first matching name or null if none. Used by the renderer to decide
 // between semantic and keyword recall.
+//
+// Preference order intentionally: tiny → mid → heavy. all-minilm is
+// ~45MB and more than good enough for memory recall. nomic-embed-text
+// (274MB) and mxbai-embed-large (669MB) get picked if the user already
+// has them pulled, but we don't push users toward bloated downloads.
 async function findEmbedModel() {
   const installed = await listInstalled()
   const names = installed.map(m => m.name)
   const preferred = [
-    'nomic-embed-text', 'nomic-embed-text:latest',
-    'all-minilm', 'all-minilm:latest',
-    'mxbai-embed-large', 'mxbai-embed-large:latest',
-    'bge-m3', 'bge-m3:latest',
+    'all-minilm', 'all-minilm:latest',                 // 45 MB — recommended default
+    'nomic-embed-text', 'nomic-embed-text:latest',     // 274 MB — higher quality, optional
+    'mxbai-embed-large', 'mxbai-embed-large:latest',   // 669 MB — top tier, heavy
+    'bge-m3', 'bge-m3:latest',                         // 1.2 GB — multilingual
   ]
   for (const p of preferred) if (names.includes(p)) return p
   // Fallback: any model with "embed" in its name.
@@ -340,4 +347,8 @@ async function findEmbedModel() {
   return fallback || null
 }
 
-module.exports = { isAvailable, listInstalled, pull, remove, installOllama, embed, findEmbedModel, BASE }
+// Suggested embed model name for first-time users. Used by the Memory
+// modal's one-click install button.
+const RECOMMENDED_EMBED_MODEL = 'all-minilm'
+
+module.exports = { isAvailable, listInstalled, pull, remove, installOllama, embed, findEmbedModel, RECOMMENDED_EMBED_MODEL, BASE }
