@@ -28,3 +28,4 @@ npm-debug.log*
 
 # Claude Code local state (user-machine specific — settings, locks, plans, etc.)
 .claude/
+build/icons.backup-*/

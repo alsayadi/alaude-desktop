@@ -5,60 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Labaik</title>
   <style>
+    /* v0.7.63 — "Labaik 04" brand palette.
+       Forest green + warm cream, pulled from labaik_design/logos.jsx.
+       Canonical: GREEN #0F3D2E · GREEN_SOFT #1C5641 · CREAM #F4EFE3 ·
+       CREAM_DEEP #EAE3D1 · INK #14110F.
+
+       The `--green` token is kept for backward compat (every accent style
+       in the app still reaches for it). It now points at the forest
+       flagship instead of the old fluorescent #0f3d2e. */
     :root {
-      --bg: #f5f5f5;
-      --bg-sidebar: #ebebeb;
-      --bg-input: #fff;
-      --bg-msg-user: #e8e8e8;
+      --bg: #f4efe3;               /* cream */
+      --bg-sidebar: #eae3d1;       /* cream-deep */
+      --bg-input: #fffaf0;         /* slight cream over pure white for warmth */
+      --bg-msg-user: #eae3d1;      /* cream-deep */
       --bg-msg-ai: transparent;
-      --bg-hover: #e0e0e0;
-      --border: #d8d8d8;
-      --green: #00a846;
-      --green-dim: rgba(0,168,70,0.1);
-      --green-glow: rgba(0,168,70,0.15);
-      --text: #1a1a1a;
-      --text-dim: #666;
-      --text-faint: #999;
-      --shadow: 0 4px 24px rgba(0,0,0,0.08);
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --bg-hover: #ded6c1;         /* cream-deep minus a shade */
+      --border: #d5cebe;           /* warm cream border */
+      --green: #0f3d2e;            /* forest primary */
+      --green-dim: rgba(15,61,46,0.10);
+      --green-glow: rgba(15,61,46,0.16);
+      --text: #14110f;             /* ink */
+      --text-dim: rgba(20,17,15,0.65);
+      --text-faint: rgba(20,17,15,0.45);
+      --shadow: 0 4px 24px rgba(20,17,15,0.08);
+      --shadow-sm: 0 1px 3px rgba(20,17,15,0.08);
       --radius: 12px;
       --sidebar-w: 260px;
     }
 
     :root[data-theme="dark"] {
-      --bg: #1a1a1a;
-      --bg-sidebar: #141414;
-      --bg-input: #242424;
-      --bg-msg-user: #2a2a2a;
+      /* Dark mode tilts the whole surface into the green family rather
+         than going fully neutral — keeps the brand identity intact in
+         night use. Ink ground, deep forest chrome, cream type. */
+      --bg: #0f1612;
+      --bg-sidebar: #0a100d;
+      --bg-input: #1a2520;
+      --bg-msg-user: #1c5641;      /* green-soft as user bubble */
       --bg-msg-ai: transparent;
-      --bg-hover: #2f2f2f;
-      --border: #333;
-      --green: #00d655;
-      --green-dim: rgba(0,214,85,0.12);
-      --green-glow: rgba(0,214,85,0.22);
-      --text: #f0f0f0;
-      --text-dim: #a8a8a8;
-      --text-faint: #6c6c6c;
-      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --bg-hover: #1e2a24;
+      --border: #2a3530;
+      --green: #5b8c76;            /* brightened forest for dark-mode contrast */
+      --green-dim: rgba(91,140,118,0.14);
+      --green-glow: rgba(91,140,118,0.24);
+      --text: #f4efe3;             /* cream */
+      --text-dim: rgba(244,239,227,0.65);
+      --text-faint: rgba(244,239,227,0.42);
+      --shadow: 0 4px 24px rgba(0,0,0,0.45);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
     }
 
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme]) {
-        --bg: #1a1a1a;
-        --bg-sidebar: #141414;
-        --bg-input: #242424;
-        --bg-msg-user: #2a2a2a;
+        --bg: #0f1612;
+        --bg-sidebar: #0a100d;
+        --bg-input: #1a2520;
+        --bg-msg-user: #1c5641;
         --bg-msg-ai: transparent;
-        --bg-hover: #2f2f2f;
-        --border: #333;
-        --green: #00d655;
-        --green-dim: rgba(0,214,85,0.12);
-        --green-glow: rgba(0,214,85,0.22);
-        --text: #f0f0f0;
-        --text-dim: #a8a8a8;
-        --text-faint: #6c6c6c;
-        --shadow: 0 4px 24px rgba(0,0,0,0.4);
+        --bg-hover: #1e2a24;
+        --border: #2a3530;
+        --green: #5b8c76;
+        --green-dim: rgba(91,140,118,0.14);
+        --green-glow: rgba(91,140,118,0.24);
+        --text: #f4efe3;
+        --text-dim: rgba(244,239,227,0.65);
+        --text-faint: rgba(244,239,227,0.42);
+        --shadow: 0 4px 24px rgba(0,0,0,0.45);
         --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
       }
     }
@@ -86,7 +97,7 @@
        A very subtle radial gradient of the active space's color in the upper
        corner of the chat area. Strong enough to feel, soft enough to not
        compete with content. Transitions smoothly on space switch. */
-    :root { --space-tint: #00a846; }
+    :root { --space-tint: #0f3d2e; }
     .main {
       position: relative;
       background:
@@ -2115,7 +2126,7 @@
     .msg-content a {
       color: var(--green);
       text-decoration: none;
-      border-bottom: 1px solid rgba(0,168,70,0.25);
+      border-bottom: 1px solid rgba(15,61,46,0.25);
     }
     .msg-content a:hover { border-bottom-color: var(--green); }
     .msg-content strong { font-weight: 700; color: var(--text); }
@@ -2637,7 +2648,7 @@
       overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
-    .file-diff-line.add { background: rgba(0,168,70,0.10); }
+    .file-diff-line.add { background: rgba(15,61,46,0.10); }
     .file-diff-line.add .marker { color: var(--green); }
     .file-diff-line.del { background: rgba(231,76,60,0.10); }
     .file-diff-line.del .marker { color: #e74c3c; }
@@ -2925,8 +2936,8 @@
       animation: wsPulse 2s ease-in-out infinite;
     }
     @keyframes wsPulse {
-      0%, 100% { border-color: var(--border); box-shadow: 0 0 0 0 rgba(0,168,70,0); }
-      50%      { border-color: var(--green); box-shadow: 0 0 0 4px rgba(0,168,70,0.12); }
+      0%, 100% { border-color: var(--border); box-shadow: 0 0 0 0 rgba(15,61,46,0); }
+      50%      { border-color: var(--green); box-shadow: 0 0 0 4px rgba(15,61,46,0.12); }
     }
 
     .workspace-hint {
@@ -2979,7 +2990,7 @@
       display: none;
       position: absolute;
       inset: 0;
-      background: rgba(0,168,70,0.08);
+      background: rgba(15,61,46,0.08);
       border: 2px dashed var(--green);
       border-radius: 12px;
       z-index: 50;
@@ -3008,7 +3019,7 @@
       align-items: center;
       gap: 6px;
       background: var(--green-dim);
-      border: 1px solid rgba(0,168,70,0.25);
+      border: 1px solid rgba(15,61,46,0.25);
       color: var(--green);
       padding: 3px 8px 3px 4px;
       border-radius: 6px;
@@ -14988,7 +14999,7 @@ Title:`
       // and a breath of color around the logo. You *feel* a space change
       // without visual chaos. The space color comes from spaces.js; for
       // custom spaces, fall back to the app green.
-      document.documentElement.style.setProperty('--space-tint', space.color || '#00a846')
+      document.documentElement.style.setProperty('--space-tint', space.color || '#0f3d2e')
       document.documentElement.setAttribute('data-space', space.id || 'general')
 
       // Update sidebar button
@@ -15124,7 +15135,7 @@ Title:`
 
       const space = {
         id, name, icon,
-        color: '#00a846',
+        color: '#0f3d2e',
         description: desc || name,
         systemPromptAddition: prompt,
         quickActions: [],
