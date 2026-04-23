@@ -31,9 +31,11 @@
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
+const { BASE_DIR, LEGACY_ALAUDE_DIR, ensureBaseDir } = require('./paths')
 
-const BASE_DIR = path.join(os.homedir(), '.alaude')
+// Writes land in ~/.labaik/. Reads check ~/.labaik/ first, and fall back
+// to ~/.alaude/ (v0.7.59–v0.7.63 legacy home) when the new file hasn't
+// been created yet — a silent one-time migration on first write.
 const SAFE_NAME = /^[a-z][a-z0-9_-]{0,63}$/i
 
 function _resolve(name) {
@@ -43,13 +45,29 @@ function _resolve(name) {
   return path.join(BASE_DIR, name + '.json')
 }
 
+function _legacyPath(name) {
+  return path.join(LEGACY_ALAUDE_DIR, name + '.json')
+}
+
 function read(name) {
   try {
     const file = _resolve(name)
-    if (!fs.existsSync(file)) return null
-    const raw = fs.readFileSync(file, 'utf8')
-    if (!raw) return null
-    return JSON.parse(raw)
+    // Fast path — canonical ~/.labaik/ location exists.
+    if (fs.existsSync(file)) {
+      const raw = fs.readFileSync(file, 'utf8')
+      return raw ? JSON.parse(raw) : null
+    }
+    // Migration path — fall back to ~/.alaude/ if present. Don't copy
+    // here; the next write() will land in the new location and subsequent
+    // reads will hit the fast path. This keeps the read path zero-disk-write
+    // (important: boot-time reads happen concurrently and a copy storm
+    // would be a footgun).
+    const legacy = _legacyPath(name)
+    if (fs.existsSync(legacy)) {
+      const raw = fs.readFileSync(legacy, 'utf8')
+      return raw ? JSON.parse(raw) : null
+    }
+    return null
   } catch (err) {
     console.warn('[json-store] read(' + name + ') failed:', err.message)
     return null
@@ -59,7 +77,7 @@ function read(name) {
 function write(name, obj) {
   try {
     const file = _resolve(name)
-    fs.mkdirSync(BASE_DIR, { recursive: true })
+    ensureBaseDir()
     const tmp = file + '.tmp'
     // pretty-printed on purpose — these files are small and users sometimes
     // grep/inspect them. A few extra bytes is cheap for debuggability.

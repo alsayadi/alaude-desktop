@@ -1,23 +1,33 @@
 /**
  * OODA loop — UX self-tuning microscope for Labaik (local/dev only).
  *
- * Observe: append every interaction event to ~/.claude/alaude-events.ndjson.
+ * Observe: append every interaction event to ~/.labaik/events.ndjson.
  * Orient:  every MIN_BATCH_SIZE outcomes, group by dimension and compute stats.
  * Decide:  priority-ordered rules return ONE proposal per batch.
- * Act:     proposal is written to ~/.claude/alaude-ux-proposals.md — a human
+ * Act:     proposal is written to ~/.labaik/ux-proposals.md — a human
  *          reviews before applying. Iron law: no auto-mutation of UX copy.
  *
- * State survives restarts via JSON file at ~/.claude/alaude-ooda-state.json.
+ * State survives restarts via JSON file at ~/.labaik/ooda-state.json.
+ *
+ * v0.7.64: paths moved from ~/.claude/ to ~/.labaik/ to unlock Labaik's
+ * data from the shared ~/.claude/ dir (which some users also use for the
+ * Claude Code CLI). Legacy files are resolved via paths.resolveWithMigration
+ * on first access — safe one-time copy, never deletes the originals.
  */
 
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const paths = require('./paths')
 
-const DIR = path.join(os.homedir(), '.claude')
-const EVENTS_FILE = path.join(DIR, 'alaude-events.ndjson')
-const STATE_FILE = path.join(DIR, 'alaude-ooda-state.json')
-const PROPOSALS_FILE = path.join(DIR, 'alaude-ux-proposals.md')
+const DIR = paths.BASE_DIR
+const LEGACY_DIR = paths.LEGACY_CLAUDE_DIR
+
+// Canonical (new) + legacy paths. `resolveWithMigration` copies from
+// legacy to canonical on first access, then the canonical path wins.
+const EVENTS_FILE    = paths.resolveWithMigration(paths.EVENTS_FILE,    [path.join(LEGACY_DIR, 'alaude-events.ndjson')])
+const STATE_FILE     = paths.resolveWithMigration(paths.OODA_STATE_FILE, [path.join(LEGACY_DIR, 'alaude-ooda-state.json')])
+const PROPOSALS_FILE = paths.resolveWithMigration(paths.UX_PROPOSALS_FILE, [path.join(LEGACY_DIR, 'alaude-ux-proposals.md')])
 
 // Solo-user dev instrumentation — small batch size is fine. Canonical rec is
 // ≥30 but for a single user 10 gives a usable first diagnosis in one session.
@@ -32,7 +42,7 @@ const ABANDON_WINDOW_MS = 30_000    // no further activity in 30s → abandoned
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ensureDir() {
-  try { fs.mkdirSync(DIR, { recursive: true }) } catch {}
+  paths.ensureBaseDir()
 }
 
 /**

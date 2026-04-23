@@ -40,6 +40,7 @@ const permissions = require('./permissions')
 const skills = require('./skills')
 const mcp = require('./mcp')
 const jsonStore = require('./json-store')
+const paths = require('./paths')
 const { detectProvider, getBaseURL, PROVIDER_KEY_IDS } = require('./provider-registry')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
@@ -219,13 +220,17 @@ function getCredential(provider) {
     dashscope: 'DASHSCOPE_API_KEY',
     zhipu: 'ZHIPU_API_KEY',
   }
-  const configDirs = [
-    path.join(os.homedir(), '.claude'),
-    path.join(os.homedir(), 'claude-local-src'),
+  // v0.7.64: credentials now live at ~/.labaik/credentials.json. We
+  // still READ from the legacy ~/.claude/.credentials.json (and the
+  // `claude-local-src/` dev path) so existing users don't lose access —
+  // first-save will copy them over to the new location.
+  const credPaths = [
+    paths.CREDENTIALS_FILE,
+    path.join(os.homedir(), '.claude', '.credentials.json'),
+    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
   ]
-  for (const dir of configDirs) {
+  for (const credPath of credPaths) {
     try {
-      const credPath = path.join(dir, '.credentials.json')
       if (!fs.existsSync(credPath)) continue
       const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
       const oauth = data?.providerOauthTokens?.[provider]
@@ -377,13 +382,20 @@ function oauthAnthropic() {
 
 function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
   const fs = require('fs')
-  const configDir = path.join(os.homedir(), '.claude')
-  const credPath = path.join(configDir, '.credentials.json')
+  // v0.7.64: writes go to ~/.labaik/credentials.json. Reads still fall
+  // back to ~/.claude/.credentials.json until the user saves a key, at
+  // which point the new file becomes authoritative.
+  const credPath = paths.CREDENTIALS_FILE
+  const legacyCredPath = path.join(os.homedir(), '.claude', '.credentials.json')
 
   let data = {}
   try {
     if (fs.existsSync(credPath)) {
       data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
+    } else if (fs.existsSync(legacyCredPath)) {
+      // First write after upgrade: seed from the legacy file so other
+      // providers' keys don't get wiped when saving one.
+      data = JSON.parse(fs.readFileSync(legacyCredPath, 'utf8'))
     }
   } catch {}
 
@@ -403,7 +415,7 @@ function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
     }
   }
 
-  fs.mkdirSync(configDir, { recursive: true })
+  paths.ensureBaseDir()
   fs.writeFileSync(credPath, JSON.stringify(data, null, 2), { mode: 0o600 })
 }
 

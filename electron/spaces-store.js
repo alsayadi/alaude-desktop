@@ -1,16 +1,25 @@
 /**
- * Custom space persistence — reads/writes ~/.claude/alaude-spaces.json
+ * Custom space persistence.
+ *
+ * v0.7.64: writes go to ~/.labaik/spaces.json. Reads fall back to the
+ * legacy ~/.claude/alaude-spaces.json for users upgrading from an
+ * earlier build — the file migrates itself on the next write.
  */
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const paths = require('./paths')
 
-const STORE_PATH = path.join(os.homedir(), '.claude', 'alaude-spaces.json')
+const STORE_PATH = paths.SPACES_FILE
+const LEGACY_STORE_PATH = path.join(os.homedir(), '.claude', 'alaude-spaces.json')
 
 function readStore() {
   try {
     if (fs.existsSync(STORE_PATH)) {
       return JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'))
+    }
+    if (fs.existsSync(LEGACY_STORE_PATH)) {
+      return JSON.parse(fs.readFileSync(LEGACY_STORE_PATH, 'utf8'))
     }
   } catch {}
   return { customSpaces: [], activeSpaceId: 'general' }
@@ -18,8 +27,7 @@ function readStore() {
 
 function writeStore(data) {
   try {
-    const dir = path.dirname(STORE_PATH)
-    fs.mkdirSync(dir, { recursive: true })
+    paths.ensureBaseDir()
     fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2))
     return true
   } catch { return false }

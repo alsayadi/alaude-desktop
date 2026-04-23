@@ -131,10 +131,17 @@ dns.lookup = function patchedLookup(hostname, options, callback) {
 // OAuth tokens (Bearer) beat API keys (x-api-key) if both are present.
 function getCredential(provider) {
   if (provider === 'ollama') return { value: 'ollama', isOauth: false }
-  const dirs = [path.join(os.homedir(), '.claude'), path.join(os.homedir(), 'claude-local-src')]
-  for (const dir of dirs) {
+  // v0.7.64: credentials now live at ~/.labaik/credentials.json. We keep
+  // reading from ~/.claude/.credentials.json (legacy) and the dev
+  // `claude-local-src/` fallback so existing users don't lose access —
+  // main.js writes to the new location on any set-key, which takes over.
+  const credPaths = [
+    path.join(os.homedir(), '.labaik', 'credentials.json'),
+    path.join(os.homedir(), '.claude', '.credentials.json'),
+    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
+  ]
+  for (const credPath of credPaths) {
     try {
-      const credPath = path.join(dir, '.credentials.json')
       if (!fs.existsSync(credPath)) continue
       const data = JSON.parse(fs.readFileSync(credPath, 'utf8'))
       const oauth = data?.providerOauthTokens?.[provider]
