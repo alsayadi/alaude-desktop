@@ -1,51 +1,62 @@
-// ad-hoc-sign.js — electron-builder `afterPack` hook.
+// scripts/ad-hoc-sign.js — electron-builder `afterPack` hook.
 //
-// WHY THIS EXISTS
-//   Shipping an unsigned macOS app used to work with a single Gatekeeper
-//   warning ("unidentified developer, right-click → Open"). Since
-//   macOS Catalina + arm64, fully-unsigned binaries are rejected with
-//   the lying message "X is damaged and can't be opened. Move to
-//   Trash." — which looks to end-users like the download is corrupt,
-//   not like a signing issue they can work around.
+// DUAL-MODE SIGNING
+//   1. **Developer ID present** (prod) — skip this hook entirely and
+//      let electron-builder run its normal codesign path using the
+//      Developer ID cert + entitlements + hardened runtime. That path
+//      is triggered when package.json's `mac.identity` is NOT null.
+//   2. **No Developer ID** (dev) — fall through to ad-hoc signing here
+//      so local builds still produce an openable .app (via right-click
+//      → Open on older macOS). Ad-hoc won't pass Gatekeeper on
+//      Sequoia+ but is useful for quick local testing.
 //
-//   An **ad-hoc signature** (`codesign --sign -`) is free, needs no
-//   Apple Developer account, and gets us back to the old
-//   "unidentified developer" flow: user right-clicks → Open → Open.
-//   Still not great, but dramatically better than "damaged".
-//
-//   The proper fix is a Developer ID cert + notarization ($99/yr).
-//   When that lands, this hook becomes dead code and should be
-//   removed in favor of electron-builder's standard signing config.
-//
-// WHAT THIS DOES
-//   After electron-builder packages the .app but before it builds the
-//   DMG / zip, recursively ad-hoc sign every Mach-O inside (the main
-//   app, Electron Helper variants, embedded frameworks). The
-//   `--force --deep` flags make codesign clobber any partial/stale
-//   signatures from the packager.
+// HOW THIS FILE GETS BYPASSED IN PROD
+//   package.json's `mac.identity` starts as null (forcing ad-hoc path).
+//   When a Developer ID cert is installed in Keychain and we want to
+//   produce a notarizable build, package.json sets identity to
+//   "Developer ID Application: <name> (<teamid>)" and electron-builder
+//   handles signing natively. This script still runs, but we detect
+//   that a real signature is already in place and no-op.
 
 const { execFileSync } = require('child_process')
 const path = require('path')
 
+function isDeveloperIDSigned(appPath) {
+  try {
+    const out = execFileSync('codesign', ['-dv', '--verbose=2', appPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    // electron-builder already signed with Developer ID → 'Authority=Developer ID Application' appears.
+    return /Authority=Developer ID Application/.test(out)
+  } catch {
+    return false
+  }
+}
+
 exports.default = async function adHocSign(context) {
-  // Only sign macOS builds. Windows / Linux skip.
   if (context.electronPlatformName !== 'darwin') return
 
   const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`)
-  console.log('[ad-hoc-sign] signing:', appPath)
+
+  // Respect existing Developer ID signing — don't overwrite Apple-trusted
+  // signatures with ad-hoc ones. This keeps the hook safe to leave on
+  // in prod builds.
+  if (isDeveloperIDSigned(appPath)) {
+    console.log('[sign] Developer ID signature already in place — skipping ad-hoc.')
+    return
+  }
+
+  console.log('[sign] ad-hoc signing:', appPath)
   try {
     execFileSync('codesign', [
       '--force',           // overwrite any existing signature
       '--deep',            // recurse into nested bundles + frameworks
-      '--sign', '-',       // ad-hoc identity (the literal dash)
-      '--timestamp=none',  // don't try to reach Apple's timestamp server
+      '--sign', '-',       // ad-hoc identity
+      '--timestamp=none',
       appPath,
     ], { stdio: 'inherit' })
-    // Quick verify so the build fails loudly if something went wrong.
     execFileSync('codesign', ['--verify', '--verbose=1', appPath], { stdio: 'inherit' })
-    console.log('[ad-hoc-sign] ok')
+    console.log('[sign] ad-hoc ok')
   } catch (err) {
-    console.error('[ad-hoc-sign] FAILED:', err.message)
+    console.error('[sign] FAILED:', err.message)
     throw err
   }
 }

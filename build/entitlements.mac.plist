@@ -12,5 +12,18 @@
   <true/>
   <key>com.apple.security.files.user-selected.read-write</key>
   <true/>
+  <!-- Node native addons (pdf-parse, xlsx, mammoth) load .node binaries
+       that aren't Apple-signed. Without this, they fail to load after
+       notarization. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <!-- NSMicrophoneUsageDescription / NSCameraUsageDescription in
+       Info.plist aren't enough under hardened runtime — the device
+       access also needs explicit entitlements. Used by voice input
+       and webcam photo attachments. -->
+  <key>com.apple.security.device.microphone</key>
+  <true/>
+  <key>com.apple.security.device.camera</key>
+  <true/>
 </dict>
 </plist>

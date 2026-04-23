@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.7.59",
+  "version": "0.7.60",
   "description": "Labaik — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "homepage": "https://github.com/alsayadi/alaude-desktop",
@@ -29,16 +29,18 @@
       "renderer/**/*",
       "build/**/*"
     ],
-    "afterPack": "./scripts/ad-hoc-sign.js",
+    "afterSign": "./scripts/notarize.js",
     "asarUnpack": [
       "electron/**/*"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "build/icons/icon.png",
-      "identity": null,
-      "hardenedRuntime": false,
+      "identity": "Mal Network Limited (D9J9BCYYU4)",
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "extendInfo": {
         "CFBundleName": "Labaik",
         "CFBundleDisplayName": "Labaik",
