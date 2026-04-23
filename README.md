@@ -1,189 +1,162 @@
 <p align="center">
-  <img src="renderer/logo.jpg" width="120" alt="Alaude logo" />
+  <img src="renderer/logo.jpg" width="96" alt="Labaik logo" />
 </p>
 
-<h1 align="center">Alaude</h1>
-<p align="center"><em>A desktop AI assistant for your computer — not your browser tab.</em></p>
+<h1 align="center">labaik</h1>
+<p align="center"><em>Every AI. One desktop.</em></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" />
+  <img src="https://img.shields.io/badge/platform-macOS-blue" />
+  <img src="https://img.shields.io/badge/windows%20%2F%20linux-coming%20soon-lightgrey" />
   <img src="https://img.shields.io/badge/electron-33-47848F" />
   <img src="https://img.shields.io/badge/node-18%2B-339933" />
   <img src="https://img.shields.io/badge/license-MIT-green" />
 </p>
 
----
-
-## What this is
-
-Alaude is an Electron desktop app that talks to any LLM you can point it at. A single AI surface that:
-
-- Runs models **locally** (via Ollama) when the prompt shouldn't leave the machine
-- Routes to **cloud models** (Claude, GPT-4, Gemini, GLM-5.1, Qwen, etc.) when heavier horsepower is needed
-- Exposes **domain-specific "Spaces"** — Health, Finance, Legal, Real Estate, Education, Marketing — each with its own system prompt and quick-actions, instead of the same prompt box for every task
-- Watches itself and surfaces **what's slow / broken / under-used** via a built-in OODA loop
-- Can actually *run commands, write files, and open browser tabs* when given a workspace folder — not just chat
+<p align="center">
+  <a href="https://labaik.ai">labaik.ai</a> ·
+  <a href="https://github.com/alsayadi/alaude-desktop/releases/latest">Download</a> ·
+  <a href="https://github.com/alsayadi/alaude-desktop/issues">Issues</a>
+</p>
 
 ---
 
-## Features
+## What is Labaik
 
-### 🦙 Local models (via Ollama)
-First-class support for running models on-device. In-app catalog for **Qwen 3.6**, **Gemma 4** (E2B/E4B/26B/31B), **Llama 3.2/3.3**, **DeepSeek R1**, and anything else with an Ollama tag. One click to download, progress bar, cancel button. Once installed, the model shows up in the dropdown alongside cloud models.
+Labaik is a macOS desktop app that talks to every AI provider worth using — **Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan** — plus fully-offline **local models via Ollama**. One app, your API keys, no middleman, no monthly fee. Open-source under MIT.
 
-### ☁️ Cloud providers
-Anthropic, OpenAI (GPT-4, o3, o4), Google Gemini, xAI Grok, Moonshot Kimi, Alibaba Qwen (DashScope), Zhipu GLM-5.1. API keys stored in `~/.claude/.credentials.json` with mode `0600`.
+The name `labaik` is Arabic for *"here I am — at your service."* That's the idea: a quiet desktop client that's wherever you need it, for whichever AI you want today.
 
-### 🧭 Spaces — domain-tuned AI modes
-Seven built-in Spaces with tuned system prompts and quick-actions:
-- **General** — the default
-- **Health** — lab result analysis, drug interaction checks, PHQ-9 / GAD-7 screening, BMI/BMR calculators
-- **Finance** — budgets, invoices, P&L analysis, cash-flow forecasts
-- **Real Estate** — property analysis, MLS listings, investment ROI
-- **Legal** — contract review, NDA drafting, compliance checks
-- **Education** — lesson plans, quizzes, grading, study guides
-- **Marketing** — social posts, email campaigns, SEO, ad copy
+---
 
-Plus: custom Spaces you can create in-app — each gets its own system prompt, placeholder, and quick-actions.
+## Why Labaik
 
-### 🛠️ Tool calling
-Models can actually do things in a workspace folder you pick:
-- `read_file`, `write_file`, `list_directory`
-- `run_command` — shell commands
-- `open_in_browser`, `start_dev_server`
+| | |
+|---|---|
+| **No subscription** | $0 app fee. You pay only the providers you already have keys for — or pay nothing when you run local models. |
+| **10 providers, one dropdown** | Anthropic · OpenAI · Google · xAI · Kimi (kimi.ai + kimi.com) · Alibaba Qwen · Zhipu GLM · MiniMax · Tencent Hunyuan · Ollama. |
+| **Crew — multi-model in parallel** | Send one prompt to 2–4 models at once. Each replies in its own lane. Pick the best or have them debate. |
+| **Skills — cron for AI** | Schedule Labaik to do things on its own. *"Summarize HN at 8am." "Draft standup at 6pm." "Ping prod every 15 min."* Results stream to a dedicated session. |
+| **Built-in browser** | The agent can open URLs, read pages, fill forms, click buttons, take screenshots — all inside the app. |
+| **Persistent memory + profile** | "Remember this" on any message. Profile = always-on facts about you. Memory = workspace-scoped, searchable with embeddings. |
+| **Rich content display** | Real markdown, diffs, charts, Mermaid, SVG, file previews, artifacts. Whatever the model returns, the app renders it right. |
+| **Tool calling + MCP** | Six built-in workspace tools (`read_file`, `write_file`, `list_directory`, `run_command`, `open_in_browser`, `start_dev_server`) plus full MCP server support. |
+| **Privacy by construction** | No Labaik backend. Keys at `~/.labaik/credentials.json` mode `0600`. Prompts go machine → provider directly. Zero telemetry. |
+| **Source-available, MIT** | Fork it, inspect it, ship your own build. |
 
-Enabled for capable models (Claude, GPT-4+, o-series, Gemma 4, Qwen 3.6, Llama 3.3, etc.). Disabled for tiny models that can't format tool calls reliably (Gemma 3 1B, Llama 3.2 1B/3B, DeepSeek R1 distills). Live activity chips show each tool call as it happens.
+---
 
-### 📊 UX OODA loop
-Every interaction is logged locally (`~/.claude/alaude-events.ndjson`) with a composite health score. Every 10 outcomes, a priority-ordered analyzer runs six diagnose rules:
+## Current flagship models (as of v0.7.64)
 
-1. High error rate on a provider
-2. High retry rate on a space × model pair
-3. Quick-action abandonment
-4. Provider latency outliers / high model-switch rate
-5. Underused quick-actions
-6. Healthy fallback
-
-Proposals land in `~/.claude/alaude-ux-proposals.md` — **never auto-applied** (iron law: humans decide anything affecting UX copy). An in-app dashboard (**📊 Insights** button) shows the current health score, dimensional breakdown, and the latest diagnosis.
-
-### ✨ Chat polish
-- Real markdown rendering (headers, bullets, bold, inline code, links, fenced code blocks with copy buttons and language tags)
-- Hover-to-copy every response
-- Smart auto-scroll — won't yank you down when you scroll up to re-read
-- Keyboard shortcuts: `⌘K` focus input, `⌘N` new session, `Esc` close modals
-- Voice input (Web Speech API)
-- File attachments (PDF, DOCX, XLSX, images, plain text)
-- Drag-and-drop
+| Provider | Flagship | Also ships |
+|---|---|---|
+| Anthropic | Claude Opus 4.7 | Sonnet 4.6 (default), Haiku 4.5 |
+| OpenAI | GPT-5.4 | 5.4 Thinking, 5.4 Pro, 5.3 |
+| Google | Gemini 3.1 Pro | 3 Flash, 3.1 Flash-Lite |
+| xAI | Grok 4.20 Reasoning | 4.20 Non-Reasoning |
+| Kimi (kimi.ai) | Kimi K2.6 | K2 Thinking Turbo |
+| Kimi (kimi.com / CN) | Kimi K2.6 | K2 Thinking Turbo, Moonshot v1 128k |
+| Alibaba DashScope | Qwen 3.6 Max Preview | Qwen 3 Coder Plus (1M ctx) |
+| Zhipu | GLM-5 | GLM-5.1 (#1 SWE-Bench Pro) |
+| MiniMax | MiniMax-M2.7 | |
+| Tencent | Hunyuan Hy3 Preview | |
+| Ollama (local) | Qwen 3.6 | Gemma 4, Llama 3.2/3.3, DeepSeek R1 |
 
 ---
 
 ## Download
 
-Prebuilt binaries are attached to each [GitHub Release](https://github.com/alsayadi/alaude-desktop/releases/latest).
+Prebuilt binaries: [**Releases**](https://github.com/alsayadi/alaude-desktop/releases/latest). Developer-ID signed with hardened runtime.
 
 | Platform | File |
 |---|---|
-| **macOS · Apple Silicon** (M1/M2/M3/M4) | `Alaude-<version>-arm64.dmg` |
-| **macOS · Intel** | `Alaude-<version>-x64.dmg` or `.dmg` without arch suffix |
-| **Windows** | `Alaude Setup <version>.exe` (planned) |
-| **Linux** | `Alaude-<version>.AppImage` or `.deb` (planned) |
+| **macOS · Apple Silicon** (M1/M2/M3/M4) | `Labaik-<version>-arm64.dmg` |
+| **macOS · Intel** | `Labaik-<version>.dmg` |
+| **Windows** | coming soon (`NSIS .exe`) |
+| **Linux** | coming soon (`.AppImage`, `.deb`) |
 
-### First launch on macOS
+### First launch on macOS Sequoia
 
-The app is unsigned (no Apple Developer certificate). On first launch, macOS Gatekeeper will say:
+Until Apple notarizes the build, you'll see: *"Apple could not verify Labaik is free of malware."*
 
-> *"Alaude" cannot be opened because the developer cannot be verified.*
+1. Click **Done** on the warning.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to the **Security** section → click **Open Anyway** next to "Labaik was blocked".
+4. Confirm with Touch ID / password.
 
-Two workarounds — pick one, only needed the first time:
-
-1. **Right-click** the app in Applications → **Open** → click **Open** in the dialog.
-2. Or in Terminal: `xattr -cr /Applications/Alaude.app`
-
-After that the app launches normally.
+One-time. After that, Labaik opens with a double-click.
 
 ---
 
-## Architecture
-
-Three processes, three concerns:
-
-```
-┌─────────────────────┐    IPC    ┌─────────────────────┐   JSON/stdio   ┌──────────────────┐
-│  Renderer           │ ────────> │  Main (Electron)    │ ─────────────> │  API Worker      │
-│  renderer/          │ <──────── │  electron/main.js   │ <───────────── │  (plain Node)    │
-│  index.html         │           │                     │                │  api-worker.js   │
-└─────────────────────┘           └─────────────────────┘                └──────────────────┘
-  UI + user events                  IPC routing, file ops,                 Talks to LLM
-                                    Ollama pull/list/remove,               providers,
-                                    credential storage                     executes tools
-```
-
-Why the worker? Electron's `ELECTRON_RUN_AS_NODE` mode had a nasty interaction with a VPN's DNS resolver that made `api.openai.com` and `api.anthropic.com` unreachable. The worker runs under the system's `node` binary with a custom `dns.lookup` monkey-patch that falls back to `8.8.8.8` / `1.1.1.1` when the system resolver whiffs. Bonus: heavy LLM work doesn't block the UI process.
-
-### Key files
-
-| Path | What it does |
-|---|---|
-| `electron/main.js` | Window creation, IPC handlers, worker spawn + lifecycle, credential storage, OAuth PKCE flow |
-| `electron/api-worker.js` | Chat request handling, DNS patch, provider routing, tool call execution |
-| `electron/ollama.js` | HTTP wrapper around `localhost:11434` — list, pull (with progress), remove |
-| `electron/model-catalog.js` | Curated list of downloadable local models (Qwen 3.6, Gemma 4, etc.) |
-| `electron/ooda.js` | Event logger, batch analyzer, diagnose rules, proposal writer |
-| `electron/spaces.js` | Built-in Spaces definitions |
-| `electron/spaces-store.js` | Persistence for custom user Spaces |
-| `electron/health/*` | Domain-specific tools: lab reference DB, drug interactions, PHQ-9/GAD-7, calculators, red-flag triage |
-| `electron/preload.js` | contextBridge surface exposed to the renderer |
-| `renderer/index.html` | Single-file UI: chat, Spaces, modals, dashboard |
-| `docs/build-log.md` | Notes from the overnight build session where most of the app came together |
-
----
-
-## Run locally
+## Run from source
 
 ```bash
-# Prerequisites
-# - macOS / Windows / Linux
-# - Node.js 18+
-# - (Optional) Ollama for local models: https://ollama.com/download
-
 git clone git@github.com:alsayadi/alaude-desktop.git
 cd alaude-desktop
-npm install
-npm start
+bun install         # or: npm install
+bun start           # or: npm start
 ```
 
-First launch will prompt for at least one API key (or you can skip straight to local models if Ollama is running).
+**Requires:** Bun or Node 18+, Electron 33 (auto-installed).
 
-**Build a distributable:**
-```bash
-npm run build:mac    # .dmg + .zip
-npm run build:win    # .exe installer
-npm run build:linux  # .AppImage + .deb
-```
+**Build locally:** `bun run build:mac` (or `build:win` / `build:linux`). Output in `dist/`.
 
 ---
 
-## Disclaimers
+## Where Labaik stores data
 
-**Health Space is informational only.** Alaude's `analyze_lab_result`, `check_drug_interactions`, `score_phq9`, `score_gad7`, and related tools surface reference ranges and screening scores — they do not diagnose, prescribe, or replace qualified medical advice. The system prompt for the Health Space includes this reminder on every response. If you're reviewing real lab work or symptoms, see a clinician.
+All under `~/.labaik/`:
 
-**API keys** are stored locally in `~/.claude/.credentials.json` (mode `0600`). They never leave your machine except as outbound requests to the respective providers.
+| File | Contents |
+|---|---|
+| `credentials.json` | Provider API keys + OAuth tokens, mode 0600 |
+| `sessions.json` | Chat history |
+| `memory.json` | Scoped memory entries (with embeddings) |
+| `profile.json` | Always-on profile facts |
+| `skills.json` + `skill-history.ndjson` | Scheduled Skills + their run log |
+| `spaces.json` | Custom Spaces |
+| `permissions.json` | Per-workspace permission modes |
+| `events.ndjson` + `ooda-state.json` + `ux-proposals.md` | Local-only OODA UX loop |
 
-**Telemetry** is local-only. The OODA loop writes interaction events to `~/.claude/alaude-events.ndjson` on your own disk. Nothing is sent to any remote service.
+v0.7.64 consolidated everything into `~/.labaik/`. Legacy files under `~/.claude/` or `~/.alaude/` are read as a fallback and silently copied forward on first access — nothing is moved or deleted from the legacy locations.
 
 ---
 
-## Credits
+## Project layout
 
-- [Electron](https://www.electronjs.org/) — desktop shell
-- [Ollama](https://ollama.com/) — local model runtime
-- [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript), [openai](https://github.com/openai/openai-node), [@google/genai](https://github.com/googleapis/js-genai) — provider SDKs
-- Model weights: Google DeepMind (Gemma), Alibaba (Qwen), Meta (Llama), DeepSeek, Z.ai (GLM-5.1) — under their respective licenses
-
-Built with heavy assist from [Claude Code](https://www.anthropic.com/claude/code). The [build log](docs/build-log.md) covers the session that shipped most of the features listed above.
+```
+alaude-desktop/
+├── electron/
+│   ├── main.js              IPC routing, credential storage, OAuth, windows
+│   ├── api-worker.js        Spawned Node child process that talks to LLMs
+│   ├── preload.js           contextBridge to window.alaude.*
+│   ├── provider-registry.js PROVIDERS table + detectProvider/normalizeModelId
+│   ├── paths.js             Canonical ~/.labaik/ paths + safe migration
+│   ├── json-store.js        Atomic tmp+rename JSON persistence
+│   ├── browser-agent.js     Built-in browser (CDP)
+│   ├── mcp.js               MCP server manager
+│   ├── ollama.js            Local runtime integration
+│   ├── ooda.js              Local UX health loop
+│   ├── permissions.js       Per-workspace permission modes
+│   └── skills.js            Cron-for-AI runner
+├── renderer/
+│   ├── index.html           UI (chat, model picker, modals, Spaces)
+│   ├── logo.jpg             The brand mark
+│   └── js/                  Memory, profile, storage adapters, task-scope
+├── build/
+│   ├── icons/icon.png       App icon (macOS full-bleed forest tile)
+│   └── entitlements.mac.plist
+├── scripts/
+│   ├── ad-hoc-sign.js       afterPack hook — fallback for dev builds
+│   └── notarize.js          afterSign hook — Apple notarize + staple
+├── labaik_design/           Brand system source (logos.jsx, design canvas)
+└── package.json             electron-builder config + signing identity
+```
 
 ---
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Fork it, ship it, do what you want.
+
+Built by [Ahmed Alsayadi](https://github.com/alsayadi).
