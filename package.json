@@ -29,6 +29,7 @@
       "renderer/**/*",
       "build/**/*"
     ],
+    "afterPack": "./scripts/ad-hoc-sign.js",
     "asarUnpack": [
       "electron/**/*"
     ],
