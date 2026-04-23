@@ -40,6 +40,7 @@ const permissions = require('./permissions')
 const skills = require('./skills')
 const mcp = require('./mcp')
 const jsonStore = require('./json-store')
+const { detectProvider, getBaseURL, PROVIDER_KEY_IDS } = require('./provider-registry')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
 // Stored in ~/.alaude/permissions.json so it survives reinstalls. This
@@ -93,19 +94,10 @@ function setCurrentMode(workspacePath, mode) {
   return true
 }
 
-// Tiny duplicate of api-worker's detectProvider, so main can derive provider
-// from a model string for telemetry without round-tripping through the worker.
-function detectProviderForUx(model) {
-  const s = (model || '').toLowerCase()
-  if (s.startsWith('ollama/') || s.startsWith('gemma') || s.startsWith('qwen3') || s.startsWith('llama3') || s.startsWith('deepseek-r1') || s.includes(':')) return 'ollama'
-  if (s.startsWith('gpt-') || s.startsWith('o1') || s.startsWith('o3') || s.startsWith('o4')) return 'openai'
-  if (s.startsWith('grok-')) return 'xai'
-  if (s.startsWith('moonshot-') || s.startsWith('kimi-')) return 'moonshot'
-  if (s.startsWith('qwen-')) return 'dashscope'
-  if (s.startsWith('glm-')) return 'zhipu'
-  if (s.startsWith('gemini')) return 'google'
-  return 'anthropic'
-}
+// v0.7.61: was a third duplicate of detectProvider (for UX telemetry).
+// Now just an alias to the shared registry function — the registry is
+// the same logic with more providers and no divergence risk.
+const detectProviderForUx = detectProvider
 
 function classifyError(err) {
   const msg = String(err?.message || err || '').toLowerCase()
@@ -255,27 +247,9 @@ function getApiKey(provider) {
   return c ? c.value : null
 }
 
-function detectProvider(model) {
-  const m = (model || '').toLowerCase()
-  if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai'
-  if (m.startsWith('grok-')) return 'xai'
-  if (m.startsWith('moonshot-') || m.startsWith('kimi-')) return 'moonshot'
-  if (m.startsWith('qwen-')) return 'dashscope'
-  if (m.startsWith('glm-')) return 'zhipu'
-  if (m.startsWith('gemini')) return 'google'
-  return 'anthropic'
-}
-
-function getBaseURL(provider) {
-  const urls = {
-    openai: undefined, // default
-    xai: 'https://api.x.ai/v1',
-    moonshot: 'https://api.moonshot.cn/v1',
-    dashscope: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    zhipu: 'https://open.bigmodel.cn/api/paas/v4',
-  }
-  return urls[provider]
-}
+// v0.7.61: `detectProvider` and `getBaseURL` moved to
+// ./provider-registry.js so main + worker route identically. Imported
+// at the top of this file.
 
 // ── OAuth PKCE flow ─────────────────────────────────────────────────────────
 
@@ -1008,9 +982,11 @@ ipcMain.handle('mcp-get-config', () => mcp.loadConfig())
 // ── IPC: Key management ─────────────────────────────────────────────────────
 
 ipcMain.handle('get-key-statuses', async () => {
-  const providers = ['anthropic', 'openai', 'google', 'xai', 'moonshot', 'dashscope', 'zhipu']
+  // v0.7.61: PROVIDER_KEY_IDS lives in provider-registry.js so adding
+  // a new provider there surfaces it in this status response + the
+  // renderer's Keys modal without a hardcoded list to keep in sync.
   const result = {}
-  for (const p of providers) {
+  for (const p of PROVIDER_KEY_IDS) {
     const key = getApiKey(p)
     result[p] = key ? 'set' : 'none'
   }

@@ -226,8 +226,11 @@ function modelFamily(model) {
   if (s.startsWith('llama')) return 'llama'
   if (s.startsWith('deepseek')) return 'deepseek'
   if (s.startsWith('grok')) return 'grok'
-  if (s.startsWith('moonshot') || s.startsWith('kimi')) return 'moonshot'
+  if (s.startsWith('kimi-intl/')) return 'kimi'     // kimi.ai global (K2 family)
+  if (s.startsWith('moonshot') || s.startsWith('kimi')) return 'moonshot'  // kimi.com CN
   if (s.startsWith('glm')) return 'glm'
+  if (s.startsWith('minimax')) return 'minimax'
+  if (s.startsWith('hunyuan') || s.startsWith('hy3') || s.startsWith('hy4')) return 'hunyuan'
   return 'other'
 }
 

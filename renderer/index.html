@@ -5199,16 +5199,19 @@
           <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🔑</div>
           <div class="login-path-body" style="flex:1">
             <div class="login-path-title">Connect with your API key <span class="login-path-badge">Recommended</span></div>
-            <div class="login-path-desc" style="margin-bottom:10px">OpenAI, Gemini, Qwen, Kimi, Grok, GLM, or Anthropic.</div>
+            <div class="login-path-desc" style="margin-bottom:10px">Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.</div>
             <div class="login-key-form" id="login-key-form" style="display:flex">
               <select class="login-provider-select" id="login-provider-select">
                 <option value="openai">OpenAI (GPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="google">Google (Gemini)</option>
                 <option value="xai">xAI (Grok)</option>
-                <option value="moonshot">Kimi (Moonshot)</option>
-                <option value="dashscope">Qwen (Alibaba)</option>
+                <option value="moonshot">Kimi — kimi.com (CN)</option>
+                <option value="kimi">Kimi — kimi.ai (Global)</option>
+                <option value="dashscope">Qwen (Alibaba DashScope)</option>
                 <option value="zhipu">GLM (Zhipu)</option>
+                <option value="minimax">MiniMax</option>
+                <option value="hunyuan">Tencent Hunyuan</option>
               </select>
               <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();submitLoginKey()}" />
               <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
@@ -5289,12 +5292,38 @@
           <option value="o3">o3</option>
           <option value="o4-mini">o4-mini</option>
         </optgroup>
-        <optgroup label="Other">
+        <optgroup label="xAI">
           <option value="grok-3">Grok-3</option>
-          <option value="moonshot-v1-128k">Kimi</option>
-          <option value="qwen-max">Qwen Max</option>
-          <option value="glm-5.1">GLM-5.1 (Z.ai · #1 SWE-Bench Pro)</option>
-          <option value="glm-4">GLM-4</option>
+        </optgroup>
+        <optgroup label="Kimi (kimi.com / CN)">
+          <!-- v0.7.61: flagship K2.6 + thinking-turbo + legacy 128k -->
+          <option value="kimi-k2.6">Kimi K2.6 · flagship (256k)</option>
+          <option value="kimi-k2-thinking-turbo">Kimi K2 Thinking Turbo · reasoning</option>
+          <option value="moonshot-v1-128k">Moonshot v1 (128k) · legacy</option>
+        </optgroup>
+        <optgroup label="Kimi (kimi.ai / Global)">
+          <!-- `kimi-intl/` is a routing prefix stripped by provider-registry
+               before hitting the api.moonshot.ai endpoint. -->
+          <option value="kimi-intl/kimi-k2.6">Kimi K2.6 · flagship (256k)</option>
+          <option value="kimi-intl/kimi-k2-thinking-turbo">Kimi K2 Thinking Turbo · reasoning</option>
+        </optgroup>
+        <optgroup label="Qwen (DashScope)">
+          <option value="qwen3.6-max-preview">Qwen 3.6 Max Preview · flagship (262k)</option>
+          <option value="qwen3-coder-plus">Qwen 3 Coder Plus · coding (1M)</option>
+          <option value="qwen-max">Qwen Max · legacy</option>
+        </optgroup>
+        <optgroup label="GLM (Zhipu)">
+          <option value="glm-5">GLM-5 · flagship MoE</option>
+          <option value="glm-5.1">GLM-5.1 (#1 SWE-Bench Pro)</option>
+          <option value="glm-4">GLM-4 · legacy</option>
+        </optgroup>
+        <optgroup label="MiniMax">
+          <option value="MiniMax-M2.7">MiniMax M2.7 · flagship</option>
+        </optgroup>
+        <optgroup label="Tencent Hunyuan">
+          <option value="hy3-preview">Hunyuan Hy3 Preview · Tencent flagship</option>
+        </optgroup>
+        <optgroup label="Google">
           <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
         </optgroup>
         <optgroup label="Local (Ollama)" id="model-select-local"></optgroup>
@@ -6393,13 +6422,20 @@
     }
 
     const PROVIDERS = [
-      { key: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-...' },
-      { key: 'openai',    label: 'OpenAI',    placeholder: 'sk-proj-...' },
-      { key: 'google',    label: 'Gemini',    placeholder: 'AIza...' },
-      { key: 'xai',       label: 'Grok',      placeholder: 'xai-...' },
-      { key: 'moonshot',  label: 'Kimi',      placeholder: 'sk-...' },
-      { key: 'dashscope', label: 'Qwen',      placeholder: 'sk-...' },
-      { key: 'zhipu',     label: 'GLM',       placeholder: '...' },
+      { key: 'anthropic', label: 'Anthropic',         placeholder: 'sk-ant-...' },
+      { key: 'openai',    label: 'OpenAI',            placeholder: 'sk-proj-...' },
+      { key: 'google',    label: 'Gemini',            placeholder: 'AIza...' },
+      { key: 'xai',       label: 'Grok',              placeholder: 'xai-...' },
+      // v0.7.61 — Kimi has two separate services with separate accounts.
+      // kimi.com routes to api.moonshot.cn (the existing `moonshot`
+      // provider id, kept for backward compat with stored sessions).
+      // kimi.ai routes to api.moonshot.ai via the new `kimi` provider id.
+      { key: 'moonshot',  label: 'Kimi (kimi.com)',   placeholder: 'sk-... — from platform.kimi.com' },
+      { key: 'kimi',      label: 'Kimi (kimi.ai)',    placeholder: 'sk-... — from platform.kimi.ai' },
+      { key: 'dashscope', label: 'Qwen',              placeholder: 'sk-... — from dashscope.aliyun.com' },
+      { key: 'zhipu',     label: 'GLM',               placeholder: '... — from open.bigmodel.cn' },
+      { key: 'minimax',   label: 'MiniMax',           placeholder: '... — from platform.minimax.io' },
+      { key: 'hunyuan',   label: 'Tencent Hunyuan',   placeholder: 'sk-... — from hunyuan.tencent.com' },
     ]
 
     // ── Logo ─────────────────────────────────────────────────────────────
@@ -13351,14 +13387,23 @@ Title:`
     // whether its provider has a credential configured. Helps new users see
     // which models will actually work without hunting for a "why did this
     // fail" error. Also auto-jumps off an unconnected default at app boot.
+    // v0.7.61: mirrors electron/provider-registry.js. Kept as a literal
+    // duplicate here (rather than imported via IPC) because this is a
+    // purely-visual marker — a per-option lookup would add ms-latency
+    // round-trips for zero UX gain. If the registry changes, update
+    // both. Order matters — `kimi-intl/` must come BEFORE `kimi-` so the
+    // global (kimi.ai) option doesn't fall through to moonshot (CN).
     function providerOf(modelId) {
       const m = (modelId || '').toLowerCase()
       if (m.startsWith('ollama/') || m.includes(':')) return 'ollama'
       if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai'
       if (m.startsWith('grok-')) return 'xai'
+      if (m.startsWith('kimi-intl/')) return 'kimi'
       if (m.startsWith('moonshot-') || m.startsWith('kimi-')) return 'moonshot'
-      if (m.startsWith('qwen-')) return 'dashscope'
+      if (m.startsWith('qwen')) return 'dashscope'           // covers qwen-max AND qwen3.6-max-preview
       if (m.startsWith('glm-')) return 'zhipu'
+      if (m.startsWith('minimax-')) return 'minimax'
+      if (m.startsWith('hunyuan-') || m.startsWith('hy3-') || m.startsWith('hy4-')) return 'hunyuan'
       if (m.startsWith('gemini') || m.startsWith('gemma')) return 'google'
       return 'anthropic'
     }
@@ -13389,7 +13434,7 @@ Title:`
         const current = select.value
         const currentProv = providerOf(current || '')
         if (isDefault && statuses[currentProv] !== 'set') {
-          const preferred = ['ollama', 'anthropic', 'openai', 'google', 'xai', 'moonshot', 'dashscope', 'zhipu']
+          const preferred = ['ollama', 'anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan']
           const firstReady = preferred.find(p => statuses[p] === 'set')
           if (firstReady) {
             const found = Array.from(select.options).find(o => o.dataset.connected === '1' && (o.parentElement?.id === 'model-select-local' ? firstReady === 'ollama' : providerOf(o.value || '') === firstReady))
@@ -13549,15 +13594,20 @@ Title:`
         }
       }
       if (saved > 0) {
-        // Auto-select a model matching the provider that was just saved
+        // Auto-select a model matching the provider that was just saved.
+        // v0.7.61: defaults point at each provider's current flagship so
+        // new users land on the best model without a manual pick.
         const modelMap = {
           anthropic: '',
-          openai: 'gpt-4o',
-          google: 'gemini-2.0-flash',
-          xai: 'grok-3',
-          moonshot: 'moonshot-v1-128k',
-          dashscope: 'qwen-max',
-          zhipu: 'glm-5.1',
+          openai:    'gpt-4o',
+          google:    'gemini-2.0-flash',
+          xai:       'grok-3',
+          moonshot:  'kimi-k2.6',                   // kimi.com flagship
+          kimi:      'kimi-intl/kimi-k2.6',         // kimi.ai flagship
+          dashscope: 'qwen3.6-max-preview',         // Qwen flagship
+          zhipu:     'glm-5',                       // GLM flagship
+          minimax:   'MiniMax-M2.7',                // MiniMax flagship (case-sensitive)
+          hunyuan:   'hy3-preview',                 // Tencent flagship
         }
         if (lastProvider && modelMap[lastProvider] !== undefined) {
           const select = document.getElementById('model-select')

@@ -11,6 +11,17 @@ const os = require('os')
 const dns = require('dns')
 const https = require('https')
 
+// v0.7.61 — provider routing moved into a shared registry so the worker
+// and the main process agree on which provider a given model belongs to.
+// Historically this was duplicated between api-worker.js and main.js and
+// drifted whenever we added a new provider.
+const {
+  detectProvider,
+  getBaseURL,
+  normalizeModelId,
+  ENV_MAP,
+} = require('./provider-registry')
+
 // ── v0.7.39 — Scope boundary check for shell commands ─────────────────
 //
 // Tools with `cwd: workspacePath` (run_command, start_dev_server) would
@@ -139,16 +150,9 @@ function getCredential(provider) {
       }
     } catch {}
   }
-  const envMap = {
-    anthropic: 'ANTHROPIC_API_KEY',
-    openai: 'OPENAI_API_KEY',
-    google: 'GEMINI_API_KEY',
-    xai: 'XAI_API_KEY',
-    moonshot: 'MOONSHOT_API_KEY',
-    dashscope: 'DASHSCOPE_API_KEY',
-    zhipu: 'ZHIPU_API_KEY',
-  }
-  const envKey = process.env[envMap[provider]]
+  // Env var fallback — derived from the shared provider registry so new
+  // providers get free env-var discovery as soon as they're added there.
+  const envKey = process.env[ENV_MAP[provider]]
   if (envKey) return { value: envKey, isOauth: false }
   return null
 }
@@ -158,41 +162,18 @@ function getApiKey(provider) {
   return c ? c.value : null
 }
 
-function getBaseURL(provider) {
-  return {
-    xai: 'https://api.x.ai/v1',
-    moonshot: 'https://api.moonshot.cn/v1',
-    dashscope: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    zhipu: 'https://open.bigmodel.cn/api/paas/v4',
-    ollama: 'http://localhost:11434/v1',
-  }[provider]
-}
-
-function detectProvider(model) {
-  const m = (model || '').toLowerCase()
-  // Local runtime: Ollama model tags use `name:tag` (e.g. qwen3:8b, gemma3:4b).
-  // Explicit "ollama/" prefix also forces local routing.
-  if (m.startsWith('ollama/') || m.startsWith('gemma') || m.startsWith('qwen3') || m.startsWith('llama3') || m.startsWith('deepseek-r1') || m.includes(':')) return 'ollama'
-  if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai'
-  if (m.startsWith('grok-')) return 'xai'
-  if (m.startsWith('moonshot-') || m.startsWith('kimi-')) return 'moonshot'
-  if (m.startsWith('qwen-')) return 'dashscope'
-  if (m.startsWith('glm-')) return 'zhipu'
-  if (m.startsWith('gemini')) return 'google'
-  return 'anthropic'
-}
-
-/** Strip an optional "ollama/" prefix so the SDK sees the raw tag. */
-function normalizeOllamaModel(model) {
-  return (model || '').replace(/^ollama\//, '')
-}
+// v0.7.61: `getBaseURL`, `detectProvider`, and the old
+// `normalizeOllamaModel` helper now live in `provider-registry.js`.
+// `normalizeModelId` supersedes `normalizeOllamaModel` — it strips any
+// provider-specific routing prefix (Ollama's `ollama/`, Kimi global's
+// `kimi-intl/`, etc.) in one go.
 
 /**
  * Only skip tools for genuinely tiny / unreliable local models. Every modern
  * mid-to-large open-weight model supports OpenAI-style function calling fine.
  */
 function shouldSkipToolsForLocal(model) {
-  const m = normalizeOllamaModel(model).toLowerCase()
+  const m = normalizeModelId(model).toLowerCase()
   // Known-poor tool callers at their smallest sizes
   if (m.startsWith('gemma3:1b')) return true
   if (m.startsWith('llama3.2:1b')) return true
@@ -728,7 +709,7 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
     const skipTools = shouldSkipToolsForLocal(model)
-    const normalised = normalizeOllamaModel(model)
+    const normalised = normalizeModelId(model)
     // Thinking models (Qwen 3, DeepSeek-R1, QwQ) get Ollama's native /api/chat
     // endpoint because OpenAI-compat silently drops chat_template_kwargs.
     // Measured: "hi" reply dropped from 48s → 0.7s by switching endpoints.
@@ -737,7 +718,10 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     }
     return await chatOpenAI(messages, normalised, provider, workspacePath, sysPrompt, { skipTools, onActivity, mode })
   } else {
-    return await chatOpenAI(messages, model, provider, workspacePath, sysPrompt, { onActivity, mode })
+    // v0.7.61: strip any routing-hint prefix (e.g. `kimi-intl/`) so the
+    // SDK sees the raw upstream model id. Case is preserved — MiniMax
+    // and other case-sensitive providers need `MiniMax-M2.7` unchanged.
+    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode })
   }
 }
 
