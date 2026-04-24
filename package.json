@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.7.64",
+  "version": "0.7.65",
   "description": "Labaik — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "homepage": "https://github.com/alsayadi/alaude-desktop",

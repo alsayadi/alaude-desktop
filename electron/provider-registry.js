@@ -76,6 +76,14 @@ const PROVIDERS_ORDERED = [
   // synthetic `hunyuan/` prefix in the picker.
   ['hunyuan',   { baseURL: 'https://api.hunyuan.cloud.tencent.com/v1', prefixes: ['hunyuan-', 'hy3-', 'hy4-'], envVar: 'HUNYUAN_API_KEY' }],
 
+  // DeepSeek (v0.7.65) — OpenAI-compatible, sk-... keys from
+  // platform.deepseek.com. The `deepseek-` prefix COULD collide with the
+  // local Ollama `deepseek-r1` family, but the Ollama branch at the top
+  // of detectProvider() checks `includes(':')` and `startsWith('deepseek-r1')`
+  // first, so cloud `deepseek-v4`/`-chat`/`-reasoner` route here while
+  // local `deepseek-r1:7b` still routes to 'ollama'.
+  ['deepseek',  { baseURL: 'https://api.deepseek.com/v1', prefixes: ['deepseek-'], envVar: 'DEEPSEEK_API_KEY' }],
+
   // Ollama — local. Treated specially in detectProvider() because
   // Ollama tags use `name:tag` and several known family names (gemma,
   // llama3, etc) don't share a single prefix.
@@ -89,7 +97,7 @@ const PROVIDERS = Object.fromEntries(PROVIDERS_ORDERED)
 // status modal. Anthropic first (default), then the rest in display
 // order. Ollama is handled specially by `main.js` (runtime availability,
 // not an API key), so it's intentionally absent.
-const PROVIDER_KEY_IDS = ['anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan']
+const PROVIDER_KEY_IDS = ['anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan', 'deepseek']
 
 // Map provider id → env var name. Derived so env-var discovery stays
 // synchronised with the registry automatically.

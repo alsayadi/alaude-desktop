@@ -5223,6 +5223,7 @@
                 <option value="zhipu">GLM (Zhipu)</option>
                 <option value="minimax">MiniMax</option>
                 <option value="hunyuan">Tencent Hunyuan</option>
+                <option value="deepseek">DeepSeek</option>
               </select>
               <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();submitLoginKey()}" />
               <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
@@ -5349,6 +5350,15 @@
         </optgroup>
         <optgroup label="Tencent Hunyuan">
           <option value="hy3-preview">Hunyuan Hy3 Preview · Tencent flagship</option>
+        </optgroup>
+        <optgroup label="DeepSeek">
+          <!-- v0.7.65: DeepSeek. V4 is the 1M-ctx flagship; chat maps to
+               V3.2 (128k); reasoner is R-series thinking.
+               Collision guard: the local Ollama 'deepseek-r1' family
+               routes via the : tag check, not this prefix. -->
+          <option value="deepseek-v4">DeepSeek V4 · flagship (1M ctx)</option>
+          <option value="deepseek-chat">DeepSeek Chat · V3.2 (128k)</option>
+          <option value="deepseek-reasoner">DeepSeek Reasoner · R-series thinking</option>
         </optgroup>
         <optgroup label="Google">
           <!-- v0.7.62 — Gemini 3.1 is the current production family.
@@ -6470,6 +6480,7 @@
       { key: 'zhipu',     label: 'GLM',               placeholder: '... — from open.bigmodel.cn' },
       { key: 'minimax',   label: 'MiniMax',           placeholder: '... — from platform.minimax.io' },
       { key: 'hunyuan',   label: 'Tencent Hunyuan',   placeholder: 'sk-... — from hunyuan.tencent.com' },
+      { key: 'deepseek',  label: 'DeepSeek',          placeholder: 'sk-... — from platform.deepseek.com' },
     ]
 
     // ── Logo ─────────────────────────────────────────────────────────────
@@ -13438,6 +13449,10 @@ Title:`
       if (m.startsWith('glm-')) return 'zhipu'
       if (m.startsWith('minimax-')) return 'minimax'
       if (m.startsWith('hunyuan-') || m.startsWith('hy3-') || m.startsWith('hy4-')) return 'hunyuan'
+      // v0.7.65: DeepSeek. Match AFTER the Ollama `:` check at the top so
+      // `deepseek-r1:7b` stays local. Guard with !includes(':') as
+      // belt+braces in case a colon sneaks into a cloud model id.
+      if (m.startsWith('deepseek-') && !m.includes(':') && !m.startsWith('deepseek-r1')) return 'deepseek'
       if (m.startsWith('gemini') || m.startsWith('gemma')) return 'google'
       return 'anthropic'
     }
@@ -13468,7 +13483,7 @@ Title:`
         const current = select.value
         const currentProv = providerOf(current || '')
         if (isDefault && statuses[currentProv] !== 'set') {
-          const preferred = ['ollama', 'anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan']
+          const preferred = ['ollama', 'anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'deepseek', 'dashscope', 'zhipu', 'minimax', 'hunyuan']
           const firstReady = preferred.find(p => statuses[p] === 'set')
           if (firstReady) {
             const found = Array.from(select.options).find(o => o.dataset.connected === '1' && (o.parentElement?.id === 'model-select-local' ? firstReady === 'ollama' : providerOf(o.value || '') === firstReady))
@@ -13642,6 +13657,7 @@ Title:`
           zhipu:     'glm-5',                       // GLM flagship
           minimax:   'MiniMax-M2.7',                // MiniMax flagship (case-sensitive)
           hunyuan:   'hy3-preview',                 // Tencent flagship
+          deepseek:  'deepseek-v4',                 // DeepSeek flagship
         }
         if (lastProvider && modelMap[lastProvider] !== undefined) {
           const select = document.getElementById('model-select')
