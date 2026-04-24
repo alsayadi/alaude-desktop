@@ -5352,13 +5352,18 @@
           <option value="hy3-preview">Hunyuan Hy3 Preview · Tencent flagship</option>
         </optgroup>
         <optgroup label="DeepSeek">
-          <!-- v0.7.65: DeepSeek. V4 is the 1M-ctx flagship; chat maps to
-               V3.2 (128k); reasoner is R-series thinking.
+          <!-- v0.7.65: DeepSeek V4. The API /v1/models list shows two
+               concrete ids: deepseek-v4-pro (flagship) and
+               deepseek-v4-flash (fast). `deepseek-chat` and
+               `deepseek-reasoner` are documented aliases that route
+               to those; we expose all four so users can target either
+               by id or by semantic label.
                Collision guard: the local Ollama 'deepseek-r1' family
                routes via the : tag check, not this prefix. -->
-          <option value="deepseek-v4">DeepSeek V4 · flagship (1M ctx)</option>
-          <option value="deepseek-chat">DeepSeek Chat · V3.2 (128k)</option>
-          <option value="deepseek-reasoner">DeepSeek Reasoner · R-series thinking</option>
+          <option value="deepseek-v4-pro">DeepSeek V4 Pro · flagship</option>
+          <option value="deepseek-v4-flash">DeepSeek V4 Flash · fast</option>
+          <option value="deepseek-reasoner">DeepSeek Reasoner · thinking (alias)</option>
+          <option value="deepseek-chat">DeepSeek Chat · balanced (alias)</option>
         </optgroup>
         <optgroup label="Google">
           <!-- v0.7.62 — Gemini 3.1 is the current production family.
@@ -13657,7 +13662,7 @@ Title:`
           zhipu:     'glm-5',                       // GLM flagship
           minimax:   'MiniMax-M2.7',                // MiniMax flagship (case-sensitive)
           hunyuan:   'hy3-preview',                 // Tencent flagship
-          deepseek:  'deepseek-v4',                 // DeepSeek flagship
+          deepseek:  'deepseek-v4-pro',             // DeepSeek flagship (v-pro, not bare v4)
         }
         if (lastProvider && modelMap[lastProvider] !== undefined) {
           const select = document.getElementById('model-select')
