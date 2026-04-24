@@ -10746,7 +10746,20 @@ footer a { color: var(--accent); text-decoration: none; }
             }
           } catch {}
         }
-        const { msgs: withMemory, used: memoriesUsed } = await window.__memInjectIntoLastUser(cleanMsgs, userText)
+        // v0.7.65: guard against __memInjectIntoLastUser being missing
+        // (rare race where the memory-bootstrap module hasn't finished
+        // loading when the user fires off the first message). Fail open
+        // — a reply without memory context is better than a thrown error
+        // that masks as "the provider broke". Matches the `?.` style the
+        // neighboring __memSys / __memExtract / __memExtractProfileCandidates
+        // call sites already use.
+        const __memInject = window.__memInjectIntoLastUser
+        const { msgs: withMemory, used: memoriesUsed } = typeof __memInject === 'function'
+          ? await __memInject(cleanMsgs, userText)
+          : { msgs: cleanMsgs, used: [] }
+        if (typeof __memInject !== 'function') {
+          console.warn('[callAI] __memInjectIntoLastUser missing — sending without memory context')
+        }
         // Tag the assistant streaming slot with the memories used so the chip
         // can render once the reply lands, and stash estimated input tokens
         // so the cost estimator can compute $ after streaming finishes.
