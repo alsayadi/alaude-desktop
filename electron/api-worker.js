@@ -756,7 +756,14 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     fetch: wrappedFetch,
   })
 
-  const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({ role: m.role, content: m.content }))]
+  // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
+  // V4 thinking-mode requires it be round-tripped in history. Other
+  // providers silently ignore unknown message fields (OpenAI spec).
+  const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({
+    role: m.role,
+    content: m.content,
+    ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}),
+  }))]
   // Tool budget: workspace tools only if a folder is picked; health tools
   // only when the user is inside the health space (avoids token bloat
   // everywhere else, and avoids models in unrelated spaces inventing
@@ -796,10 +803,22 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
       })
       let iterContent = ''
+      // v0.7.65: DeepSeek's thinking-mode responses stream a separate
+      // `delta.reasoning_content` channel. We aggregate it here and
+      // carry it forward in the multi-turn history — DeepSeek's API
+      // returns 400 "reasoning_content must be passed back" otherwise.
+      let iterReasoning = ''
       const partialTools = []
       for await (const chunk of stream) {
         const delta = chunk.choices?.[0]?.delta
         if (!delta) continue
+        if (delta.reasoning_content) {
+          iterReasoning += delta.reasoning_content
+          // Surface the reasoning tokens to the renderer as a distinct
+          // activity phase — the UI can choose to hide them (default) or
+          // render a collapsible "thinking" panel.
+          onActivity({ phase: 'reasoning_token', text: delta.reasoning_content })
+        }
         if (delta.content) {
           iterContent += delta.content
           onActivity({ phase: 'token', text: delta.content })
@@ -821,6 +840,9 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         role: 'assistant',
         content: partialTools.length ? (iterContent || null) : (iterContent || ''),
         ...(partialTools.length ? { tool_calls: partialTools } : {}),
+        // Preserve reasoning_content so DeepSeek's next-turn validator
+        // finds it in history. Other providers ignore unknown fields.
+        ...(iterReasoning ? { reasoning_content: iterReasoning } : {}),
       }
     } catch (streamErr) {
       // Streaming not supported or failed — fall back to non-streaming on this iteration only
@@ -902,7 +924,14 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
 async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
   const baseURL = 'http://localhost:11434'
-  const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({ role: m.role, content: m.content }))]
+  // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
+  // V4 thinking-mode requires it be round-tripped in history. Other
+  // providers silently ignore unknown message fields (OpenAI spec).
+  const chatMsgs = [{ role: 'system', content: sysPrompt }, ...msgs.map(m => ({
+    role: m.role,
+    content: m.content,
+    ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}),
+  }))]
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
   const allTools = skipTools ? [] : [

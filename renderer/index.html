@@ -3155,6 +3155,35 @@
       cursor: zoom-in;
       border: 1px solid var(--border);
     }
+    /* v0.7.65 — attached-file chips in user messages.
+       Replaces the pre-v0.7.65 behaviour of dumping raw file bytes into
+       the bubble text. Chip shows filename + size + (pages/rows if known). */
+    .msg-file-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 4px 0 8px;
+    }
+    .msg-file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 14px;
+      background: var(--green-dim);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .msg-file-chip-meta {
+      color: var(--text-faint);
+      font-size: 11px;
+      margin-left: 2px;
+    }
 
     /* Icon button (attach, mic) */
     .icon-btn {
@@ -10283,20 +10312,20 @@ footer a { color: var(--accent); text-decoration: none; }
       const _sdCurrent = sessions.find(s => s.id === currentSessionId)
       if (_sdCurrent) { delete _sdCurrent.inputDraft; persistSessions() }
 
-      // Prepend attached file contents to the message
+      // v0.7.65: file attachments no longer pollute the visible user text.
+      // Previous behaviour dumped up to 50k chars of raw file content into
+      // the chat bubble — which rendered as 乱码 (garbled mojibake) for
+      // non-text blobs and was unreadable for anything else. Now we store
+      // the attachments on the message as structured metadata, render a
+      // compact chip per file in the bubble, and only expand the raw
+      // content when building the API payload (see sanitizeHistoryForApi).
+      const attachedFilesSnapshot = attachedFiles.slice()
       if (attachedFiles.length > 0) {
-        let fileContext = ''
-        for (const f of attachedFiles) {
-          if (f.type === 'image') {
-            fileContext += `[Attached image: ${f.name}]\n`
-          } else {
-            const label = f.pages ? `(${f.pages} pages)` : f.rows ? `(${f.rows} rows)` : ''
-            fileContext += `--- File: ${f.name} ${label} ---\n${f.content.slice(0, 50000)}\n--- End of file ---\n\n`
-          }
-        }
-        text = fileContext + (text || 'Please analyze the attached file(s).')
         attachedFiles = []
         renderFileChips()
+        // Give the user a default prompt if they attached files without
+        // typing a message — the model needs *some* text to anchor to.
+        if (!text) text = 'Please analyze the attached file(s).'
       }
 
       // Multimodal: if there are pasted/dropped images, produce a content array
@@ -10316,6 +10345,19 @@ footer a { color: var(--accent); text-decoration: none; }
         if (!text) text = '(image)'
       } else {
         userMessage = { role: 'user', content: text }
+      }
+      // Attach the file metadata (name, size, pages/rows, content) on a
+      // non-rendered key. renderMessages() uses `fileAttachments` to draw
+      // chips; sanitizeHistoryForApi() reads it to build the expanded
+      // content string the model actually sees.
+      if (attachedFilesSnapshot.length > 0) {
+        userMessage.fileAttachments = attachedFilesSnapshot.filter(f => f.type !== 'image').map(f => ({
+          name: f.name,
+          size: f.size || (f.content ? f.content.length : 0),
+          pages: f.pages,
+          rows: f.rows,
+          content: (f.content || '').slice(0, 50000),
+        }))
       }
       messages.push(userMessage)
       renderMessages()
@@ -10656,9 +10698,27 @@ footer a { color: var(--accent); text-decoration: none; }
           out.push({ role, content: clean })
           continue
         }
-        const content = (m.content == null) ? '' : String(m.content)
+        let content = (m.content == null) ? '' : String(m.content)
+        // v0.7.65: expand fileAttachments into the content string right here,
+        // at the API-payload boundary. Visible chat bubble keeps showing a
+        // clean user prompt + chips; the model gets the full file context.
+        if (role === 'user' && Array.isArray(m.fileAttachments) && m.fileAttachments.length) {
+          const blocks = m.fileAttachments.map(f => {
+            const label = f.pages ? `(${f.pages} pages)` : f.rows ? `(${f.rows} rows)` : ''
+            return `--- File: ${f.name} ${label} ---\n${f.content || ''}\n--- End of file ---`
+          }).join('\n\n')
+          content = blocks + (content ? '\n\n' + content : '')
+        }
         if (!content && role === 'user') continue  // nothing to send
-        out.push({ role, content })
+        // Preserve reasoning_content on assistant turns — DeepSeek's
+        // thinking-mode responses require the reasoning payload be
+        // round-tripped on the next turn. Other providers silently
+        // ignore the extra field. Passing it through is always safe.
+        if (role === 'assistant' && m.reasoning_content) {
+          out.push({ role, content, reasoning_content: m.reasoning_content })
+        } else {
+          out.push({ role, content })
+        }
       }
       return out
     }
@@ -11185,7 +11245,18 @@ Title:`
             const urls = msg.content.filter(p => p?.type === 'image_url').map(p => p.image_url?.url).filter(Boolean)
             imgHtml = urls.map(u => `<img class="msg-img" src="${u}" alt="attachment" />`).join('')
           }
-          body = diffsHtml + imgHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
+          // v0.7.65: file-attachment chips (replaces the old raw-content dump).
+          // The actual file bytes are stored on msg.fileAttachments and are
+          // only expanded into the API payload at sanitize time.
+          let fileChipsHtml = ''
+          if (Array.isArray(msg.fileAttachments) && msg.fileAttachments.length) {
+            fileChipsHtml = '<div class="msg-file-chips">' + msg.fileAttachments.map(f => {
+              const kb = f.size ? ` · ${(f.size / 1024).toFixed(1)} KB` : ''
+              const meta = f.pages ? ` · ${f.pages}p` : f.rows ? ` · ${f.rows} rows` : ''
+              return `<span class="msg-file-chip" title="${escapeHtml(f.name)}">📎 ${escapeHtml(f.name)}<span class="msg-file-chip-meta">${escapeHtml(meta + kb)}</span></span>`
+            }).join('') + '</div>'
+          }
+          body = diffsHtml + imgHtml + fileChipsHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
         }
         // Model + timestamp metadata on assistant responses
         const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
@@ -14231,6 +14302,17 @@ Title:`
     // Live tool activity — refresh the streaming bubble as the agent works.
     window.alaude.onToolActivity((activity) => {
       if (!activity) return
+      // v0.7.65: reasoning_content from DeepSeek's thinking-mode stream.
+      // Captured on the assistant message so sanitizeHistoryForApi can
+      // round-trip it to DeepSeek on the next turn (else DeepSeek 400s
+      // with "reasoning_content must be passed back"). Not rendered in
+      // the bubble — hiding the thinking is the default UX; a future
+      // collapsible "thinking" panel can surface it opt-in.
+      if (activity.phase === 'reasoning_token') {
+        const target = findStreamingTargetFor(activity)
+        if (target) target.reasoning_content = (target.reasoning_content || '') + (activity.text || '')
+        return
+      }
       // Token events go into the streaming message content. We do an in-place
       // DOM update for smoothness — NOT a full renderMessages() call — since
       // tokens can arrive at 100+/sec.
@@ -14667,15 +14749,29 @@ Title:`
       input.setSelectionRange(input.value.length, input.value.length)
       hideSmartPasteChip()
     }
-    // Also catch drops that happen on the input itself
+    // Also catch drops that happen on the input itself.
+    // v0.7.65 fix: previously we bailed on non-image drops and let the browser
+    // default run — which in Electron navigates to file:/// and eats the drop
+    // silently. Now we handle both: images go through the vision pipeline,
+    // everything else goes through processFile() the same way #messages does.
     input.addEventListener('drop', async (e) => {
       const files = e.dataTransfer?.files
       if (!files || !files.length) return
-      const anyImage = [...files].some(f => f.type?.startsWith('image/'))
-      if (!anyImage) return  // let the default handler deal with non-image drops
       e.preventDefault()
+      e.stopPropagation()
       for (const file of files) {
-        if (file.type?.startsWith('image/')) await attachImageFromFile(file)
+        if (file.type?.startsWith('image/')) {
+          await attachImageFromFile(file)
+          continue
+        }
+        const fp = (file.path && file.path.length)
+          ? file.path
+          : (window.alaude?.getPathForFile ? window.alaude.getPathForFile(file) : '')
+        if (!fp) {
+          showRewindToast?.(`⚠️ Could not read "${file.name}" — use the "Attach file" button instead`, true)
+          continue
+        }
+        await processFile(fp)
       }
     })
     input.addEventListener('dragover', (e) => {
