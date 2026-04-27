@@ -4,6 +4,15 @@ const os = require('os')
 const http = require('http')
 const crypto = require('crypto')
 
+// EPIPE on stdout/stderr crashes the app when the parent shell exits or
+// a background-task wrapper reaps our FDs (seen in dev runs launched via
+// `npm start &`). Attach a no-op error handler so a closed pipe doesn't
+// bubble to Electron's "Uncaught Exception" dialog. Anyone who needs to
+// know about a write failure can wrap their own write in try/catch.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err) => { if (err && err.code !== 'EPIPE') throw err })
+}
+
 // Identify as "Alaude" EVERYWHERE macOS might label us — menu bar, About
 // panel, notification sender, dock badge, user-data-dir. Happens during
 // dev runs (`npm start`), where the Electron binary would otherwise call
@@ -166,7 +175,11 @@ function createWindow() {
   mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
     const lvl = ['log','warn','error'][level] || 'log'
     if (lvl === 'error' || lvl === 'warn') {
-      process.stderr.write(`[renderer ${lvl}] ${message} (${source}:${line})\n`)
+      // EPIPE-safe: when the parent shell exits (or a background-task
+      // wrapper reaps our stderr FD) the next sync write throws EPIPE
+      // which Electron surfaces as an "Uncaught Exception" dialog. We
+      // can't log the failure-to-log, so just drop it.
+      try { process.stderr.write(`[renderer ${lvl}] ${message} (${source}:${line})\n`) } catch {}
     }
   })
 
