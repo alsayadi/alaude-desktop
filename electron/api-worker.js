@@ -233,6 +233,43 @@ function detectRichIntent(userText) {
   return keys
 }
 
+// v0.7.67 — AGENTS.md / CLAUDE.md auto-injection.
+//
+// When the workspace contains an AGENTS.md (vendor-neutral convention) or
+// CLAUDE.md (Anthropic's convention) at its root, append its contents to the
+// system prompt so project-specific instructions reach the model on every
+// turn — no separate pasting, no settings UI to maintain.
+//
+// Precedence: AGENTS.md > CLAUDE.md > .agents.md > .claude.md. First hit wins.
+// Capped at 16KB so a 200KB README accidentally renamed AGENTS.md doesn't
+// blow up the context window. Truncation marker tells the model + the user
+// what happened.
+//
+// Read fresh on every chat turn (no cache) so the user can edit the file
+// and see the change take effect on the next message. Files are tiny
+// (single-digit KB typically) — re-reading is cheaper than cache invalidation.
+const AGENTS_MD_CANDIDATES = ['AGENTS.md', 'CLAUDE.md', '.agents.md', '.claude.md']
+const AGENTS_MD_MAX_BYTES = 16 * 1024
+
+function loadProjectInstructions(workspacePath) {
+  if (!workspacePath) return null
+  for (const name of AGENTS_MD_CANDIDATES) {
+    const fp = path.join(workspacePath, name)
+    try {
+      const stat = fs.statSync(fp)
+      if (!stat.isFile()) continue
+      let text = fs.readFileSync(fp, 'utf8')
+      const originalLen = text.length
+      if (text.length > AGENTS_MD_MAX_BYTES) {
+        text = text.slice(0, AGENTS_MD_MAX_BYTES) +
+          `\n\n[…truncated ${originalLen - AGENTS_MD_MAX_BYTES} chars on inject — keep ${name} under ${AGENTS_MD_MAX_BYTES / 1024}KB for full context]`
+      }
+      return { name, text, bytes: originalLen }
+    } catch { /* not present, try next candidate */ }
+  }
+  return null
+}
+
 function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
   let sys = 'You are Labaik, a helpful AI assistant.'
   // v0.7.42 — ambiguity nudge. Without this, a one-word prompt like "test"
@@ -267,6 +304,16 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
     // Cloud models get a tiny one-liner — cheap enough, reminds them the
     // rich blocks exist for follow-up turns in the same session.
     sys += '\n\nLabaik renders chart / mermaid / svg / html / pptx / docx / xlsx fenced blocks when the user asks for visuals or exports.'
+  }
+  // v0.7.67 — inject project instructions from AGENTS.md / CLAUDE.md if present.
+  // Goes BEFORE the space prompt so the user's space-level system prompt can
+  // override or extend the project's defaults if they conflict.
+  if (workspacePath) {
+    const proj = loadProjectInstructions(workspacePath)
+    if (proj) {
+      sys += `\n\n## Project instructions (from ${proj.name})\n\n${proj.text}`
+      try { console.error(`[worker] Injected ${proj.name} (${proj.bytes} bytes) from ${workspacePath}`) } catch {}
+    }
   }
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys
