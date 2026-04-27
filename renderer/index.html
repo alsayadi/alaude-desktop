@@ -1910,82 +1910,38 @@
       margin: 0 2px;
     }
 
-    /* ── First-run coach card ──
-       Shows on the welcome screen exactly once per install, then dismissed
-       to `alaude:seenCoach:v1`. Clickable prompts demo killer features so
-       new users find them within the first minute. */
-    .first-run-coach {
-      margin-top: 28px;
-      max-width: 680px;
+    /* ── Starter chips ──
+       v0.7.67 — minimalist replacement for the old first-run-coach card.
+       A single row of pill-shaped chips under the welcome title, shown
+       once per install, then dismissed to `alaude:seenCoach:v1`. Clicking
+       fills the composer and sends. No header, no descriptions, no
+       keyboard-shortcut footer — discoverability moves to ⌘K. */
+    .starter-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 22px;
+      max-width: 620px;
       width: 100%;
-      padding: 16px 18px 14px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: color-mix(in oklch, var(--green) 6%, var(--bg-input));
-      text-align: left;
       animation: msgSlideIn 0.3s ease-out;
     }
-    .frc-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .frc-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .frc-close {
-      background: transparent;
-      border: 0;
-      color: var(--text-faint);
-      font-size: 20px;
-      line-height: 1;
-      padding: 0 4px;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    .frc-close:hover { color: var(--text); background: var(--bg); }
-    .frc-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    @media (max-width: 640px) { .frc-grid { grid-template-columns: 1fr; } }
-    .frc-prompt {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      text-align: left;
-      padding: 11px 12px;
+    .starter-chip {
+      padding: 7px 13px;
       border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--bg);
-      cursor: pointer;
-      transition: border-color 0.12s, transform 0.1s;
-    }
-    .frc-prompt:hover { border-color: var(--green); transform: translateY(-1px); }
-    .frc-icon { font-size: 18px; line-height: 1; flex-shrink: 0; padding-top: 2px; }
-    .frc-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-    .frc-head { font-size: 13px; font-weight: 600; color: var(--text); }
-    .frc-hint { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
-    .frc-footer {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border);
-      font-size: 11px;
-      color: var(--text-faint);
-    }
-    .frc-footer kbd {
-      padding: 1px 5px;
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      background: var(--bg);
+      border-radius: 999px;
+      background: var(--bg-input);
       color: var(--text-dim);
-      font-family: var(--mono, ui-monospace, monospace);
-      font-size: 10px;
-      margin: 0 1px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: border-color 0.12s, color 0.12s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .starter-chip:hover {
+      border-color: var(--green);
+      color: var(--text);
+      transform: translateY(-1px);
     }
 
     @keyframes msgSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -5900,49 +5856,15 @@
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title">What can I help you with?</div>
-        <div class="welcome-sub">Drop a file, or just start typing.</div>
         <div class="quick-actions" id="quick-actions"></div>
-        <!-- First-run coach card — shown once per install, then dismissed to
-             localStorage. Each prompt is clickable and demonstrates one of
-             Labaik's killer features so new users discover them early. -->
-        <div class="first-run-coach" id="first-run-coach" style="display:none">
-          <div class="frc-header">
-            <span class="frc-title">✨ New here? Try any of these</span>
-            <button class="frc-close" onclick="dismissFirstRunCoach()" title="Dismiss">×</button>
-          </div>
-          <div class="frc-grid">
-            <button class="frc-prompt" onclick="coachFillAndSend('Build me a playable snake game I can run right here')">
-              <span class="frc-icon">🎮</span>
-              <span class="frc-body">
-                <span class="frc-head">Playable games in chat</span>
-                <span class="frc-hint">Labaik runs HTML artifacts in a sandboxed iframe — keyboard works.</span>
-              </span>
-            </button>
-            <button class="frc-prompt" onclick="coachFillAndSend('Make a bar chart comparing Q1-Q4 revenue: 120, 150, 180, 210 (in thousands)')">
-              <span class="frc-icon">📊</span>
-              <span class="frc-body">
-                <span class="frc-head">Inline charts</span>
-                <span class="frc-hint">```chart blocks render as real SVG.</span>
-              </span>
-            </button>
-            <button class="frc-prompt" onclick="coachFillAndSend('Write a one-page PPTX about the solar system — title, 3 planet slides with bullets')">
-              <span class="frc-icon">📄</span>
-              <span class="frc-body">
-                <span class="frc-head">Real Office files</span>
-                <span class="frc-hint">.pptx / .docx / .xlsx with Save + Open.</span>
-              </span>
-            </button>
-            <button class="frc-prompt" onclick="coachFillAndSend('Summarize this repo in 3 bullet points, then propose one concrete improvement')">
-              <span class="frc-icon">🗂️</span>
-              <span class="frc-body">
-                <span class="frc-head">Understand a codebase fast</span>
-                <span class="frc-hint">Pick a folder, then let Labaik read + summarize it.</span>
-              </span>
-            </button>
-          </div>
-          <div class="frc-footer">
-            Power-user tips: <kbd>⌘K</kbd> palette · <kbd>⌘1-6</kbd> model slots · <kbd>⌘F</kbd> find · <kbd>⌘/</kbd> snippets
-          </div>
+        <!-- v0.7.67 — minimalist starter chips. Replaced the verbose
+             "first-run coach" card. Less copy, no keyboard footer, no
+             promotional header. Click a chip → fill composer + send. -->
+        <div class="starter-chips" id="first-run-coach" style="display:none">
+          <button class="starter-chip" onclick="coachFillAndSend('Build me a playable snake game I can run right here')">🎮 Snake game</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Make a bar chart comparing Q1-Q4 revenue: 120, 150, 180, 210 (in thousands)')">📊 Chart from data</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Write a one-page PPTX about the solar system — title, 3 planet slides with bullets')">📄 PowerPoint draft</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Summarize this repo in 3 bullet points, then propose one concrete improvement')">🗂️ Summarize a repo</button>
         </div>
       </div>
       <div class="drop-overlay" id="drop-overlay">
@@ -12145,18 +12067,16 @@ Title:`
       const templateCards = (typeof renderTemplatePickerHtml === 'function')
         ? renderTemplatePickerHtml()
         : ''
+      // v0.7.67 — minimalist welcome. Dropped subtitle, dropped keyboard
+      // hints footer (⌘P palette covers discovery). Kept space cards +
+      // templates because they're real entry points, not promo. Title
+      // matches the first-paint welcome.
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
-        <div class="welcome-title"><span class="welcome-gradient">Labaik</span> — what are we building?</div>
-        <div class="welcome-sub">Drop a file, or just start typing. Local and cloud models in one window.</div>
+        <div class="welcome-title">What can I help you with?</div>
         ${spaceCardsHtml}
         <div class="quick-actions" id="quick-actions"></div>
         ${templateCards}
-        <div class="welcome-hints">
-          <span><kbd>⌘K</kbd> focus input</span>
-          <span><kbd>⌘P</kbd> jump anywhere</span>
-          <span><kbd>⌘⇧L</kbd> theme</span>
-        </div>
       </div>`
 
       // Smart auto-scroll: only stick to bottom if the user was already near it
