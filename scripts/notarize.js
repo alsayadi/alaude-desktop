@@ -41,10 +41,14 @@ function waitForSubmission(submissionId) {
       encoding: 'utf8',
     })
     const out = (r.stdout || '') + (r.stderr || '')
-    const statusMatch = out.match(/status:\s*(\w+)/)
+    // v0.7.66: previous regex `(\w+)` matched only "In" from "In Progress"
+    // (\w doesn't span the space). That made the polling loop treat "In
+    // Progress" as a terminal status named "In" and throw immediately.
+    // Match the full single-line status value instead.
+    const statusMatch = out.match(/status:\s*([^\n\r]+)/)
     if (statusMatch) {
       consecutiveErrors = 0
-      const status = statusMatch[1]
+      const status = statusMatch[1].trim()
       console.log('[notarize] status:', status)
       if (status === 'In Progress') {
         // still going — wait and try again

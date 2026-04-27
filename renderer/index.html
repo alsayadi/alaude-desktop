@@ -6286,12 +6286,28 @@
     // preserves more than enough context for a model's recall while
     // keeping the file at a sane size.
     const MAX_PERSIST_CONTENT = 200 * 1024  // 200 KB per message field
+    // v0.7.66: Real on-disk telemetry from a 16MB sessions.json showed the
+    // bulk wasn't text — it was base64 image data URLs, ~5MB per attached
+    // screenshot, sometimes duplicated in a sibling `images` field. Real
+    // remote URLs are short. We replace big data URLs on persist with a
+    // tiny placeholder marker — the model already incorporated the image
+    // into its reply on the original turn, so dropping the bytes doesn't
+    // lose semantic context, only the ability to re-render the thumbnail
+    // in the bubble after a restart. That trade beats a 16MB sessions.json
+    // by a huge margin.
+    const MAX_INLINE_IMAGE = 16 * 1024  // 16 KB threshold — larger ⇒ data URL
     function _truncateForPersist(s) {
       if (typeof s !== 'string') return s
       if (s.length <= MAX_PERSIST_CONTENT) return s
       const dropped = s.length - MAX_PERSIST_CONTENT
       return s.slice(0, MAX_PERSIST_CONTENT) +
         `\n\n[… truncated ${dropped.toLocaleString()} chars on persist to keep sessions.json bounded — v0.7.66]`
+    }
+    function _stripBigDataUrl(url) {
+      if (typeof url !== 'string' || url.length <= MAX_INLINE_IMAGE) return url
+      // data:image/png;base64,... — keep the mime hint, drop the bytes.
+      const head = url.slice(0, 60).replace(/[\r\n]/g, '')
+      return `[image dropped on persist — was ${url.length.toLocaleString()} bytes; ${head}…]`
     }
     function _sanitizeForPersist(msgs) {
       if (!Array.isArray(msgs)) return []
@@ -6306,19 +6322,60 @@
           if (!cleaned.content) cleaned.content = '(generation interrupted)'
         }
         // Cap the content field. Multimodal content is an array of parts;
-        // truncate each part's text without disturbing image_url shape.
+        // strip big data-URL image bytes and truncate any oversize text.
         if (typeof cleaned.content === 'string' && cleaned.content.length > MAX_PERSIST_CONTENT) {
           cleaned = { ...cleaned, content: _truncateForPersist(cleaned.content) }
         } else if (Array.isArray(cleaned.content)) {
           let mutated = false
           const parts = cleaned.content.map(p => {
-            if (p && typeof p === 'object' && typeof p.text === 'string' && p.text.length > MAX_PERSIST_CONTENT) {
+            if (!p || typeof p !== 'object') return p
+            if (typeof p.text === 'string' && p.text.length > MAX_PERSIST_CONTENT) {
               mutated = true
               return { ...p, text: _truncateForPersist(p.text) }
+            }
+            // p.image_url can be either a string or { url, detail } (per the
+            // OpenAI multimodal spec). Either shape: replace the URL when
+            // it's a giant data URL.
+            if (p.image_url) {
+              const iu = p.image_url
+              if (typeof iu === 'string' && iu.length > MAX_INLINE_IMAGE) {
+                mutated = true
+                return { ...p, image_url: _stripBigDataUrl(iu) }
+              }
+              if (iu && typeof iu === 'object' && typeof iu.url === 'string' && iu.url.length > MAX_INLINE_IMAGE) {
+                mutated = true
+                return { ...p, image_url: { ...iu, url: _stripBigDataUrl(iu.url) } }
+              }
             }
             return p
           })
           if (mutated) cleaned = { ...cleaned, content: parts }
+        }
+        // The `images` array is a SECOND copy of attached image data used
+        // by the bubble renderer for display. It mirrors what's in content
+        // for multimodal turns — same base64 bytes, ~5MB each. Strip the
+        // big data URLs on persist; renderer falls back to the marker.
+        if (Array.isArray(cleaned.images) && cleaned.images.length) {
+          let mutated = false
+          const stripped = cleaned.images.map(img => {
+            if (!img) return img
+            if (typeof img === 'string' && img.length > MAX_INLINE_IMAGE) {
+              mutated = true
+              return _stripBigDataUrl(img)
+            }
+            if (typeof img === 'object') {
+              const next = { ...img }
+              for (const key of ['dataUrl', 'url', 'src', 'data']) {
+                if (typeof next[key] === 'string' && next[key].length > MAX_INLINE_IMAGE) {
+                  next[key] = _stripBigDataUrl(next[key])
+                  mutated = true
+                }
+              }
+              if (mutated) return next
+            }
+            return img
+          })
+          if (mutated) cleaned = { ...cleaned, images: stripped }
         }
         // Cap file-attachment content blobs (PDFs/DOCX dumps).
         if (Array.isArray(cleaned.fileAttachments) && cleaned.fileAttachments.length) {
