@@ -5443,7 +5443,7 @@
           <div class="topbar-menu" id="topbar-menu" role="menu">
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('search', event)">🔍 Search all sessions <span style="color:var(--text-faint);font-size:11px;margin-left:auto">⌘F</span></button>
             <button class="topbar-menu-item" id="menu-crew" role="menuitem" onclick="runTopbarAction('crew', event)">👥 Crew</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('skills', event)">⏰ Tasks</button>
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('skills', event)">⏰ Routines</button>
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
@@ -5986,11 +5986,11 @@
   <div class="modal-overlay" id="skills-modal">
     <div class="modal" style="max-width:760px;width:94vw">
       <h2>
-        ⏰ Scheduled Skills
+        ⏰ Routines
         <button class="modal-close" onclick="toggleSkillsModal()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
-        Labaik runs a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
+        Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
       </div>
 
       <!-- Starter templates — click one to pre-fill the Add form. -->
@@ -6000,7 +6000,7 @@
       </div>
 
       <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a skill</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
         <input id="skill-name" type="text" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
         <textarea id="skill-prompt" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
         <!-- v0.5.23 friendly schedule picker. Converts to cron internally; -->
@@ -6053,7 +6053,7 @@
         </div>
       </div>
 
-      <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your skills</div>
+      <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
       <div id="skills-list"></div>
     </div>
   </div>
@@ -7920,7 +7920,7 @@ SUMMARY:`
       if (!listEl) return
       const skills = await window.alaude.skillsList()
       if (!Array.isArray(skills) || skills.length === 0) {
-        listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:13px">No scheduled skills yet. Add one above.</div>'
+        listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:13px">No routines yet. Add one above.</div>'
         return
       }
       listEl.innerHTML = skills.map(s => {
@@ -7977,7 +7977,7 @@ SUMMARY:`
       refreshSkillsList()
     }
     async function deleteSkill(id) {
-      if (!confirm('Delete this scheduled skill?')) return
+      if (!confirm('Delete this routine?')) return
       await window.alaude.skillsRemove(id)
       refreshSkillsList()
     }
