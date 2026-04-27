@@ -14242,38 +14242,39 @@ Title:`
     // first-message draft. Shown as a card grid on the empty welcome
     // screen. Each template ties together features that already exist
     // (Goal Tracker + Tags + starter prompt) into one click.
-    // v0.7.68: trimmed from 6 templates to 3 — one per chip category
-    // (Build / Office / Ideate) per labaik_bugs.md #2. Old IDs are
-    // preserved on existing sessions; we just don't surface launchers
-    // for the niche ones (standup / debug / research) on the welcome
-    // grid anymore. They're still reachable via custom-template save.
+    // v0.7.68 (rev2): rethought to showcase Labaik-only capabilities,
+    // not generic LLM tasks. Each template is self-contained (no
+    // user-fill-in blanks needed) and produces something the user can
+    // SEE — a runnable artifact, a real .xlsx, or a structured analysis.
+    // Differs from the first-run starter chips so returning users get
+    // fresh entry points instead of duplicate prompts.
     const SESSION_TEMPLATES = [
       {
-        id: 'code-review',
+        id: 'one-file-app',
         icon: '🛠️',
-        name: 'Build · Code Review',
-        desc: 'Paste code, get line-by-line feedback',
-        goal: 'Review code for bugs, perf, and clarity',
-        tags: ['review', 'coding'],
-        starter: 'Review the code below. Flag bugs, performance issues, code smells, and clarity problems. Cite specific line numbers and be direct — no hedging.\n\n```\n\n```',
+        name: 'One-file app',
+        desc: 'A working web tool — runs right here in chat',
+        goal: 'Build a small, self-contained HTML utility',
+        tags: ['build', 'artifact'],
+        starter: 'Build me a small, genuinely useful web tool — pick something you think I would actually use day-to-day (unit converter, regex tester, color picker, stopwatch, password generator, etc). One self-contained HTML file, clean styling, fully keyboard-accessible. Surprise me with the choice.',
       },
       {
-        id: 'writing',
+        id: 'budget-sheet',
         icon: '💼',
-        name: 'Office · Writing Polish',
-        desc: 'Rewrite a doc, email, or memo for clarity',
-        goal: 'Polish a piece of writing',
-        tags: ['writing'],
-        starter: 'Rewrite this for clarity and a professional but warm tone. Preserve the meaning; trim anything redundant. Show the polished version, then a short bulleted list of what you changed and why.\n\n---\n\n',
+        name: 'Budget spreadsheet',
+        desc: 'Real .xlsx with formulas — open in Excel or Numbers',
+        goal: 'Produce an editable .xlsx workbook',
+        tags: ['office', 'xlsx'],
+        starter: 'Build me a personal-finance starter spreadsheet covering 12 months and 5 spending categories with realistic mock numbers, a monthly net row, a savings-rate column, and yearly totals. Use formulas, not hardcoded sums. Use the ```xlsx block so I can save it as a real .xlsx file and edit it later.',
       },
       {
-        id: 'brainstorm',
+        id: 'idea-with-critique',
         icon: '💡',
-        name: 'Ideate · Brainstorm',
-        desc: 'Generate and evaluate options',
-        goal: 'Generate and evaluate ideas',
-        tags: ['brainstorm'],
-        starter: 'Help me brainstorm approaches to:\n\n\n\nGenerate 5 meaningfully different options. For each: one-line pitch, main upside, main risk, and where it\'d shine. Then recommend a favorite with reasoning.',
+        name: 'Idea + critique',
+        desc: '5 niche product ideas, then which one actually wins',
+        goal: 'Generate ideas with built-in critique',
+        tags: ['ideate', 'brainstorm'],
+        starter: 'Pick a specific niche (e.g. "tools for solo restaurant owners", "side projects for tired parents", "AI for high-school teachers"). Generate 5 product ideas in that niche. For each: who it is for, the wedge that makes it work, and why now. Then crown the strongest one and tell me what would have to be true for it to ship in 90 days.',
       },
     ]
     // User-saved custom templates live in localStorage, merged with the
