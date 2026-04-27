@@ -744,7 +744,11 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // Pass the current permission mode for this workspace so the worker can
     // gate tool execution before the OS-level tool call actually runs.
     const mode = getCurrentMode(workspacePath)
-    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode }) + '\n'
+    // v0.7.67 — plan mode propagates from the renderer through uxMeta. The
+    // worker uses it to swap in the plan-only system prompt and skip tool
+    // offerings so the model can't sneak past the "no execution" rule.
+    const planMode = !!uxMeta?.planMode
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
     armIdle()

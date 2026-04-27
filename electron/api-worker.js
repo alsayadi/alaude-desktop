@@ -721,7 +721,34 @@ function summarizeArgs(name, args) {
   return ''
 }
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode }) {
+// v0.7.67 — plan-mode addition. Appended to the system prompt when the
+// renderer requests plan mode. Tells the model to write a plan only and
+// NOT to execute. We also strip the workspace tools below so the model
+// physically cannot call write_file / run_command even if it tried.
+const PLAN_MODE_PROMPT_ADDITION = `
+
+## PLAN MODE — read this before responding
+
+You are in plan mode. The user wants a step-by-step plan, NOT execution.
+
+Rules:
+1. Do NOT call any tools. Do NOT write files. Do NOT run commands.
+2. Output a clear markdown plan with:
+   - A 1-2 sentence summary of what you intend to do.
+   - A numbered list of concrete steps. Each step should be small enough
+     that you'd execute it as a single action if/when approved.
+   - "Files to be touched" — list the specific paths you'd read or write.
+   - Any open questions or assumptions the user should confirm.
+3. End with: "Reply 'go' or click Approve & execute to proceed, or tell
+   me what to change."
+4. If the request is ambiguous, ASK FOR CLARIFICATION instead of inventing
+   a plan based on guesses.
+
+The user will review the plan, then either approve it (which lands you
+back in normal mode with a "Proceed with the plan above" message) or
+ask for changes. Stay in plan mode until they explicitly approve.`
+
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -745,24 +772,35 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     return ''
   })()
 
-  const sysPrompt = buildSystemPrompt({
+  let sysPrompt = buildSystemPrompt({
     provider,
     model,
     workspacePath,
     spacePrompt,
     userText: lastUserText,
   })
+  // v0.7.67 — plan mode swaps in a "produce a plan, don't execute" addendum.
+  // Tools are also disabled below by passing skipTools=true into the chat
+  // routes that respect it. Belt + suspenders: prompt says don't, code
+  // can't.
+  if (planMode) {
+    sysPrompt += PLAN_MODE_PROMPT_ADDITION
+    process.stderr.write(`[worker] plan mode active for messageId=${messageId}\n`)
+  }
 
   // Wrap every activity event with the renderer messageId so the renderer can
   // route tokens to the right lane in council / multi-model mode.
   const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode })
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
-    const skipTools = shouldSkipToolsForLocal(model)
+    // Plan mode forces skipTools=true regardless of model — even a thinking
+    // model with tools available shouldn't be able to physically call them
+    // while planning.
+    const skipTools = planMode || shouldSkipToolsForLocal(model)
     const normalised = normalizeModelId(model)
     // Thinking models (Qwen 3, DeepSeek-R1, QwQ) get Ollama's native /api/chat
     // endpoint because OpenAI-compat silently drops chat_template_kwargs.
@@ -775,7 +813,7 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     // v0.7.61: strip any routing-hint prefix (e.g. `kimi-intl/`) so the
     // SDK sees the raw upstream model id. Case is preserved — MiniMax
     // and other case-sensitive providers need `MiniMax-M2.7` unchanged.
-    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode })
+    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode })
   }
 }
 
@@ -1158,7 +1196,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {}, mode = 'autopilot' } = opts
+  const { onActivity = () => {}, mode = 'autopilot', planMode = false } = opts
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
   // token. The SDK takes authToken for Bearer auth. When the credential
@@ -1174,8 +1212,9 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   }
   const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
-  const mcpTools = await getMcpTools().catch(() => [])
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  // v0.7.67 — plan mode strips ALL tools so the model physically can't act.
+  const mcpTools = planMode ? [] : await getMcpTools().catch(() => [])
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs

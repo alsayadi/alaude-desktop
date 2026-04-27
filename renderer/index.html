@@ -5608,6 +5608,12 @@
           <option value="flow">🌊 Flow · auto-edit, ask dangerous</option>
           <option value="autopilot" selected>🚀 Autopilot · run everything</option>
         </select>
+        <!-- v0.7.67 Plan mode — model produces a step-by-step plan only,
+             no tool calls, no file writes. User reviews + approves to
+             execute. Toggle is sticky (persists across sessions). -->
+        <button class="workspace-perm-select" id="plan-mode-btn" onclick="togglePlanMode()"
+                title="Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute."
+                style="background:transparent;cursor:pointer">📋 Plan mode</button>
         <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
       </div>
     </div>
@@ -9693,6 +9699,45 @@ footer a { color: var(--accent); text-decoration: none; }
       { name: 'Researcher', icon: '🔍', prompt: 'You are the Researcher. Ground the answer in facts, cite reasoning chains, surface relevant precedents or prior art. Link where possible.' },
     ]
     let crewMode = false
+    // v0.7.67 — Plan mode. When true, the next chat call asks the model to
+    // produce a markdown plan only (no tool calls, no file changes). After
+    // the response renders, an inline "Approve & execute" button appears
+    // that turns plan mode off and sends "Proceed with the plan above."
+    // back to the model. Sticky across launches.
+    const LS_PLAN_MODE = 'alaude:planMode:v1'
+    let planMode = (() => { try { return localStorage.getItem(LS_PLAN_MODE) === '1' } catch { return false } })()
+    function _renderPlanModeButton() {
+      const btn = document.getElementById('plan-mode-btn')
+      if (!btn) return
+      if (planMode) {
+        btn.style.background = 'rgba(255,196,0,0.15)'
+        btn.style.borderColor = 'rgba(255,196,0,0.4)'
+        btn.textContent = '📋 Plan mode · ON'
+      } else {
+        btn.style.background = 'transparent'
+        btn.style.borderColor = ''
+        btn.textContent = '📋 Plan mode'
+      }
+      // Reflect in composer placeholder so the user sees the change.
+      const ta = document.getElementById('input')
+      if (ta && !ta.value) {
+        ta.placeholder = planMode
+          ? 'Describe the task — Labaik will plan it before touching anything.'
+          : 'Message Labaik...'
+      }
+    }
+    function togglePlanMode() {
+      planMode = !planMode
+      try { localStorage.setItem(LS_PLAN_MODE, planMode ? '1' : '0') } catch {}
+      _renderPlanModeButton()
+    }
+    function setPlanMode(v) {
+      planMode = !!v
+      try { localStorage.setItem(LS_PLAN_MODE, planMode ? '1' : '0') } catch {}
+      _renderPlanModeButton()
+    }
+    // Render once at script init so the saved state shows up on boot.
+    requestAnimationFrame(_renderPlanModeButton)
     // Per-role model picks. Empty string = "use whatever's in the sidebar
     // selector" (fallback). Persists across launches.
     const LS_CREW_MODELS = 'alaude:crewModels:v1'
@@ -10579,6 +10624,9 @@ footer a { color: var(--accent); text-decoration: none; }
         action: ux.pendingAction,
         promptHash,
         hasAttachments: false,
+        // v0.7.67 — pass plan-mode flag so the worker can swap in the
+        // plan-only system prompt and skip workspace tool offers.
+        planMode: !!planMode,
       }
       // Reset for next send
       ux.pendingEntry = 'freeform'
