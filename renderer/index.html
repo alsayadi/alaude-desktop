@@ -9326,6 +9326,21 @@ footer a { color: var(--accent); text-decoration: none; }
     let cmdPaletteItems = []
     let cmdPaletteActiveIdx = 0
 
+    // v0.7.67 — folder-skills cache. Refreshed when the palette opens so a
+    // user who just dropped a new skill folder doesn't need to relaunch.
+    // Failure (no IPC bridge, etc.) leaves the cache as-is — palette still
+    // works, just without folder skills.
+    let _folderSkillsCache = []
+    let _folderSkillsRoot = ''
+    async function _refreshFolderSkills() {
+      try {
+        if (!window.alaude?.folderSkillsList) return
+        const r = await window.alaude.folderSkillsList()
+        _folderSkillsCache = Array.isArray(r?.skills) ? r.skills : []
+        _folderSkillsRoot = r?.root || ''
+      } catch {}
+    }
+
     function openCmdPalette() {
       const overlay = document.getElementById('cmd-palette-overlay')
       const input = document.getElementById('cmd-palette-input')
@@ -9334,6 +9349,14 @@ footer a { color: var(--accent); text-decoration: none; }
       renderCmdPalette('')
       overlay.classList.add('show')
       requestAnimationFrame(() => input.focus())
+      // Async — by the time the user types something, the skills are loaded.
+      // First-paint shows whatever was cached on the previous open (or empty).
+      _refreshFolderSkills().then(() => {
+        // Re-render if the palette is still visible and now has skills to show
+        if (overlay.classList.contains('show')) {
+          renderCmdPalette(document.getElementById('cmd-palette-input').value || '')
+        }
+      })
     }
     function closeCmdPalette() {
       document.getElementById('cmd-palette-overlay').classList.remove('show')
@@ -9428,6 +9451,30 @@ footer a { color: var(--accent); text-decoration: none; }
           label: `Pin current model to slot ${n}`,
           search: `pin slot ${n} hotkey shortcut favorite`,
           action: () => { closeCmdPalette(); if (_curModel) pinModelToSlot(n, _curModel) },
+        })
+      }
+      // v0.7.67 — folder-discovered skills from ~/.labaik/skills/<slug>/SKILL.md
+      // Click → prepend the skill body to the composer (does NOT auto-send so
+      // the user can edit/append their own context first).
+      for (const sk of _folderSkillsCache) {
+        items.push({
+          kind: 'skill',
+          icon: '🛠️',
+          label: sk.name,
+          search: `skill ${sk.name} ${sk.description} ${sk.slug}`,
+          desc: sk.description || sk.slug,
+          action: () => {
+            closeCmdPalette()
+            const ta = document.getElementById('input')
+            if (!ta) return
+            const existing = ta.value || ''
+            ta.value = existing
+              ? `${sk.body}\n\n${existing}`
+              : sk.body
+            ta.focus()
+            // Trigger any input listeners (autosize, etc.)
+            ta.dispatchEvent(new Event('input', { bubbles: true }))
+          },
         })
       }
       return items

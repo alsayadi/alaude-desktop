@@ -38,6 +38,7 @@ const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
 const permissions = require('./permissions')
 const skills = require('./skills')
+const folderSkills = require('./folder-skills')
 const mcp = require('./mcp')
 const jsonStore = require('./json-store')
 const paths = require('./paths')
@@ -967,6 +968,16 @@ ipcMain.handle('skills-list', () => skills.list())
 ipcMain.handle('skills-upsert', (_e, skill) => skills.upsert(skill))
 ipcMain.handle('skills-remove', (_e, id) => { skills.remove(id); return true })
 ipcMain.handle('skills-set-enabled', (_e, id, enabled) => skills.setEnabled(id, enabled))
+
+// ── IPC: folder-skills (v0.7.67) ─────────────────────────────────────────
+// Filesystem-discovered skill templates from ~/.labaik/skills/<slug>/SKILL.md.
+// Distinct concept from cron-routines above; see electron/folder-skills.js
+// for the rationale on the naming overlap.
+ipcMain.handle('folder-skills-list', () => {
+  folderSkills.ensureRoot()  // creates dir + README on first call
+  return { skills: folderSkills.discover(), root: folderSkills.getRoot() }
+})
+ipcMain.handle('folder-skills-get', (_e, slug) => folderSkills.get(slug))
 
 // ── IPC: durable JSON store (v0.7.59) ─────────────────────────────────────
 // Renderer-side stores (memory, profile, eventually sessions) used to live

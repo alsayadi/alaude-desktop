@@ -111,7 +111,7 @@ contextBridge.exposeInMainWorld('alaude', {
     try { return ipcRenderer.sendSync('fs-json-write-sync', name, data) } catch { return false }
   },
 
-  // Cron Skills (v0.5.4)
+  // Routines (v0.5.4 — was "Cron Skills"; renamed in v0.7.67 UI)
   skillsList: () => ipcRenderer.invoke('skills-list'),
   skillsUpsert: (skill) => ipcRenderer.invoke('skills-upsert', skill),
   skillsRemove: (id) => ipcRenderer.invoke('skills-remove', id),
@@ -121,6 +121,11 @@ contextBridge.exposeInMainWorld('alaude', {
     ipcRenderer.on('skill-ran', h)
     return () => ipcRenderer.removeListener('skill-ran', h)
   },
+
+  // Folder-skills (v0.7.67) — filesystem-discovered prompt templates from
+  // ~/.labaik/skills/<slug>/SKILL.md. Surfaced in the command palette.
+  folderSkillsList: () => ipcRenderer.invoke('folder-skills-list'),
+  folderSkillsGet: (slug) => ipcRenderer.invoke('folder-skills-get', slug),
 
   // Permission mode (v0.4.0 — Observe + Autopilot; Careful/Flow arrive later)
   permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),
