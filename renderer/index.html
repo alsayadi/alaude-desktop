@@ -5857,14 +5857,13 @@
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title">What can I help you with?</div>
         <div class="quick-actions" id="quick-actions"></div>
-        <!-- v0.7.67 — minimalist starter chips. Replaced the verbose
-             "first-run coach" card. Less copy, no keyboard footer, no
-             promotional header. Click a chip → fill composer + send. -->
+        <!-- v0.7.68 — three category chips: Build, Office work, Ideate.
+             One chip per major use case so first-time users see the
+             breadth without information overload. Click → fill + send. -->
         <div class="starter-chips" id="first-run-coach" style="display:none">
-          <button class="starter-chip" onclick="coachFillAndSend('Build me a playable snake game I can run right here')">🎮 Snake game</button>
-          <button class="starter-chip" onclick="coachFillAndSend('Make a bar chart comparing Q1-Q4 revenue: 120, 150, 180, 210 (in thousands)')">📊 Chart from data</button>
-          <button class="starter-chip" onclick="coachFillAndSend('Write a one-page PPTX about the solar system — title, 3 planet slides with bullets')">📄 PowerPoint draft</button>
-          <button class="starter-chip" onclick="coachFillAndSend('Summarize this repo in 3 bullet points, then propose one concrete improvement')">🗂️ Summarize a repo</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Build me a small playable game I can run right here — keep it in one HTML file with keyboard controls. Surprise me with the choice.')">🛠️ Build something</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Draft a 4-slide PowerPoint pitch deck on a topic of your choice — title slide, problem, solution, the ask. I will edit from there.')">💼 Office work</button>
+          <button class="starter-chip" onclick="coachFillAndSend('Brainstorm 5 fresh side-project ideas I could ship in a weekend. For each: one-line pitch, main upside, biggest risk. Recommend your favorite and why.')">💡 Ideate</button>
         </div>
       </div>
       <div class="drop-overlay" id="drop-overlay">
@@ -10741,9 +10740,13 @@ footer a { color: var(--accent); text-decoration: none; }
         if (e.key === 'Escape') { e.preventDefault(); closeFindbar() }
       })
     }, 0)
-    // Track system changes when no explicit preference is set
+    // v0.7.68: per labaik_bugs.md #1, default is LIGHT — we don't follow
+    // the system theme anymore. Old behavior auto-flipped to dark on
+    // dark-mode macOS, which is exactly what the user reported as a bug.
+    // Listener kept (no-op) so removing it later doesn't need to hunt for
+    // an addEventListener call site.
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-      if (!localStorage.getItem(LS_THEME)) applyTheme(null)
+      // Intentionally empty. Theme follows the user's explicit toggle only.
     })
 
     // v0.7.46 — topbar "more" dropdown handlers.
@@ -11906,18 +11909,18 @@ Title:`
         const compareClass = compareArmedHere ? ' active' : ''
         const compareLabel = compareArmedHere ? '⚖ Armed…' : '⚖ Compare'
         const noteBtnLabel = msg.note ? '📝 Note ✓' : '📝 Note'
-        // v0.7.46: message-action trim. Kept only the four most-used
-        // actions: Copy, Pin, Branch, Regenerate (Regenerate is added
-        // later, only on the last assistant message). Hidden:
-        //   👍 👎 (reactions), 🔊 (TTS — was already voice-gated),
-        //   ⚖ Compare, 📝 Note, ↪ Refine, 💾 Save, ↶ Rewind.
+        // v0.7.68: per labaik_bugs.md #3 — final action-bar trim. Kept
+        // exactly: 📌 Pin, 💾 Save, 📋 Copy, ⎇ Branch. Hidden:
+        //   👍 👎 (reactions), 🔊 (TTS), ⚖ Compare, 📝 Note,
+        //   ↪ Refine, ↻ Regenerate, ↶ Rewind.
         // The functions still exist — reachable via command palette or
         // shortcuts — they're just not cluttering the per-message action
         // row every time you get a reply.
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
-              <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
+              <button class="msg-action-btn" onclick="saveMessage(${i})" title="Save response to a file">💾 Save</button>
+              <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
               <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">⎇ Branch</button>
              </div>`
           : ''
@@ -11995,12 +11998,11 @@ Title:`
         const timestamp = (msg.ts && !msg.streaming)
           ? `<span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>`
           : ''
-        // Regenerate button on the LAST assistant message
-        const isLastAssistant = msg.role === 'assistant' && !msg.streaming && i === messages.length - 1
-        const regenBtn = isLastAssistant ? `<button class="msg-action-btn" onclick="regenerateLast()" title="Re-run with same / different model">↻ Regenerate</button>` : ''
+        // v0.7.68: ↻ Regenerate removed from action bar per labaik_bugs.md #3.
+        // The function regenerateLast() still exists — reachable via the
+        // command palette / keyboard shortcut. We just don't render the
+        // per-message button anymore.
         const actionsFull = actions
-          ? actions.replace('</div>', regenBtn + '</div>')
-          : (isLastAssistant ? `<div class="msg-actions">${regenBtn}</div>` : '')
         // Memory chip on assistant messages that had recalled memories injected.
         const memChip = (msg.role === 'assistant' && !msg.streaming && msg.memoriesUsed && msg.memoriesUsed.length)
           ? `<div><span class="memory-chip" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'" title="Click to expand">🧠 ${msg.memoriesUsed.length} ${msg.memoriesUsed.length === 1 ? 'memory' : 'memories'} used</span><div class="memory-chip-expanded" style="display:none">${msg.memoriesUsed.map(m => `<div class="mem-item">· ${escapeHtml(m.text)}</div>`).join('')}<div style="margin-top:6px"><a onclick="toggleMemoryModal()" style="color:var(--green);cursor:pointer;font-size:11px">Manage memories →</a></div></div></div>`
@@ -14240,60 +14242,38 @@ Title:`
     // first-message draft. Shown as a card grid on the empty welcome
     // screen. Each template ties together features that already exist
     // (Goal Tracker + Tags + starter prompt) into one click.
+    // v0.7.68: trimmed from 6 templates to 3 — one per chip category
+    // (Build / Office / Ideate) per labaik_bugs.md #2. Old IDs are
+    // preserved on existing sessions; we just don't surface launchers
+    // for the niche ones (standup / debug / research) on the welcome
+    // grid anymore. They're still reachable via custom-template save.
     const SESSION_TEMPLATES = [
       {
-        id: 'standup',
-        icon: '📅',
-        name: 'Daily Standup',
-        desc: 'Turn yesterday\'s work into today\'s plan',
-        goal: 'Prepare today\'s standup update',
-        tags: ['standup'],
-        starter: 'Here\'s what I worked on yesterday:\n- \n\nBlockers:\n- \n\nPlan for today:\n- \n\nPolish this into a tight 3-bullet standup update.',
-      },
-      {
         id: 'code-review',
-        icon: '🧐',
-        name: 'Code Review',
+        icon: '🛠️',
+        name: 'Build · Code Review',
         desc: 'Paste code, get line-by-line feedback',
         goal: 'Review code for bugs, perf, and clarity',
         tags: ['review', 'coding'],
         starter: 'Review the code below. Flag bugs, performance issues, code smells, and clarity problems. Cite specific line numbers and be direct — no hedging.\n\n```\n\n```',
       },
       {
-        id: 'debug',
-        icon: '🐛',
-        name: 'Debug Help',
-        desc: 'Root-cause a stack trace or weird behavior',
-        goal: 'Root-cause and fix the bug',
-        tags: ['debug'],
-        starter: 'I\'m seeing this error/behavior:\n\n\n\nRelevant code:\n\n```\n\n```\n\nList the top 3 most likely causes in order of probability. For each, give a one-line fix + how to verify.',
+        id: 'writing',
+        icon: '💼',
+        name: 'Office · Writing Polish',
+        desc: 'Rewrite a doc, email, or memo for clarity',
+        goal: 'Polish a piece of writing',
+        tags: ['writing'],
+        starter: 'Rewrite this for clarity and a professional but warm tone. Preserve the meaning; trim anything redundant. Show the polished version, then a short bulleted list of what you changed and why.\n\n---\n\n',
       },
       {
         id: 'brainstorm',
         icon: '💡',
-        name: 'Brainstorm',
-        desc: 'Generate and evaluate ideas',
+        name: 'Ideate · Brainstorm',
+        desc: 'Generate and evaluate options',
         goal: 'Generate and evaluate ideas',
         tags: ['brainstorm'],
         starter: 'Help me brainstorm approaches to:\n\n\n\nGenerate 5 meaningfully different options. For each: one-line pitch, main upside, main risk, and where it\'d shine. Then recommend a favorite with reasoning.',
-      },
-      {
-        id: 'research',
-        icon: '🔬',
-        name: 'Research Brief',
-        desc: 'Structured answer with citations',
-        goal: 'Produce a research brief',
-        tags: ['research'],
-        starter: 'Topic:\n\n\n\nWrite a ~400-word brief covering: current state, 2-3 competing viewpoints, what changed recently, and what\'s still contested. Where you\'re uncertain, say so. Cite sources inline.',
-      },
-      {
-        id: 'writing',
-        icon: '✍️',
-        name: 'Writing Polish',
-        desc: 'Rewrite for clarity and tone',
-        goal: 'Polish a piece of writing',
-        tags: ['writing'],
-        starter: 'Rewrite this for clarity and a professional but warm tone. Preserve the meaning; trim anything redundant. Show the polished version, then a short bulleted list of what you changed and why.\n\n---\n\n',
       },
     ]
     // User-saved custom templates live in localStorage, merged with the
