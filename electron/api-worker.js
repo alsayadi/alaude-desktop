@@ -855,9 +855,16 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
       // carry it forward in the multi-turn history — DeepSeek's API
       // returns 400 "reasoning_content must be passed back" otherwise.
       let iterReasoning = ''
+      // v0.7.67 streaming verification: track the last finish_reason so we
+      // can detect token-cap truncation ("length") and other anomalies after
+      // the loop ends. Many providers send finish_reason in the FINAL chunk
+      // only, so we overwrite on every non-null sighting.
+      let lastFinishReason = null
       const partialTools = []
       for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta
+        const choice = chunk.choices?.[0]
+        if (choice?.finish_reason) lastFinishReason = choice.finish_reason
+        const delta = choice?.delta
         if (!delta) continue
         if (delta.reasoning_content) {
           iterReasoning += delta.reasoning_content
@@ -880,6 +887,39 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
           }
         }
       }
+      // v0.7.67 streaming verification — post-stream sanity checks.
+      // We do NOT throw on warnings; we surface them so the user understands
+      // why a response looks short or empty, and we keep going.
+      if (lastFinishReason === 'length') {
+        const note = '\n\n⚠️ Response was cut off at the model\'s token limit. Ask "continue" to resume from where it stopped.'
+        iterContent += note
+        onActivity({ phase: 'stream_warning', reason: 'length_cap', note })
+        process.stderr.write(`[worker] stream truncated by length cap (model=${model})\n`)
+      } else if (!iterContent && !iterReasoning && !partialTools.length) {
+        // No text, no reasoning, no tool calls — most likely a transient
+        // server-side issue. Log loudly; don't fake content.
+        process.stderr.write(`[worker] stream ended with no content / no tool_calls / no reasoning (finish_reason=${lastFinishReason}, model=${model})\n`)
+        onActivity({ phase: 'stream_warning', reason: 'empty_stream' })
+      }
+      // Validate any tool-call arguments JSON now, before they're handed to
+      // executeToolCall. Malformed JSON used to crash the whole turn at the
+      // JSON.parse() below; instead we drop bad calls with a clear error.
+      const validatedTools = partialTools.filter((tc, idx) => {
+        if (!tc.function?.name) {
+          process.stderr.write(`[worker] dropped tool_call ${idx}: missing function name\n`)
+          return false
+        }
+        try {
+          JSON.parse(tc.function.arguments || '{}')
+          return true
+        } catch (e) {
+          process.stderr.write(`[worker] dropped tool_call "${tc.function.name}": malformed args JSON: ${e.message}\n`)
+          onActivity({ phase: 'stream_warning', reason: 'bad_tool_args', name: tc.function.name })
+          return false
+        }
+      })
+      partialTools.length = 0
+      partialTools.push(...validatedTools)
       // OpenAI spec: content can only be null when tool_calls is set. If no
       // tools AND no text came back, send an empty string so the next turn's
       // history stays valid.
@@ -907,7 +947,17 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     if (msg.content) fullText += msg.content
     if (msg.tool_calls?.length) {
       for (const tc of msg.tool_calls) {
-        const args = JSON.parse(tc.function.arguments || '{}')
+        // v0.7.67 — second-line JSON.parse safety. The streaming validator
+        // above already filters malformed args, but the non-streaming
+        // fallback path doesn't run that check, so we guard here too.
+        let args
+        try { args = JSON.parse(tc.function.arguments || '{}') }
+        catch (e) {
+          process.stderr.write(`[worker] non-streaming bad tool args for ${tc.function.name}: ${e.message}\n`)
+          onActivity({ phase: 'stream_warning', reason: 'bad_tool_args', name: tc.function.name })
+          chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'tool arguments were not valid JSON; the model needs to retry' }) })
+          continue
+        }
         onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
         const result = await executeToolCall(tc.function.name, args, workspacePath, mode)
         onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
@@ -1171,6 +1221,19 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     } catch (streamErr) {
       process.stderr.write(`[worker] anthropic streaming failed (${streamErr.message}) — falling back\n`)
       res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
+    }
+
+    // v0.7.67 — verify Anthropic stream completeness via stop_reason.
+    // Healthy values: "end_turn" (done), "tool_use" (will iterate), "stop_sequence".
+    // "max_tokens" means truncated → tell the user.
+    if (res?.stop_reason === 'max_tokens') {
+      const note = '\n\n⚠️ Response was cut off at the model\'s token limit. Ask "continue" to resume.'
+      fullText += note
+      onActivity({ phase: 'stream_warning', reason: 'length_cap', note })
+      process.stderr.write(`[worker] anthropic stream truncated by max_tokens (model=${model})\n`)
+    } else if (!res?.content?.length) {
+      process.stderr.write(`[worker] anthropic stream returned empty content (stop_reason=${res?.stop_reason}, model=${model})\n`)
+      onActivity({ phase: 'stream_warning', reason: 'empty_stream' })
     }
 
     for (const b of res.content) { if (b.type === 'text') fullText += b.text }
