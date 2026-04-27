@@ -5330,12 +5330,15 @@
     }
 
     /* The question popup is an INLINE card above the composer — contained
-       inside the chat panel, no full-screen overlay. Sits in the same
-       region as the plan-mode approve bar so the conversation stays
-       fully visible while the user is choosing. */
+       inside the chat panel. Right-aligned + max-width capped so it
+       doesn't dominate the chat width. Has a collapse/expand toggle
+       so the user can shrink it to a tiny chip while reading the
+       conversation. */
     .ask-modal-overlay {
       display: none;
       margin: 0 16px 8px;
+      margin-left: auto;
+      max-width: 420px;
       animation: askPopIn 0.18s ease-out;
     }
     .ask-modal-overlay.show { display: block; }
@@ -5346,6 +5349,21 @@
       border: 1px solid rgba(120, 180, 255, 0.4);
       box-shadow: 0 4px 20px rgba(91, 157, 255, 0.15);
     }
+    /* Collapsed state — only the header is visible. Saves ~300px of
+       vertical space when the user wants to focus on the chat. */
+    .ask-modal-overlay.collapsed .ask-modal-questions,
+    .ask-modal-overlay.collapsed .ask-modal-custom,
+    .ask-modal-overlay.collapsed .ask-modal-footer { display: none; }
+    .ask-modal-overlay.collapsed .ask-modal-header { border-bottom: 0; }
+    /* Header now lives flex-row with a collapse toggle on the right. */
+    .ask-modal-collapse {
+      flex: 0 0 auto;
+      padding: 2px 8px; border-radius: 6px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-size: 12px; line-height: 1;
+      cursor: pointer; transition: all 0.12s ease;
+    }
+    .ask-modal-collapse:hover { background: var(--bg-input); color: var(--text); }
     @keyframes askPopIn {
       from { transform: translateY(6px); opacity: 0; }
       to   { transform: translateY(0); opacity: 1; }
@@ -5419,6 +5437,210 @@
       cursor: pointer; transition: all 0.12s ease;
     }
     .ask-modal-skip:hover { background: var(--bg); color: var(--text); border-color: var(--text-dim); }
+    .ask-modal-submit {
+      padding: 6px 14px; border-radius: 6px;
+      background: #28a76b; color: white; border: 0;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .ask-modal-submit:hover { background: #229057; }
+    .ask-modal-submit:disabled { background: #888; cursor: not-allowed; opacity: 0.6; }
+    /* Multi-question wrapper. Each question has its own group with a
+       small numbered header above its options. */
+    .ask-modal-questions {
+      padding: 10px 12px 4px;
+      display: flex; flex-direction: column; gap: 14px;
+      max-height: 360px; overflow-y: auto;
+    }
+    .ask-mod-question-group { display: flex; flex-direction: column; gap: 5px; }
+    .ask-mod-question-label {
+      font-size: 12px; font-weight: 600;
+      color: var(--text);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .ask-mod-question-num {
+      flex: 0 0 18px; height: 18px; border-radius: 50%;
+      background: rgba(120, 180, 255, 0.2); color: #5b9dff;
+      font-size: 10.5px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ask-mod-question-text { flex: 1; }
+    .ask-mod-question-options { display: flex; flex-direction: column; gap: 4px; }
+    .ask-mod-option.selected {
+      border-color: #28a76b !important;
+      background: rgba(40, 167, 107, 0.18) !important;
+      box-shadow: 0 0 0 2px rgba(40, 167, 107, 0.15);
+    }
+    .ask-mod-option.selected::after {
+      content: '✓'; position: absolute; right: 11px; top: 50%;
+      transform: translateY(-50%);
+      color: #28a76b; font-weight: 700; font-size: 14px;
+    }
+    .ask-mod-option { position: relative; }
+    /* Custom-answer input row */
+    .ask-modal-custom {
+      padding: 6px 14px 12px;
+      display: flex; flex-direction: column; gap: 4px;
+      border-top: 1px dashed var(--border);
+      margin-top: 4px;
+    }
+    .ask-modal-custom-label {
+      font-size: 11px; color: var(--text-faint);
+    }
+    .ask-modal-custom-input {
+      padding: 7px 10px; border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg-input); color: var(--text);
+      font-size: 12.5px;
+      transition: border-color 0.12s ease;
+    }
+    .ask-modal-custom-input:focus { outline: none; border-color: rgba(120, 180, 255, 0.55); }
+
+    /* v0.7.67 — Plan card. The model emits a fenced ```plan``` JSON block;
+       the renderer turns it into a clean, scannable card with sections.
+       Goal: the user sees WHAT THEY GET, the steps, the files affected,
+       and the things they should know — without scrolling through a wall
+       of prose. Each section has a clear icon and grouping. */
+    /* Normal-readable fonts, ultra-tight spacing.
+       Goal: card looks elegant + scannable, but text isn't squinty. */
+    .plan-card {
+      margin: 6px 0;
+      border-radius: 9px;
+      background: linear-gradient(180deg, rgba(255, 176, 32, 0.05), transparent 120px);
+      border: 1px solid rgba(255, 176, 32, 0.32);
+      overflow: hidden;
+    }
+    .plan-card-header {
+      padding: 7px 11px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255, 176, 32, 0.10), rgba(255, 176, 32, 0.03));
+    }
+    .plan-card-ico {
+      flex: 0 0 22px; height: 22px; border-radius: 6px;
+      background: linear-gradient(135deg, #ffb020, #d99317);
+      color: white; font-size: 12px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 3px rgba(255, 176, 32, 0.4);
+    }
+    .plan-card-title { flex: 1; line-height: 1.15; }
+    .plan-card-kicker {
+      font-size: 10px; font-weight: 700;
+      color: #b97a14; letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .plan-card-headline { font-size: 14.5px; font-weight: 600; color: var(--text); line-height: 1.25; }
+    .plan-section {
+      padding: 5px 11px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .plan-section:last-of-type { border-bottom: 0; }
+    .plan-section-head {
+      font-size: 10.5px; font-weight: 600;
+      color: var(--text-dim); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 2px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .plan-section-head-count {
+      font-size: 10px; font-weight: 600;
+      color: var(--text-faint);
+      padding: 0 5px; border-radius: 999px;
+      background: var(--bg-input);
+      letter-spacing: 0; text-transform: none;
+    }
+    .plan-goal {
+      font-size: 13.5px; line-height: 1.4;
+      color: var(--text);
+    }
+    .plan-steps {
+      display: flex; flex-direction: column; gap: 1px;
+      padding: 0; margin: 0; list-style: none;
+    }
+    .plan-step {
+      display: flex; gap: 7px;
+      padding: 2px 4px;
+      background: transparent;
+      border-radius: 4px;
+      align-items: center;
+    }
+    .plan-step-num {
+      flex: 0 0 18px; height: 18px; border-radius: 50%;
+      background: rgba(255, 176, 32, 0.16);
+      color: #b97a14; font-size: 10.5px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .plan-step-body { flex: 1; line-height: 1.3; }
+    .plan-step-title { font-size: 13.5px; font-weight: 500; color: var(--text); }
+    .plan-step-detail { font-size: 12.5px; color: var(--text-dim); margin-top: 0; }
+    /* Toggle for the "technical details" (files) section — hidden by default. */
+    .plan-details-toggle {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; color: var(--text-faint);
+      background: transparent; border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .plan-details-toggle:hover { color: var(--text-dim); border-color: var(--text-faint); }
+    .plan-files-wrap { display: none; margin-top: 4px; }
+    .plan-files-wrap.show { display: block; }
+    .plan-files {
+      display: flex; flex-direction: column; gap: 1px;
+    }
+    .plan-file {
+      display: flex; align-items: center; gap: 6px;
+      padding: 2px 6px;
+      font-size: 12px;
+      border-radius: 3px;
+      background: var(--bg-input);
+      font-family: var(--mono, ui-monospace, monospace);
+    }
+    .plan-file-icon { font-size: 11px; flex-shrink: 0; }
+    .plan-file-path { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plan-file-action {
+      font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 0 5px; border-radius: 2px;
+    }
+    .plan-file-action-create { background: rgba(40, 167, 107, 0.15); color: #28a76b; }
+    .plan-file-action-modify { background: rgba(91, 157, 255, 0.15); color: #5b9dff; }
+    .plan-file-action-delete { background: rgba(220, 80, 80, 0.15); color: #d35050; }
+    .plan-knows {
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .plan-know {
+      display: flex; gap: 6px;
+      padding: 0;
+      font-size: 12.5px; line-height: 1.4;
+      color: var(--text-dim);
+    }
+    .plan-know::before {
+      content: '•'; color: #ffb020;
+      font-weight: 700; flex-shrink: 0;
+    }
+    .plan-card-footer {
+      padding: 4px 11px;
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg-input);
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+    }
+    .plan-card-estimate {
+      color: var(--text-dim);
+      display: inline-flex; align-items: center; gap: 3px;
+    }
+    .plan-card-estimate::before { content: '⏱'; font-size: 11.5px; }
+    .plan-card-hint {
+      color: var(--text-faint);
+      font-style: italic; font-size: 11px;
+    }
+    .plan-card-error {
+      padding: 10px 14px; font-size: 12px;
+      color: var(--text-faint); font-family: var(--mono, monospace);
+      background: rgba(220, 80, 80, 0.06);
+      border: 1px solid rgba(220, 80, 80, 0.2);
+      border-radius: 8px;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
@@ -5765,20 +5987,28 @@
       <button class="plan-mode-approve-btn" onclick="approvePlanAndExecute()">✓ Approve &amp; execute</button>
     </div>
 
-    <!-- v0.7.67 — Ask-user-question popup. Inline card above the composer,
-         contained within the chat panel (no full-screen overlay). Shows
-         when an assistant message contains a ```ask``` block. Skip to
-         dismiss; click an option to auto-fill + send. -->
+    <!-- v0.7.67 — Ask-user-question popup. Inline card above the composer.
+         Multi-question: model emits up to 3 questions in one block; the
+         popup shows them all, user picks an option per question, then
+         clicks Submit. Custom answer input lets the user type free-form
+         for any question. Skip = "use your best judgment for the rest". -->
     <div class="ask-modal-overlay" id="ask-modal-overlay">
-      <div class="ask-modal" role="dialog" aria-modal="false" aria-labelledby="ask-modal-q">
+      <div class="ask-modal" role="dialog" aria-modal="false">
         <div class="ask-modal-header">
           <span class="ask-modal-q-ico" aria-hidden="true">?</span>
-          <span class="ask-modal-q-text" id="ask-modal-q"></span>
+          <span class="ask-modal-q-text" id="ask-modal-q">Quick questions</span>
+          <button class="ask-modal-collapse" id="ask-modal-collapse" onclick="toggleAskCollapse()" title="Collapse / expand">▾</button>
         </div>
-        <div class="ask-modal-options" id="ask-modal-options"></div>
+        <div class="ask-modal-questions" id="ask-modal-questions"></div>
+        <div class="ask-modal-custom">
+          <label class="ask-modal-custom-label" for="ask-modal-custom-input">Or type a custom answer / extra context (optional):</label>
+          <input type="text" class="ask-modal-custom-input" id="ask-modal-custom-input"
+                 placeholder="e.g. use Postgres but with Drizzle ORM"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();askModalSubmitAll()}" />
+        </div>
         <div class="ask-modal-footer">
-          <span class="ask-modal-hint">Or type your own answer below.</span>
-          <button class="ask-modal-skip" onclick="closeAskModal()">Skip</button>
+          <button class="ask-modal-skip" onclick="askModalSkip()">Skip — use defaults</button>
+          <button class="ask-modal-submit" id="ask-modal-submit" onclick="askModalSubmitAll()">✓ Submit answers</button>
         </div>
       </div>
     </div>
@@ -9975,16 +10205,49 @@ footer a { color: var(--accent); text-decoration: none; }
       _renderPlanModeApproveBar()
     }
 
+    // The approve bar should ONLY show when the LATEST assistant turn is an
+    // actual plan ready for approval — not when the model is asking a
+    // clarifying question or has just acknowledged something.
+    //
+    // Detection: the last assistant message must (a) contain the closing
+    // phrase the system prompt asks for ("Approve & execute" / "reply 'go'"),
+    // OR clear plan structure (numbered steps + "Files to be touched"), AND
+    // (b) NOT contain a fenced ```ask``` block — if it does, the model is
+    // still gathering info, not planning.
+    function _isAssistantPlanReady(content) {
+      const s = String(content || '')
+      if (!s) return false
+      // If the model is still asking clarifying questions, no plan to approve yet.
+      const hasAskBlock = /```\s*ask\b/.test(s)
+      if (hasAskBlock) return false
+      // v0.7.67 — primary signal: a structured ```plan``` JSON block.
+      const hasPlanBlock = /```\s*plan\b/.test(s)
+      if (hasPlanBlock) return true
+      // Legacy fallbacks for plans rendered as plain markdown.
+      const hasClosingPhrase = /Approve\s*&\s*execute|click\s+Approve|reply\s+['"`]?go['"`]?\s*[\.\?!]/i.test(s)
+      const hasPlanStructure = /(^|\n)\s*\d+\.\s+/.test(s) &&
+        /Files\s+to\s+be\s+touched|Files?\s+to\s+(modify|create|edit)/i.test(s)
+      return hasClosingPhrase || hasPlanStructure
+    }
+
     function _renderPlanModeApproveBar() {
       const bar = document.getElementById('plan-mode-approve-bar')
       if (!bar) return
-      let hasAssistantMsg = false
+      let planReady = false
       try {
         const sess = (typeof sessions !== 'undefined' && Array.isArray(sessions))
           ? sessions.find(s => s.id === currentSessionId) : null
-        hasAssistantMsg = !!sess?.messages?.some(m => m.role === 'assistant' && m.content)
+        const msgs = sess?.messages || []
+        // Find the most recent assistant message that has settled (not still streaming).
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i]
+          if (m?.role !== 'assistant') continue
+          if (m.streaming) break  // still streaming — wait for it to finish
+          planReady = _isAssistantPlanReady(m.content)
+          break
+        }
       } catch {}
-      bar.classList.toggle('show', planMode && hasAssistantMsg)
+      bar.classList.toggle('show', planMode && planReady)
     }
 
     // Click handler for the green "Approve & execute" button. Turns plan
@@ -10805,6 +11068,25 @@ footer a { color: var(--accent); text-decoration: none; }
       let text = input.value.trim()
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
       if (isStreaming) return
+      // v0.7.67 — if the user is sending a message while an ask-popup is
+      // open AND the message wasn't built by the popup itself, treat it as
+      // the user bypassing the popup. Append a "use defaults for the rest"
+      // hint so the model proceeds with its recommended defaults for any
+      // unanswered questions instead of re-asking.
+      try {
+        const overlay = document.getElementById('ask-modal-overlay')
+        if (overlay?.classList?.contains('show') && !window._askSubmitInFlight) {
+          const spec = _askChipMap.get(_askActiveChipId)
+          if (spec?.questions?.length) {
+            const hint = '\n\n(Use your recommended defaults for any unanswered questions in the popup. Do not re-ask.)'
+            if (!text.includes('Use your recommended defaults')) {
+              text += hint
+              input.value = text  // keep the textarea in sync for downstream code
+            }
+          }
+          closeAskModal()
+        }
+      } catch {}
       resetPromptHistory?.()
       if (window._ttsIdx != null) stopReadAloud?.()
       hideSmartPasteChip?.()
@@ -12557,11 +12839,148 @@ Title:`
     const _askChipMap = new Map()      // chipId → spec
     const _askJsonToChip = new Map()   // hash(rawJson) → chipId  (dedup key)
     const _askChipsAnswered = new Set() // chipIds the user already engaged with
+    // v0.7.67 — don't auto-pop the modal on app boot for questions in
+    // restored history (the user already answered those). Auto-popup only
+    // kicks in once the initial render has settled. Chips remain clickable
+    // either way — the user can manually re-open an old question if they
+    // want to; we just don't shove it in their face on every launch.
+    let _askAutoPopupEnabled = false
+    setTimeout(() => { _askAutoPopupEnabled = true }, 2000)
     function _askHash(s) {
       // Tiny non-crypto hash — collisions don't matter, we just need an id.
       let h = 0
       for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0 }
       return 'h' + (h >>> 0).toString(36)
+    }
+
+    // v0.7.67 — Plan card renderer. The model emits a fenced ```plan``` JSON
+    // block; we turn it into a clean, scannable card with sections instead
+    // of a wall of markdown. Goal: the user sees WHAT they get + WHAT to
+    // expect at a glance, without having to parse prose.
+    //
+    // Schema (all fields optional except headline + steps):
+    //   {
+    //     "headline": "Add user authentication",
+    //     "whatYouGet": "Plain-English description of the outcome.",
+    //     "steps": [{"title": "...", "detail": "..."}, ...],
+    //     "files": [{"path": "src/...", "action": "create"|"modify"|"delete"}, ...],
+    //     "thingsToKnow": ["First gotcha", "Second tradeoff", ...],
+    //     "estimate": "~25 minutes"
+    //   }
+    //
+    // Bad JSON or empty plan → render a graceful error chip; the model's
+    // intent isn't lost (raw JSON is shown so the user / dev can see it).
+    function renderPlanBlock(rawJson) {
+      let p
+      try { p = JSON.parse(rawJson) }
+      catch (e) {
+        return `<div class="plan-card-error">⚠️ plan-block had bad JSON (${escapeHtml(e.message)}). Raw:\n${escapeHtml(rawJson)}</div>`
+      }
+      const headline = String(p.headline || p.title || 'Plan').slice(0, 200)
+      const goal = String(p.whatYouGet || p.goal || p.summary || '').slice(0, 600)
+      const steps = Array.isArray(p.steps) ? p.steps : []
+      const files = Array.isArray(p.files) ? p.files : []
+      const knows = Array.isArray(p.thingsToKnow || p.notes) ? (p.thingsToKnow || p.notes) : []
+      const estimate = String(p.estimate || p.timeEstimate || '').slice(0, 60)
+      if (!steps.length && !files.length && !goal) {
+        return `<div class="plan-card-error">⚠️ plan-block needs at least a headline + steps. Raw:\n${escapeHtml(rawJson)}</div>`
+      }
+      const goalHtml = goal ? `<div class="plan-section">
+        <div class="plan-section-head">🎯 What you'll get</div>
+        <div class="plan-goal">${escapeHtml(goal)}</div>
+      </div>` : ''
+      const stepsHtml = steps.length ? `<div class="plan-section">
+        <div class="plan-section-head">📝 Steps <span class="plan-section-head-count">${steps.length}</span></div>
+        <ol class="plan-steps">
+          ${steps.map((s, i) => {
+            const title = String(s?.title || s?.name || s || '').slice(0, 200)
+            const detail = String(s?.detail || s?.description || '').slice(0, 400)
+            return `<li class="plan-step">
+              <span class="plan-step-num">${i + 1}</span>
+              <div class="plan-step-body">
+                <div class="plan-step-title">${escapeHtml(title)}</div>
+                ${detail ? `<div class="plan-step-detail">${escapeHtml(detail)}</div>` : ''}
+              </div>
+            </li>`
+          }).join('')}
+        </ol>
+      </div>` : ''
+      // Files section is HIDDEN by default — most users don't care about
+      // implementation paths, they care about outcomes. Click "show files"
+      // to reveal it; the model still gets to enumerate them for the
+      // execution phase, the user just isn't forced to read them.
+      const filesId = 'planfiles_' + Math.random().toString(36).slice(2, 8)
+      const filesHtml = files.length ? `<div class="plan-section">
+        <button class="plan-details-toggle" onclick="(function(b){var w=document.getElementById('${filesId}');var on=w.classList.toggle('show');b.textContent=on?'▾ hide files':'▸ show files (${files.length})';})(this)">▸ show files (${files.length})</button>
+        <div class="plan-files-wrap" id="${filesId}">
+          <div class="plan-files">
+            ${files.map(f => {
+              const path = String(f?.path || f?.file || f || '').slice(0, 200)
+              const action = String(f?.action || 'modify').toLowerCase()
+              const cls = action === 'create' ? 'plan-file-action-create'
+                        : action === 'delete' ? 'plan-file-action-delete'
+                        : 'plan-file-action-modify'
+              const ico = action === 'create' ? '✨' : action === 'delete' ? '🗑️' : '✏️'
+              return `<div class="plan-file">
+                <span class="plan-file-icon">${ico}</span>
+                <span class="plan-file-path">${escapeHtml(path)}</span>
+                <span class="plan-file-action ${cls}">${escapeHtml(action)}</span>
+              </div>`
+            }).join('')}
+          </div>
+        </div>
+      </div>` : ''
+      const knowsHtml = knows.length ? `<div class="plan-section">
+        <div class="plan-section-head">⚠️ Things you should know</div>
+        <div class="plan-knows">
+          ${knows.map(k => `<div class="plan-know">${escapeHtml(String(k).slice(0, 400))}</div>`).join('')}
+        </div>
+      </div>` : ''
+      const footerHtml = (estimate || true) ? `<div class="plan-card-footer">
+        <span class="plan-card-estimate">${estimate ? escapeHtml(estimate) : 'Ready when you are'}</span>
+        <span class="plan-card-hint">Reply "go" or click Approve & execute below ↓</span>
+      </div>` : ''
+      return `<div class="plan-card">
+        <div class="plan-card-header">
+          <span class="plan-card-ico" aria-hidden="true">📋</span>
+          <div class="plan-card-title">
+            <div class="plan-card-kicker">Plan</div>
+            <div class="plan-card-headline">${escapeHtml(headline)}</div>
+          </div>
+        </div>
+        ${goalHtml}
+        ${stepsHtml}
+        ${filesHtml}
+        ${knowsHtml}
+        ${footerHtml}
+      </div>`
+    }
+
+    // Normalize ask-block JSON. Supports two schemas:
+    //   New (preferred):  { questions: [{question, options:[...]}], ...} — up to 3 questions
+    //   Legacy:           { question, options:[...] } — single question, wrapped to new shape
+    function _normalizeAskSpec(raw) {
+      if (Array.isArray(raw?.questions) && raw.questions.length) {
+        const questions = raw.questions.slice(0, 3).map(q => ({
+          question: String(q?.question || 'Question').slice(0, 240),
+          options: Array.isArray(q?.options) ? q.options.slice(0, 5) : [],
+        })).filter(q => q.options.length)
+        if (!questions.length) return null
+        return { questions }
+      }
+      if (raw?.question && Array.isArray(raw?.options) && raw.options.length) {
+        return { questions: [{
+          question: String(raw.question).slice(0, 240),
+          options: raw.options.slice(0, 5),
+        }] }
+      }
+      return null
+    }
+
+    function _askChipLabel(spec) {
+      const qs = spec?.questions || []
+      if (qs.length === 1) return qs[0].question
+      return `${qs.length} quick questions`
     }
 
     function renderAskBlock(rawJson) {
@@ -12573,32 +12992,36 @@ Title:`
         if (spec) {
           return `<button class="ask-chip" onclick="openAskModalById('${chipId}')" data-chipid="${chipId}">
             <span class="ask-chip-ico">📥</span>
-            <span>${escapeHtml(spec.question)}</span>
+            <span>${escapeHtml(_askChipLabel(spec))}</span>
             <span class="ask-chip-action">click to answer →</span>
           </button>`
         }
       }
-      let spec
-      try { spec = JSON.parse(rawJson) }
+      let raw
+      try { raw = JSON.parse(rawJson) }
       catch (e) {
         return `<div class="ask-widget-error">⚠️ ask-block had bad JSON (${escapeHtml(e.message)}). Raw:\n${escapeHtml(rawJson)}</div>`
       }
-      const question = String(spec.question || 'What would you like?').slice(0, 240)
-      const options = Array.isArray(spec.options) ? spec.options.slice(0, 8) : []
-      if (!options.length) {
-        return `<div class="ask-widget-error">⚠️ ask-block had no options. Raw:\n${escapeHtml(rawJson)}</div>`
+      const spec = _normalizeAskSpec(raw)
+      if (!spec) {
+        return `<div class="ask-widget-error">⚠️ ask-block needs questions[] or {question, options[]}. Raw:\n${escapeHtml(rawJson)}</div>`
       }
       const chipId = 'askchip_' + (++_askChipSeq)
-      const cleanSpec = { question, options }
-      _askChipMap.set(chipId, cleanSpec)
+      _askChipMap.set(chipId, spec)
       _askJsonToChip.set(hash, chipId)
-      _pendingAsks.push(chipId)
-      // Open the first pending modal on next paint. Subsequent chips wait
-      // until the user closes the active one (handled in closeAskModal).
-      setTimeout(() => _drainPendingAsks(), 30)
+      // Only queue a popup for fresh chips created after the app finished
+      // its initial session restore. Restored history chips stay clickable
+      // but don't auto-pop. _askChipsAnswered is reused to suppress the
+      // drain loop for these.
+      if (_askAutoPopupEnabled) {
+        _pendingAsks.push(chipId)
+        setTimeout(() => _drainPendingAsks(), 30)
+      } else {
+        _askChipsAnswered.add(chipId)
+      }
       return `<button class="ask-chip" onclick="openAskModalById('${chipId}')" data-chipid="${chipId}">
         <span class="ask-chip-ico">📥</span>
-        <span>${escapeHtml(question)}</span>
+        <span>${escapeHtml(_askChipLabel(spec))}</span>
         <span class="ask-chip-action">click to answer →</span>
       </button>`
     }
@@ -12606,6 +13029,14 @@ Title:`
     function _drainPendingAsks() {
       const overlay = document.getElementById('ask-modal-overlay')
       if (!overlay || overlay.classList.contains('show')) return
+      // Don't open the popup while the model is still streaming. If we did,
+      // the user could click Submit before isStreaming became false, and
+      // sendMessage would refuse to send — leaving the formatted answer
+      // stuck in the composer. Defer until streaming completes.
+      if (typeof isStreaming !== 'undefined' && isStreaming) {
+        setTimeout(() => _drainPendingAsks(), 300)
+        return
+      }
       // Skip any chips the user already engaged with — they shouldn't
       // re-pop on subsequent renders.
       while (_pendingAsks.length) {
@@ -12615,34 +13046,87 @@ Title:`
       }
     }
 
+    // Track which chip is currently displayed so close/submit can mark it engaged.
+    let _askActiveChipId = null
+    // qIdx → label that the user picked. Reset when a new popup opens.
+    let _askActiveSelections = {}
+
     function openAskModalById(chipId) {
       const spec = _askChipMap.get(chipId)
       if (!spec) return
       const overlay = document.getElementById('ask-modal-overlay')
       const qEl = document.getElementById('ask-modal-q')
-      const optsEl = document.getElementById('ask-modal-options')
-      if (!overlay || !qEl || !optsEl) return
+      const qListEl = document.getElementById('ask-modal-questions')
+      const customInput = document.getElementById('ask-modal-custom-input')
+      if (!overlay || !qEl || !qListEl) return
       _askActiveChipId = chipId
-      qEl.textContent = spec.question
-      const optHtml = spec.options.map(opt => {
-        const label = String(opt.label || opt.id || 'Option').slice(0, 80)
-        const desc = String(opt.desc || opt.description || '').slice(0, 200)
-        const isRec = !!opt.recommended
-        const dataLabel = label.replace(/"/g, '&quot;')
-        return `<button class="ask-mod-option${isRec ? ' recommended' : ''}" onclick="askModalSubmit(this)" data-label="${dataLabel}">
-          <span class="ask-mod-row">
-            ${isRec ? '<span class="ask-mod-badge">★ Recommended</span>' : ''}
-            <span class="ask-mod-label">${escapeHtml(label)}</span>
-          </span>
-          ${desc ? `<span class="ask-mod-desc">${escapeHtml(desc)}</span>` : ''}
-        </button>`
+      _askActiveSelections = {}
+      if (customInput) customInput.value = ''
+      const questions = spec.questions || []
+      qEl.textContent = questions.length === 1
+        ? 'Quick question'
+        : `${questions.length} quick questions before I plan`
+      const html = questions.map((q, qi) => {
+        const optHtml = (q.options || []).map((opt) => {
+          const label = String(opt.label || opt.id || 'Option').slice(0, 80)
+          const desc = String(opt.desc || opt.description || '').slice(0, 200)
+          const isRec = !!opt.recommended
+          const dataLabel = label.replace(/"/g, '&quot;')
+          return `<button class="ask-mod-option${isRec ? ' recommended' : ''}" onclick="askModalSelect(${qi}, this)" data-label="${dataLabel}">
+            <span class="ask-mod-row">
+              ${isRec ? '<span class="ask-mod-badge">★ Recommended</span>' : ''}
+              <span class="ask-mod-label">${escapeHtml(label)}</span>
+            </span>
+            ${desc ? `<span class="ask-mod-desc">${escapeHtml(desc)}</span>` : ''}
+          </button>`
+        }).join('')
+        const numHtml = questions.length > 1 ? `<span class="ask-mod-question-num">${qi + 1}</span>` : ''
+        return `<div class="ask-mod-question-group" data-q-idx="${qi}">
+          <div class="ask-mod-question-label">${numHtml}<span class="ask-mod-question-text">${escapeHtml(q.question || 'Question')}</span></div>
+          <div class="ask-mod-question-options">${optHtml}</div>
+        </div>`
       }).join('')
-      optsEl.innerHTML = optHtml
+      qListEl.innerHTML = html
+      // Wire the custom input to refresh the submit button as the user types.
+      if (customInput) {
+        customInput.oninput = () => _refreshAskSubmitState()
+      }
+      // New popup → always start expanded.
+      overlay.classList.remove('collapsed')
+      const collapseBtn = document.getElementById('ask-modal-collapse')
+      if (collapseBtn) { collapseBtn.textContent = '▾'; collapseBtn.title = 'Collapse' }
       overlay.classList.add('show')
+      _refreshAskSubmitState()
     }
 
-    // Track which chip is currently displayed so close/submit can mark it engaged.
-    let _askActiveChipId = null
+    // Click a pill → mark it as the chosen answer for that question.
+    // Click again to deselect. Only one option per question can be active.
+    function askModalSelect(qIdx, btn) {
+      try {
+        const label = btn?.dataset?.label || ''
+        const group = btn.closest('.ask-mod-question-group')
+        if (!group) return
+        group.querySelectorAll('.ask-mod-option').forEach(o => o.classList.remove('selected'))
+        if (_askActiveSelections[qIdx] === label) {
+          delete _askActiveSelections[qIdx]
+        } else {
+          btn.classList.add('selected')
+          _askActiveSelections[qIdx] = label
+        }
+        _refreshAskSubmitState()
+      } catch (e) { console.warn('[ask] select failed:', e?.message) }
+    }
+
+    // Submit is enabled when at least one answer (selection or custom text)
+    // exists. Otherwise the button is dim.
+    function _refreshAskSubmitState() {
+      const submitBtn = document.getElementById('ask-modal-submit')
+      const customInput = document.getElementById('ask-modal-custom-input')
+      if (!submitBtn) return
+      const anyPicked = Object.keys(_askActiveSelections).length > 0
+      const hasCustom = !!(customInput?.value || '').trim()
+      submitBtn.disabled = !(anyPicked || hasCustom)
+    }
 
     function closeAskModal() {
       const overlay = document.getElementById('ask-modal-overlay')
@@ -12653,25 +13137,90 @@ Title:`
         _askChipsAnswered.add(_askActiveChipId)
         _askActiveChipId = null
       }
-      // Drain any other queued questions after a short delay — user
-      // may want a beat between popups.
+      _askActiveSelections = {}
       setTimeout(() => _drainPendingAsks(), 250)
     }
 
-    function askModalSubmit(btn) {
+    // Submit: gather selections + custom text → format → send as one turn.
+    function askModalSubmitAll() {
       try {
-        const label = btn?.dataset?.label || ''
-        if (!label) return closeAskModal()
+        const spec = _askChipMap.get(_askActiveChipId)
+        if (!spec) { closeAskModal(); return }
+        const questions = spec.questions || []
+        const customInput = document.getElementById('ask-modal-custom-input')
+        const customText = (customInput?.value || '').trim()
+        const lines = []
+        questions.forEach((q, qi) => {
+          const ans = _askActiveSelections[qi]
+          if (ans) lines.push(`**${q.question}** → ${ans}`)
+        })
+        // For unanswered questions, signal "use the recommended default" so
+        // the model proceeds without re-asking.
+        const unanswered = questions.filter((_, qi) => _askActiveSelections[qi] == null)
+        if (unanswered.length && unanswered.length < questions.length) {
+          lines.push(`(For the remaining ${unanswered.length} question${unanswered.length > 1 ? 's' : ''}: use the recommended default. Do not re-ask.)`)
+        }
+        if (customText) lines.push(`**Additional context:** ${customText}`)
+        if (!lines.length) return  // submit was disabled anyway
         const ta = document.getElementById('input')
         if (!ta) return closeAskModal()
-        ta.value = label
+        ta.value = lines.join('\n')
         ta.dispatchEvent(new Event('input', { bubbles: true }))
-        closeAskModal()  // also marks the chip engaged
-        setTimeout(() => {
-          try { sendMessage() } catch (e) { console.warn('[ask-modal] send failed:', e?.message) }
-        }, 50)
+        closeAskModal()
+        // Flag prevents the bypass-hint in sendMessage from double-firing.
+        window._askSubmitInFlight = true
+        // Wait for streaming to finish before calling sendMessage. Otherwise
+        // sendMessage refuses to send while isStreaming is true and the
+        // formatted answer text gets stuck visible in the composer.
+        const trySend = (attempt = 0) => {
+          if (typeof isStreaming !== 'undefined' && isStreaming && attempt < 60) {
+            setTimeout(() => trySend(attempt + 1), 250)
+            return
+          }
+          try { sendMessage() } catch (e) { console.warn('[ask] send failed:', e?.message) }
+          finally { window._askSubmitInFlight = false }
+        }
+        setTimeout(() => trySend(), 50)
       } catch (e) {
-        console.warn('[ask-modal] submit failed:', e?.message)
+        console.warn('[ask] submitAll failed:', e?.message)
+        closeAskModal()
+      }
+    }
+
+    // Collapse / expand toggle. Hides the question body and footer so the
+    // popup shrinks to just the header bar — the user can keep reading
+    // the conversation underneath without losing the popup entirely.
+    function toggleAskCollapse() {
+      const overlay = document.getElementById('ask-modal-overlay')
+      const btn = document.getElementById('ask-modal-collapse')
+      if (!overlay) return
+      const collapsed = overlay.classList.toggle('collapsed')
+      if (btn) btn.textContent = collapsed ? '▸' : '▾'
+      if (btn) btn.title = collapsed ? 'Expand' : 'Collapse'
+    }
+
+    // Skip = "use your best judgment / recommended defaults". Tells the
+    // model to proceed without re-asking.
+    function askModalSkip() {
+      try {
+        const ta = document.getElementById('input')
+        if (!ta) return closeAskModal()
+        ta.value = 'Skip the questions — use your best judgment with the recommended options as defaults. Do not re-ask.'
+        ta.dispatchEvent(new Event('input', { bubbles: true }))
+        closeAskModal()
+        window._askSubmitInFlight = true
+        // Same wait-for-streaming pattern as submitAll.
+        const trySend = (attempt = 0) => {
+          if (typeof isStreaming !== 'undefined' && isStreaming && attempt < 60) {
+            setTimeout(() => trySend(attempt + 1), 250)
+            return
+          }
+          try { sendMessage() } catch (e) { console.warn('[ask] skip-send failed:', e?.message) }
+          finally { window._askSubmitInFlight = false }
+        }
+        setTimeout(() => trySend(), 50)
+      } catch (e) {
+        console.warn('[ask] skip failed:', e?.message)
         closeAskModal()
       }
     }
@@ -13546,6 +14095,10 @@ Title:`
         // v0.7.67 — Ask-user-question widget. JSON: { question, options:[{label,desc,recommended}] }
         if (lc === 'ask') {
           return renderAskBlock(code)
+        }
+        // v0.7.67 — Structured plan card. JSON: { headline, whatYouGet, steps, files, thingsToKnow, estimate }
+        if (lc === 'plan') {
+          return renderPlanBlock(code)
         }
         // Mermaid diagrams: lazy-rendered below after the HTML is inserted.
         // We emit a placeholder with the raw source encoded as a data attr.

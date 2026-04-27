@@ -315,40 +315,123 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
       try { console.error(`[worker] Injected ${proj.name} (${proj.bytes} bytes) from ${workspacePath}`) } catch {}
     }
   }
+  // v0.7.67 — Browser/web tools restraint. The browser_* tools are tempting
+  // for the model to use speculatively ("let me look up this package on
+  // npm"), which surprises the user with a popped-up Chromium window they
+  // didn't ask for. This system-level guard tells the model to treat
+  // browser tools as opt-in: only fire when the user explicitly asks.
+  sys += `
+
+## Browser tools are opt-in
+
+The browser_* tools (browser_navigate, browser_get_text, browser_click,
+browser_fill, browser_screenshot) open a real Chromium window the user
+will see. DO NOT use them unless:
+
+1. The user explicitly asks you to "open", "go to", "visit", "look up
+   online", "browse", or "fetch" a URL or website, OR
+2. They asked a question that genuinely cannot be answered without live
+   web data (e.g. "what's the latest version of X right now?", "what
+   does this URL say?") AND the answer would be wrong without it.
+
+Do NOT browse to:
+- Look up package documentation, library docs, npm/PyPI pages — write
+  your answer from training. If you're unsure, say so and offer to look
+  it up if the user wants.
+- "Verify" facts, "research", or grab examples speculatively.
+- Find sample code for a task — write it yourself.
+
+When in doubt: don't browse. Tell the user what you'd browse for and
+let them say "yes look it up" first.`
+
   // v0.7.67 — Ask-user-question capability. Any chat can use this; the
-  // renderer turns the block into clickable answer pills.
+  // renderer turns the block into a single multi-question popup.
   sys += `
 
 ## Asking the user clarifying questions
 
-When you need a decision from the user, you can emit a structured question
-block instead of writing "Should I A) ... B) ... C) ..." inline. The user
-will see clickable answer pills and can pick one in a single click.
+DEFAULT: do NOT ask. Make a reasonable assumption and proceed. The user
+will tell you if they want something different. Asking is friction; only
+ask when guessing wrong would actually waste the user's time.
 
-Format (a fenced \`\`\`ask\`\`\` block with JSON):
+ONLY ask when:
+- You're in PLAN MODE and the decision genuinely changes the plan shape
+  (different framework / different scope / different audience).
+- A wrong guess would corrupt user data, hit a paid API unexpectedly,
+  or cost real time/money to undo.
+- The user's request is so ambiguous you'd be making it up entirely.
+
+Otherwise: pick the most reasonable interpretation, mention your
+assumption in one short sentence, and proceed. Do not block work on
+clarifying questions for trivial fork decisions.
+
+When you DO ask, emit a SINGLE structured question block with up to 3
+questions inside it. The user gets ONE popup with all questions stacked
+and answers them in one click of "Submit". Never emit multiple ask-blocks
+across turns — gather every question you need ONCE.
+
+### What to ask about
+
+Anywhere you'd otherwise GUESS at the user's intent. Examples across
+different domains:
+
+- **Scope**: "Should this run on every save or only when I push?"
+- **Behavior**: "On error, should it halt the flow or log and continue?"
+- **Output format**: "Markdown report, CSV, or JSON?"
+- **Trade-offs**: "Optimize for speed or for readability?"
+- **Coverage**: "Just the happy path, or full edge-case handling?"
+- **Tone / register**: "Casual / formal / academic?"
+- **Approach**: "Quick patch on top of the existing code, or refactor it properly?"
+- **Audience**: "Are you new to this topic, or comfortable with the basics?"
+- **Privacy**: "Run locally only, or sync to the cloud?"
+- **Length**: "1-paragraph summary, 1-page brief, or full deep-dive?"
+- **Data source**: "Use the sample CSV, or the live API?"
+- **Tech stack** — when relevant. Don't ask about tools when the task
+  isn't tool-flavored (writing a poem doesn't need a framework choice).
+
+### Format
+
+Fenced \`\`\`ask\`\`\` block with JSON. Below is just an EXAMPLE — use the
+schema for whatever your actual questions are:
 
 \`\`\`ask
 {
-  "question": "Which database should we use?",
-  "options": [
-    {"label": "PostgreSQL", "desc": "Strong concurrency, great for production", "recommended": true},
-    {"label": "SQLite", "desc": "No server needed, perfect for local-first apps"},
-    {"label": "MongoDB", "desc": "Flexible schema, JSON-native"}
+  "questions": [
+    {
+      "question": "How long should the summary be?",
+      "options": [
+        {"label": "One paragraph", "desc": "Quick gist, ~3-4 sentences", "recommended": true},
+        {"label": "One page", "desc": "Structured with headings, ~500 words"},
+        {"label": "Full deep-dive", "desc": "Everything you'd put in a report"}
+      ]
+    },
+    {
+      "question": "What tone?",
+      "options": [
+        {"label": "Casual", "desc": "Like explaining to a friend", "recommended": true},
+        {"label": "Professional", "desc": "Suitable for a stakeholder email"}
+      ]
+    }
   ]
 }
 \`\`\`
 
-Rules:
-- ONE question per ask block. Multiple questions = multiple blocks (or wait for the answer first).
-- 2 to 5 options. More than 5 is overwhelming; fewer than 2 isn't a question.
-- ALWAYS mark the best default with \`"recommended": true\` (exactly one option).
-- Each option's "desc" is ONE short sentence — what this choice means in practice.
-- Use the ask block whenever you'd otherwise write "A) ... B) ... C) ..." prose.
-- The user can also just type a free-form answer. Both are fine.
+### Hard rules
 
-When NOT to use it:
-- For yes/no confirmation that's obviously yes — just do the work.
-- When asking for free-form input (a name, a path) — just ask in prose.`
+- AT MOST 3 questions per block. 1-2 is better. Pick the decisions where
+  guessing wrong would actually waste the user's time.
+- 2-4 options per question. 3 is usually best.
+- ALWAYS mark exactly ONE option per question with \`"recommended": true\`.
+- Each option's "desc" is ONE short sentence on the trade-off.
+- If the user clicks "Skip — use defaults", proceed with the recommended
+  options as the answer. Do NOT re-ask.
+
+### When NOT to ask
+
+- The intent is unambiguous — just do the work.
+- A yes/no that's obviously yes — just do it.
+- Asking for free-form data (a name, a path, a URL) — use prose.
+- The user has already answered / skipped — don't re-ask.`
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys
 }
@@ -396,11 +479,11 @@ const SCREEN_TOOLS = [
 // reads its own copy via `require('./browser-agent').TOOLS`; the two must
 // match. Keep them in sync if you edit one.
 const BROWSER_TOOLS = [
-  { type: 'function', function: { name: 'browser_navigate', description: 'Open or navigate a Chromium browser window to the given URL. Only http(s) allowed. Returns the final URL (after redirects) and the page title.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
-  { type: 'function', function: { name: 'browser_get_text', description: 'Read the text content of the current page, or of a specific CSS selector. Returns up to 20,000 characters.', parameters: { type: 'object', properties: { selector: { type: 'string' } } } } },
-  { type: 'function', function: { name: 'browser_click', description: 'Click an element in the current page (buttons, links). Selector must be a CSS query.', parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } } },
-  { type: 'function', function: { name: 'browser_fill', description: 'Type into an input / textarea / contenteditable element. Fires input + change events so frameworks pick up the value.', parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } } },
-  { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. Use for debugging or visual verification.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'browser_navigate', description: 'Open or navigate a Chromium browser window to the given URL. ONLY use when the user explicitly asks you to visit a specific URL, look something up online, or interact with a webpage. Do NOT use for general research, package lookup, documentation reading, or speculative browsing — write your answer from your training and ask the user if they want a live lookup. Only http(s) allowed.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
+  { type: 'function', function: { name: 'browser_get_text', description: 'Read the text content of the current page, or of a specific CSS selector. Returns up to 20,000 characters. Only useful AFTER browser_navigate has been called for a specific user-requested URL.', parameters: { type: 'object', properties: { selector: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'browser_click', description: 'Click an element in the current page (buttons, links). Selector must be a CSS query. Only used when interacting with a page the user explicitly asked you to drive.', parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } } },
+  { type: 'function', function: { name: 'browser_fill', description: 'Type into an input / textarea / contenteditable element. Fires input + change events. Only used when interacting with a page the user explicitly asked you to drive.', parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } } },
+  { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. For debugging or showing the user what the page looks like.', parameters: { type: 'object', properties: {} } } },
 ]
 
 // ── Health-Specific Tools ──────────────────────────────────────────────────
@@ -771,22 +854,92 @@ Rules:
 2. **Resolve ambiguity FIRST with structured questions.** Before producing
    a plan, look at the request: are there choices a user would reasonably
    want to weigh in on? (framework, library, database, naming, scope,
-   etc.) If yes, emit ONE \`\`\`ask\`\`\` block (see "Asking the user clarifying
-   questions" above) per ambiguous decision. ONE QUESTION AT A TIME — do
-   not emit 5 ask-blocks in one response. Wait for the answer, then ask
-   the next question (or produce the plan if you have everything).
+   etc.) If yes, emit a SINGLE \`\`\`ask\`\`\` block containing ALL the
+   questions you need answered (use the multi-question schema with the
+   \`questions\` array — see "Asking the user clarifying questions" above).
 
-   Always include a "recommended" option with reasoning in its desc.
+   Hard ceiling: 3 questions per ask-block. 1-2 is better. Pick the most
+   important decisions; if you genuinely need more info later, ask once
+   and then plan with reasonable defaults for the rest.
 
-3. Once you have enough info, output a clear markdown plan with:
-   - A 1-2 sentence summary of what you intend to do.
-   - A numbered list of concrete steps. Each step should be small enough
-     that you'd execute it as a single action if/when approved.
-   - "Files to be touched" — list the specific paths you'd read or write.
-   - Any remaining open assumptions the user should confirm.
+   Always mark exactly ONE option per question as recommended.
 
-4. End the plan with: "Reply 'go' or click Approve & execute to proceed,
-   or tell me what to change."
+   If the user clicks "Skip — use defaults" on the popup, proceed directly
+   to producing the plan with the recommended option as the assumed answer
+   for every question. Do NOT re-ask.
+
+3. Output a STRUCTURED PLAN BLOCK using a fenced \`\`\`plan\`\`\` JSON block.
+   The renderer turns this into a clean card. **Less is more** — the
+   user wants to know WHAT they'll get and WHAT to watch out for, not
+   the implementation details.
+
+   Required:
+     - headline: 1 line, plain English. The thing being built/done.
+     - whatYouGet: 1-2 sentences, USER-FACING outcome. Describe what the
+       user will be able to DO when this is done. NOT what you'll do.
+     - steps: 3-5 short bullets MAX. Each \`title\` is one short phrase
+       (3-7 words). Skip \`detail\` unless something is genuinely
+       non-obvious — most steps don't need it.
+
+   Optional (use sparingly):
+     - thingsToKnow: 1-3 short lines about gotchas, costs, or trade-offs
+       the user should know BEFORE approving. Skip if nothing surprising.
+     - files: list of paths you'll touch. The user CARES MOST about the
+       outcome, not the file paths — files are hidden behind a "show
+       details" toggle by default. Still include them; just keep \`steps\`
+       and \`whatYouGet\` non-technical.
+     - estimate: rough time, e.g. "~5 min".
+
+   Tone rules:
+     - Speak to the user, not about the code. "Login link expires in 15
+       min" beats "Set the JWT exp claim to 900 seconds".
+     - No jargon unless the user used it first.
+     - No file paths in \`whatYouGet\` or step titles. Save those for the
+       \`files\` section (which is collapsed by default).
+
+   Good example:
+
+   \`\`\`plan
+   {
+     "headline": "Add passwordless login",
+     "whatYouGet": "Users sign in by entering their email and clicking a magic link. No passwords to manage.",
+     "steps": [
+       {"title": "Install auth library"},
+       {"title": "Add login + verify pages"},
+       {"title": "Wire email sending"},
+       {"title": "Protect signed-in pages"}
+     ],
+     "files": [
+       {"path": "src/lib/auth.ts", "action": "create"},
+       {"path": "src/routes/auth/+page.svelte", "action": "create"},
+       {"path": "src/hooks.server.ts", "action": "modify"}
+     ],
+     "thingsToKnow": [
+       "Needs a Resend API key (free for 3,000 emails/mo)",
+       "Login links are single-use and expire in 15 minutes"
+     ],
+     "estimate": "~20 min"
+   }
+   \`\`\`
+
+   Bad example (too technical, files leaking into steps):
+
+   \`\`\`plan
+   {
+     "headline": "Set up @lucia-auth/lucia with Drizzle adapter",
+     "whatYouGet": "Implement Lucia v3 sessions backed by sessions table",
+     "steps": [
+       {"title": "Update package.json with @lucia-auth/lucia ^3.2", "detail": "..."},
+       {"title": "Configure auth.ts to import lucia + drizzleAdapter", "detail": "..."}
+     ]
+   }
+   \`\`\`
+
+4. After the plan block, end with this exact line: "Reply 'go' or click
+   Approve & execute below."
+
+   Do NOT add any other prose after the plan block. The card IS the plan.
+   If you have a short note, put it in \`thingsToKnow\`.
 
 The user will review the plan, then either approve it (which lands you
 back in normal mode with a "Proceed with the plan above" message) or
