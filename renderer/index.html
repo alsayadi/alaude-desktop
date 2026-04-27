@@ -6244,8 +6244,23 @@
       return legacy
     }
     function _sessionsSetItem(key, value) {
-      // Always mirror to localStorage — belt & braces during the transition.
-      try { localStorage.setItem(key, value) } catch {}
+      // Mirror to localStorage as belt-&-braces — but ONLY for values that
+      // fit. v0.7.66: the LS_SESSIONS string can be 10–20MB once a user has
+      // accumulated long tool-output sessions, which blows past Chromium's
+      // ~10MB localStorage quota and throws QuotaExceededError on every
+      // persist. We were swallowing that throw silently, but the failed
+      // write can also push the localStorage layer into a degraded state
+      // for SUBSEQUENT keys — which manifested as "sessions sometimes
+      // disappear". Skip the mirror when the value is large; fs is the
+      // authoritative source anyway.
+      const LS_MIRROR_MAX = 5 * 1024 * 1024  // 5 MB ceiling, well under quota
+      if (typeof value === 'string' && value.length <= LS_MIRROR_MAX) {
+        try { localStorage.setItem(key, value) } catch {}
+      } else {
+        // Make sure no stale value lingers in localStorage to confuse
+        // legacy readers — they should fall through to the fs read.
+        try { localStorage.removeItem(key) } catch {}
+      }
       const field = _sessionsFsFields[key]
       if (!field) return
       const br = _sessionsBridge()
@@ -6261,15 +6276,66 @@
     // worker or a mid-stream app crash leaves a message with
     // `streaming: true` baked into localStorage, which then makes every
     // session-switch think generation is still in flight after restart.
+    //
+    // v0.7.66: also enforce a hard size cap per message. We discovered
+    // sessions.json had grown to 16MB+ for some users — single tool-output
+    // messages were 10MB on their own. That made every persist a 200-500ms
+    // sync IPC blocker AND occasionally caused fsJsonReadSync to return
+    // null under load, which the restore path then mistook for "fresh
+    // install" and locked persistence. Capping at 200KB per message
+    // preserves more than enough context for a model's recall while
+    // keeping the file at a sane size.
+    const MAX_PERSIST_CONTENT = 200 * 1024  // 200 KB per message field
+    function _truncateForPersist(s) {
+      if (typeof s !== 'string') return s
+      if (s.length <= MAX_PERSIST_CONTENT) return s
+      const dropped = s.length - MAX_PERSIST_CONTENT
+      return s.slice(0, MAX_PERSIST_CONTENT) +
+        `\n\n[… truncated ${dropped.toLocaleString()} chars on persist to keep sessions.json bounded — v0.7.66]`
+    }
     function _sanitizeForPersist(msgs) {
       if (!Array.isArray(msgs)) return []
       return msgs.map(m => {
         if (!m) return m
-        if (!m.streaming) return m
-        const cleaned = { ...m, streaming: false }
-        // If the streaming placeholder never got content, mark it as an
-        // aborted turn so the user can distinguish it from a real reply.
-        if (!cleaned.content) cleaned.content = '(generation interrupted)'
+        let cleaned = m
+        // Drop streaming flag (sticky-streaming bug fix; see v0.7.35 below).
+        if (cleaned.streaming) {
+          cleaned = { ...cleaned, streaming: false }
+          // If the streaming placeholder never got content, mark it as an
+          // aborted turn so the user can distinguish it from a real reply.
+          if (!cleaned.content) cleaned.content = '(generation interrupted)'
+        }
+        // Cap the content field. Multimodal content is an array of parts;
+        // truncate each part's text without disturbing image_url shape.
+        if (typeof cleaned.content === 'string' && cleaned.content.length > MAX_PERSIST_CONTENT) {
+          cleaned = { ...cleaned, content: _truncateForPersist(cleaned.content) }
+        } else if (Array.isArray(cleaned.content)) {
+          let mutated = false
+          const parts = cleaned.content.map(p => {
+            if (p && typeof p === 'object' && typeof p.text === 'string' && p.text.length > MAX_PERSIST_CONTENT) {
+              mutated = true
+              return { ...p, text: _truncateForPersist(p.text) }
+            }
+            return p
+          })
+          if (mutated) cleaned = { ...cleaned, content: parts }
+        }
+        // Cap file-attachment content blobs (PDFs/DOCX dumps).
+        if (Array.isArray(cleaned.fileAttachments) && cleaned.fileAttachments.length) {
+          let mutated = false
+          const atts = cleaned.fileAttachments.map(f => {
+            if (f && typeof f.content === 'string' && f.content.length > MAX_PERSIST_CONTENT) {
+              mutated = true
+              return { ...f, content: _truncateForPersist(f.content) }
+            }
+            return f
+          })
+          if (mutated) cleaned = { ...cleaned, fileAttachments: atts }
+        }
+        // Cap reasoning_content (DeepSeek thinking-mode streams can be huge).
+        if (typeof cleaned.reasoning_content === 'string' && cleaned.reasoning_content.length > MAX_PERSIST_CONTENT) {
+          cleaned = { ...cleaned, reasoning_content: _truncateForPersist(cleaned.reasoning_content) }
+        }
         return cleaned
       })
     }
@@ -6437,7 +6503,14 @@
     const _restored = restoreSessions()
     if (_restored) {
       sessions = _restored
-      const savedActive = parseInt(localStorage.getItem(LS_ACTIVE_SESSION), 10)
+      // v0.7.66: read activeSessionId via the fs-first helper, NOT raw
+      // localStorage. After v0.7.63 renamed the app (Alaude → Labaik),
+      // Electron's userData partition changed and localStorage started
+      // empty for upgrading users — so `localStorage.getItem(LS_ACTIVE_SESSION)`
+      // returned null even though the value existed in ~/.labaik/sessions.json.
+      // That made every boot land on `sessions[0]` instead of the user's
+      // last-active session. _sessionsGetItem checks fs first.
+      const savedActive = parseInt(_sessionsGetItem(LS_ACTIVE_SESSION), 10)
       const active = sessions.find(s => s.id === savedActive) || sessions[0]
       currentSessionId = active.id
       messages = Array.isArray(active.messages) ? active.messages : []
@@ -6457,7 +6530,8 @@
           const late = restoreSessions()  // also unlocks _persistLocked on success
           if (late && late.length) {
             sessions = late
-            const savedActive = parseInt(localStorage.getItem(LS_ACTIVE_SESSION), 10)
+            // v0.7.66: same fs-first read as the primary restore path above.
+            const savedActive = parseInt(_sessionsGetItem(LS_ACTIVE_SESSION), 10)
             const active = sessions.find(s => s.id === savedActive) || sessions[0]
             // Only swap currentSessionId if the user hasn't started a fresh
             // chat in the meantime (messages still empty).
