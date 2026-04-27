@@ -315,6 +315,40 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
       try { console.error(`[worker] Injected ${proj.name} (${proj.bytes} bytes) from ${workspacePath}`) } catch {}
     }
   }
+  // v0.7.67 — Ask-user-question capability. Any chat can use this; the
+  // renderer turns the block into clickable answer pills.
+  sys += `
+
+## Asking the user clarifying questions
+
+When you need a decision from the user, you can emit a structured question
+block instead of writing "Should I A) ... B) ... C) ..." inline. The user
+will see clickable answer pills and can pick one in a single click.
+
+Format (a fenced \`\`\`ask\`\`\` block with JSON):
+
+\`\`\`ask
+{
+  "question": "Which database should we use?",
+  "options": [
+    {"label": "PostgreSQL", "desc": "Strong concurrency, great for production", "recommended": true},
+    {"label": "SQLite", "desc": "No server needed, perfect for local-first apps"},
+    {"label": "MongoDB", "desc": "Flexible schema, JSON-native"}
+  ]
+}
+\`\`\`
+
+Rules:
+- ONE question per ask block. Multiple questions = multiple blocks (or wait for the answer first).
+- 2 to 5 options. More than 5 is overwhelming; fewer than 2 isn't a question.
+- ALWAYS mark the best default with \`"recommended": true\` (exactly one option).
+- Each option's "desc" is ONE short sentence — what this choice means in practice.
+- Use the ask block whenever you'd otherwise write "A) ... B) ... C) ..." prose.
+- The user can also just type a free-form answer. Both are fine.
+
+When NOT to use it:
+- For yes/no confirmation that's obviously yes — just do the work.
+- When asking for free-form input (a name, a path) — just ask in prose.`
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys
 }
@@ -733,16 +767,26 @@ You are in plan mode. The user wants a step-by-step plan, NOT execution.
 
 Rules:
 1. Do NOT call any tools. Do NOT write files. Do NOT run commands.
-2. Output a clear markdown plan with:
+
+2. **Resolve ambiguity FIRST with structured questions.** Before producing
+   a plan, look at the request: are there choices a user would reasonably
+   want to weigh in on? (framework, library, database, naming, scope,
+   etc.) If yes, emit ONE \`\`\`ask\`\`\` block (see "Asking the user clarifying
+   questions" above) per ambiguous decision. ONE QUESTION AT A TIME — do
+   not emit 5 ask-blocks in one response. Wait for the answer, then ask
+   the next question (or produce the plan if you have everything).
+
+   Always include a "recommended" option with reasoning in its desc.
+
+3. Once you have enough info, output a clear markdown plan with:
    - A 1-2 sentence summary of what you intend to do.
    - A numbered list of concrete steps. Each step should be small enough
      that you'd execute it as a single action if/when approved.
    - "Files to be touched" — list the specific paths you'd read or write.
-   - Any open questions or assumptions the user should confirm.
-3. End with: "Reply 'go' or click Approve & execute to proceed, or tell
-   me what to change."
-4. If the request is ambiguous, ASK FOR CLARIFICATION instead of inventing
-   a plan based on guesses.
+   - Any remaining open assumptions the user should confirm.
+
+4. End the plan with: "Reply 'go' or click Approve & execute to proceed,
+   or tell me what to change."
 
 The user will review the plan, then either approve it (which lands you
 back in normal mode with a "Proceed with the plan above" message) or
@@ -752,8 +796,12 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
-    if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
-    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-5' }
+    // v0.7.67 — DeepSeek V4 Pro is the new default. Cheaper per token than
+    // OpenAI/Anthropic flagships with comparable quality on most tasks.
+    // Fallback chain in order of preference if the user lacks the key.
+    if (getApiKey('deepseek')) { provider = 'deepseek'; model = 'deepseek-v4-pro' }
+    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-6' }
+    else if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
     else throw new Error('No API key configured')
   }
   process.stderr.write(`[worker] resolved provider="${provider}" model="${model}"\n`)

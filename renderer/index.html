@@ -5218,6 +5218,207 @@
       outline: 2px solid var(--green);
       outline-offset: 0;
     }
+
+    /* v0.7.67 — Plan mode UI. Three pieces:
+       1. .plan-mode-toggle: the always-visible pill in the workspace bar.
+          Off = neutral. On = warm amber border + pulse to telegraph "hot".
+       2. .plan-mode-banner: a dismissible strip across the top of the chat
+          area when plan mode is on. Hidden by default; .show toggles it.
+       3. .plan-mode-approve: an inline button inside the composer area,
+          shown only when plan mode is on AND the current session has at
+          least one assistant message. Click → toggle off + auto-send. */
+    .plan-mode-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-dim); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s ease;
+      user-select: none;
+    }
+    .plan-mode-toggle:hover { background: var(--bg-input); color: var(--text); }
+    .plan-mode-toggle.on {
+      background: rgba(255, 176, 32, 0.12);
+      border-color: rgba(255, 176, 32, 0.5);
+      color: #ffb020;
+      box-shadow: 0 0 0 3px rgba(255, 176, 32, 0.08);
+    }
+    .plan-mode-toggle.on::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: #ffb020; box-shadow: 0 0 6px rgba(255, 176, 32, 0.8);
+      animation: planPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes planPulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
+    .plan-mode-banner {
+      display: none;
+      align-items: center; gap: 10px;
+      padding: 10px 16px;
+      background: linear-gradient(90deg, rgba(255,176,32,0.15), rgba(255,176,32,0.06));
+      border-bottom: 1px solid rgba(255,176,32,0.3);
+      color: #d99317; font-size: 13px; font-weight: 500;
+      flex-shrink: 0;
+    }
+    .plan-mode-banner.show { display: flex; }
+    .plan-mode-banner-ico { font-size: 16px; }
+    .plan-mode-banner-msg { flex: 1; }
+    .plan-mode-banner-msg b { color: #b97a14; font-weight: 600; }
+    .plan-mode-banner-actions { display: flex; gap: 6px; }
+    .plan-mode-banner-btn {
+      padding: 5px 12px; border-radius: 6px;
+      border: 1px solid rgba(255,176,32,0.4);
+      background: rgba(255,176,32,0.08); color: #b97a14;
+      font-size: 12px; font-weight: 500; cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .plan-mode-banner-btn:hover { background: rgba(255,176,32,0.18); }
+    .plan-mode-banner-btn.primary {
+      background: #ffb020; color: #fff; border-color: #ffb020;
+    }
+    .plan-mode-banner-btn.primary:hover { background: #f5a512; }
+    /* Approve & execute pill that floats above the composer when plan
+       mode is on AND the user has a plan response in the active session. */
+    .plan-mode-approve-bar {
+      display: none;
+      align-items: center; gap: 8px;
+      margin: 0 16px 8px; padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(60, 220, 130, 0.08);
+      border: 1px solid rgba(60, 220, 130, 0.35);
+      color: #28a76b; font-size: 12.5px;
+    }
+    .plan-mode-approve-bar.show { display: flex; }
+    .plan-mode-approve-msg { flex: 1; font-weight: 500; }
+    .plan-mode-approve-btn {
+      padding: 6px 14px; border-radius: 7px;
+      background: #28a76b; color: white; border: 0;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .plan-mode-approve-btn:hover { background: #229057; }
+
+    /* v0.7.67 — Ask-user-question.
+       Inline in the message: just a small chip linking back to the modal.
+       The actual answer UI lives in #ask-modal — a focused popup so the
+       choices don't dominate the chat scroll.
+
+       Goal: keep the conversation compact. Reading 5 option pills inline
+       was visually heavy and made every plan-mode turn feel "loud". The
+       modal lets the user click in, decide, and dismiss — 1 second flow. */
+    .ask-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin: 6px 0; padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(120, 180, 255, 0.10);
+      border: 1px solid rgba(120, 180, 255, 0.35);
+      color: #5b9dff;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.13s ease;
+    }
+    .ask-chip:hover { background: rgba(120, 180, 255, 0.2); }
+    .ask-chip-ico { font-size: 13px; }
+    .ask-chip-action { font-size: 11px; color: var(--text-faint); margin-left: 4px; }
+
+    .ask-widget-error {
+      padding: 10px 14px; font-size: 12px;
+      color: var(--text-faint); font-family: var(--mono, monospace);
+      background: rgba(220, 80, 80, 0.06);
+      border: 1px solid rgba(220, 80, 80, 0.2);
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+
+    /* The question popup is an INLINE card above the composer — contained
+       inside the chat panel, no full-screen overlay. Sits in the same
+       region as the plan-mode approve bar so the conversation stays
+       fully visible while the user is choosing. */
+    .ask-modal-overlay {
+      display: none;
+      margin: 0 16px 8px;
+      animation: askPopIn 0.18s ease-out;
+    }
+    .ask-modal-overlay.show { display: block; }
+    .ask-modal {
+      width: 100%;
+      background: var(--bg); color: var(--text);
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid rgba(120, 180, 255, 0.4);
+      box-shadow: 0 4px 20px rgba(91, 157, 255, 0.15);
+    }
+    @keyframes askPopIn {
+      from { transform: translateY(6px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    .ask-modal-header {
+      padding: 12px 14px 10px;
+      display: flex; align-items: flex-start; gap: 10px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(120, 180, 255, 0.08), rgba(120, 180, 255, 0.02));
+    }
+    .ask-modal-q-ico {
+      flex: 0 0 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(135deg, #5b9dff, #3a7adb);
+      color: white; font-weight: 700; font-size: 12px;
+      display: inline-flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 5px rgba(91, 157, 255, 0.4);
+    }
+    .ask-modal-q-text { flex: 1; font-size: 13.5px; font-weight: 600; line-height: 1.4; padding-top: 1px; }
+    .ask-modal-options {
+      padding: 8px 12px;
+      display: flex; flex-direction: column; gap: 5px;
+      max-height: 280px; overflow-y: auto;
+    }
+    .ask-mod-option {
+      display: flex; flex-direction: column;
+      gap: 2px; padding: 8px 11px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text); font-size: 12.5px;
+      cursor: pointer; text-align: left;
+      transition: all 0.12s ease;
+      width: 100%;
+    }
+    .ask-mod-option:hover {
+      background: var(--bg-input);
+      border-color: rgba(120, 180, 255, 0.55);
+    }
+    .ask-mod-option.recommended {
+      border-color: rgba(60, 200, 130, 0.45);
+      background: rgba(60, 200, 130, 0.05);
+    }
+    .ask-mod-option.recommended:hover {
+      border-color: rgba(60, 200, 130, 0.75);
+      background: rgba(60, 200, 130, 0.11);
+    }
+    .ask-mod-row { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .ask-mod-label { flex: 1; }
+    .ask-mod-badge {
+      font-size: 9.5px; font-weight: 700;
+      padding: 2px 6px; border-radius: 999px;
+      background: #28a76b; color: white;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .ask-mod-desc {
+      font-size: 11px; color: var(--text-dim);
+      line-height: 1.35;
+    }
+    .ask-modal-footer {
+      padding: 8px 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+      background: var(--bg-input);
+    }
+    .ask-modal-hint {
+      font-size: 10.5px; color: var(--text-faint); font-style: italic;
+    }
+    .ask-modal-skip {
+      padding: 5px 12px; border-radius: 6px;
+      background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); font-size: 11.5px; font-weight: 500;
+      cursor: pointer; transition: all 0.12s ease;
+    }
+    .ask-modal-skip:hover { background: var(--bg); color: var(--text); border-color: var(--text-dim); }
   </style>
 </head>
 <body>
@@ -5321,10 +5522,11 @@
       <button class="sidebar-new-btn" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
         <optgroup label="Anthropic">
-          <!-- v0.7.62 — 4.x family. Sonnet 4.6 is the daily-driver default;
-               Opus 4.7 is the flagship; Haiku 4.5 is the cheap/fast option.
-               Older Opus versions kept so saved sessions keep working. -->
-          <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6 · default</option>
+          <!-- v0.7.62 — 4.x family. Default model lives in the DeepSeek
+               group below (deepseek-v4-pro) — cheaper per token than
+               Sonnet 4.6 with comparable quality. Sonnet stays as a
+               popular alternative; Opus is the flagship for hard tasks. -->
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 · daily driver</option>
           <option value="claude-opus-4-7">Claude Opus 4.7 · flagship</option>
           <option value="claude-haiku-4-5">Claude Haiku 4.5 · fast / cheap</option>
           <option value="">Claude Sonnet · legacy</option>
@@ -5389,7 +5591,7 @@
                by id or by semantic label.
                Collision guard: the local Ollama 'deepseek-r1' family
                routes via the : tag check, not this prefix. -->
-          <option value="deepseek-v4-pro">DeepSeek V4 Pro · flagship</option>
+          <option value="deepseek-v4-pro" selected>DeepSeek V4 Pro · default · flagship · cheap</option>
           <option value="deepseek-v4-flash">DeepSeek V4 Flash · fast</option>
           <option value="deepseek-reasoner">DeepSeek Reasoner · thinking (alias)</option>
           <option value="deepseek-chat">DeepSeek Chat · balanced (alias)</option>
@@ -5463,6 +5665,15 @@
     <div class="session-todos" id="session-todos"></div>
     <div class="tag-suggest" id="tag-suggest"></div>
     <button class="focus-exit-chip" onclick="toggleFocusMode()" title="Exit focus mode (F)">⎋ Exit focus</button>
+    <!-- v0.7.67 Plan mode banner — appears across the top of the chat
+         when plan mode is on. Impossible to miss; click to disable. -->
+    <div class="plan-mode-banner" id="plan-mode-banner" role="status" aria-live="polite">
+      <span class="plan-mode-banner-ico">📋</span>
+      <span class="plan-mode-banner-msg"><b>Plan mode is on.</b> Labaik will write a plan — no tool calls, no file changes. Send a request to get started.</span>
+      <span class="plan-mode-banner-actions">
+        <button class="plan-mode-banner-btn" onclick="togglePlanMode()" title="Turn off plan mode">Turn off</button>
+      </span>
+    </div>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
@@ -5545,6 +5756,33 @@
     <div class="img-chip-warn" id="img-chip-warn" style="display:none"></div>
     <div class="smart-paste-chip" id="smart-paste-chip"></div>
 
+    <!-- v0.7.67 Plan mode approve bar — sits right above the composer.
+         Only shown when plan mode is on AND the active session has at
+         least one assistant message (a plan to approve). Click → toggle
+         plan mode off + auto-send "Proceed with the plan above." -->
+    <div class="plan-mode-approve-bar" id="plan-mode-approve-bar">
+      <span class="plan-mode-approve-msg">📋 Read the plan above. Ready to execute it?</span>
+      <button class="plan-mode-approve-btn" onclick="approvePlanAndExecute()">✓ Approve &amp; execute</button>
+    </div>
+
+    <!-- v0.7.67 — Ask-user-question popup. Inline card above the composer,
+         contained within the chat panel (no full-screen overlay). Shows
+         when an assistant message contains a ```ask``` block. Skip to
+         dismiss; click an option to auto-fill + send. -->
+    <div class="ask-modal-overlay" id="ask-modal-overlay">
+      <div class="ask-modal" role="dialog" aria-modal="false" aria-labelledby="ask-modal-q">
+        <div class="ask-modal-header">
+          <span class="ask-modal-q-ico" aria-hidden="true">?</span>
+          <span class="ask-modal-q-text" id="ask-modal-q"></span>
+        </div>
+        <div class="ask-modal-options" id="ask-modal-options"></div>
+        <div class="ask-modal-footer">
+          <span class="ask-modal-hint">Or type your own answer below.</span>
+          <button class="ask-modal-skip" onclick="closeAskModal()">Skip</button>
+        </div>
+      </div>
+    </div>
+
     <div class="input-area">
       <div class="input-wrap">
         <div class="slash-menu" id="slash-menu" role="listbox" aria-label="Prompt snippets"></div>
@@ -5611,9 +5849,8 @@
         <!-- v0.7.67 Plan mode — model produces a step-by-step plan only,
              no tool calls, no file writes. User reviews + approves to
              execute. Toggle is sticky (persists across sessions). -->
-        <button class="workspace-perm-select" id="plan-mode-btn" onclick="togglePlanMode()"
-                title="Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute."
-                style="background:transparent;cursor:pointer">📋 Plan mode</button>
+        <button class="plan-mode-toggle" id="plan-mode-btn" onclick="togglePlanMode()"
+                title="Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute.">📋 Plan mode</button>
         <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
       </div>
     </div>
@@ -9340,11 +9577,17 @@ footer a { color: var(--accent); text-decoration: none; }
     let _folderSkillsRoot = ''
     async function _refreshFolderSkills() {
       try {
-        if (!window.alaude?.folderSkillsList) return
+        if (!window.alaude?.folderSkillsList) {
+          console.warn('[folder-skills] preload bridge missing — skills will not appear in palette')
+          return
+        }
         const r = await window.alaude.folderSkillsList()
         _folderSkillsCache = Array.isArray(r?.skills) ? r.skills : []
         _folderSkillsRoot = r?.root || ''
-      } catch {}
+        console.log('[folder-skills] loaded', _folderSkillsCache.length, 'skills from', _folderSkillsRoot)
+      } catch (e) {
+        console.warn('[folder-skills] refresh failed:', e?.message)
+      }
     }
 
     function openCmdPalette() {
@@ -9708,23 +9951,57 @@ footer a { color: var(--accent); text-decoration: none; }
     let planMode = (() => { try { return localStorage.getItem(LS_PLAN_MODE) === '1' } catch { return false } })()
     function _renderPlanModeButton() {
       const btn = document.getElementById('plan-mode-btn')
-      if (!btn) return
-      if (planMode) {
-        btn.style.background = 'rgba(255,196,0,0.15)'
-        btn.style.borderColor = 'rgba(255,196,0,0.4)'
-        btn.textContent = '📋 Plan mode · ON'
-      } else {
-        btn.style.background = 'transparent'
-        btn.style.borderColor = ''
-        btn.textContent = '📋 Plan mode'
+      if (btn) {
+        btn.classList.toggle('on', planMode)
+        btn.textContent = planMode ? '📋 Plan mode · ON' : '📋 Plan mode'
       }
-      // Reflect in composer placeholder so the user sees the change.
+      // Banner across the top of the chat — impossible to miss.
+      const banner = document.getElementById('plan-mode-banner')
+      if (banner) banner.classList.toggle('show', planMode)
+      // macOS dock title / window title — telegraphs mode in Cmd-Tab.
+      try {
+        const baseTitle = document.title.replace(/\s*·\s*📋 Plan mode\s*$/, '')
+        document.title = planMode ? `${baseTitle} · 📋 Plan mode` : baseTitle
+      } catch {}
+      // Composer placeholder reinforcement.
       const ta = document.getElementById('input')
       if (ta && !ta.value) {
         ta.placeholder = planMode
           ? 'Describe the task — Labaik will plan it before touching anything.'
           : 'Message Labaik...'
       }
+      // Approve bar: only show if plan mode is on AND the active session has
+      // an assistant message to approve.
+      _renderPlanModeApproveBar()
+    }
+
+    function _renderPlanModeApproveBar() {
+      const bar = document.getElementById('plan-mode-approve-bar')
+      if (!bar) return
+      let hasAssistantMsg = false
+      try {
+        const sess = (typeof sessions !== 'undefined' && Array.isArray(sessions))
+          ? sessions.find(s => s.id === currentSessionId) : null
+        hasAssistantMsg = !!sess?.messages?.some(m => m.role === 'assistant' && m.content)
+      } catch {}
+      bar.classList.toggle('show', planMode && hasAssistantMsg)
+    }
+
+    // Click handler for the green "Approve & execute" button. Turns plan
+    // mode off, then either fires send if the user has typed something, or
+    // injects "Proceed with the plan above." and sends.
+    function approvePlanAndExecute() {
+      setPlanMode(false)
+      const ta = document.getElementById('input')
+      if (!ta) return
+      if (!ta.value.trim()) {
+        ta.value = 'Proceed with the plan above.'
+        ta.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      // Defer to next tick so the placeholder + state changes paint first.
+      setTimeout(() => {
+        try { sendMessage() } catch (e) { console.warn('[plan] send failed:', e?.message) }
+      }, 30)
     }
     function togglePlanMode() {
       planMode = !planMode
@@ -11398,6 +11675,10 @@ Title:`
 
     function renderMessages() {
       const container = document.getElementById('messages')
+      // v0.7.67 — keep the plan-mode approve bar in sync whenever the
+      // message list rerenders (new assistant response landed, session
+      // switched, etc.). Cheap; runs only when planMode is on.
+      try { _renderPlanModeApproveBar() } catch {}
 
       let html = ''
 
@@ -12252,6 +12533,160 @@ Title:`
     //   { type: "bar", title: "...", data: { labels: [...], values: [...] } }
     // and we turn it into an inline chart that respects the app theme,
     // works offline, and doesn't slow the chat down.
+    // v0.7.67 — Ask-user-question. Two-stage rendering:
+    //   1. Inside the message bubble: a small chip (so the chat stays compact).
+    //   2. After render finishes: a focused popup modal opens with the
+    //      question + options + Skip. User picks → composer auto-fills + sends.
+    //
+    // Goal: keep the conversation tidy. Stuffing 5 option pills inline made
+    // every plan-mode turn feel "loud". The modal lets the user click in,
+    // decide in 1 second, and dismiss.
+    //
+    // _pendingAsks holds specs scheduled to open after render. We open at
+    // most one at a time; the chip stays clickable so the user can re-open
+    // a question they skipped.
+    //
+    // Streaming-safety: renderMarkdown re-runs on EVERY streamed token. Without
+    // dedup, the same ```ask``` block would queue + pop a modal once per token
+    // (sometimes 100+ pops per response). We hash the raw JSON; if we've already
+    // registered this exact spec, reuse the existing chipId and DON'T re-queue.
+    // Also: chips that have already been answered or explicitly skipped stay in
+    // the map so re-renders don't resurrect them.
+    const _pendingAsks = []
+    let _askChipSeq = 0
+    const _askChipMap = new Map()      // chipId → spec
+    const _askJsonToChip = new Map()   // hash(rawJson) → chipId  (dedup key)
+    const _askChipsAnswered = new Set() // chipIds the user already engaged with
+    function _askHash(s) {
+      // Tiny non-crypto hash — collisions don't matter, we just need an id.
+      let h = 0
+      for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0 }
+      return 'h' + (h >>> 0).toString(36)
+    }
+
+    function renderAskBlock(rawJson) {
+      const hash = _askHash(rawJson)
+      // Already saw this exact spec — return the existing chip and don't re-queue.
+      if (_askJsonToChip.has(hash)) {
+        const chipId = _askJsonToChip.get(hash)
+        const spec = _askChipMap.get(chipId)
+        if (spec) {
+          return `<button class="ask-chip" onclick="openAskModalById('${chipId}')" data-chipid="${chipId}">
+            <span class="ask-chip-ico">📥</span>
+            <span>${escapeHtml(spec.question)}</span>
+            <span class="ask-chip-action">click to answer →</span>
+          </button>`
+        }
+      }
+      let spec
+      try { spec = JSON.parse(rawJson) }
+      catch (e) {
+        return `<div class="ask-widget-error">⚠️ ask-block had bad JSON (${escapeHtml(e.message)}). Raw:\n${escapeHtml(rawJson)}</div>`
+      }
+      const question = String(spec.question || 'What would you like?').slice(0, 240)
+      const options = Array.isArray(spec.options) ? spec.options.slice(0, 8) : []
+      if (!options.length) {
+        return `<div class="ask-widget-error">⚠️ ask-block had no options. Raw:\n${escapeHtml(rawJson)}</div>`
+      }
+      const chipId = 'askchip_' + (++_askChipSeq)
+      const cleanSpec = { question, options }
+      _askChipMap.set(chipId, cleanSpec)
+      _askJsonToChip.set(hash, chipId)
+      _pendingAsks.push(chipId)
+      // Open the first pending modal on next paint. Subsequent chips wait
+      // until the user closes the active one (handled in closeAskModal).
+      setTimeout(() => _drainPendingAsks(), 30)
+      return `<button class="ask-chip" onclick="openAskModalById('${chipId}')" data-chipid="${chipId}">
+        <span class="ask-chip-ico">📥</span>
+        <span>${escapeHtml(question)}</span>
+        <span class="ask-chip-action">click to answer →</span>
+      </button>`
+    }
+
+    function _drainPendingAsks() {
+      const overlay = document.getElementById('ask-modal-overlay')
+      if (!overlay || overlay.classList.contains('show')) return
+      // Skip any chips the user already engaged with — they shouldn't
+      // re-pop on subsequent renders.
+      while (_pendingAsks.length) {
+        const next = _pendingAsks.shift()
+        if (_askChipsAnswered.has(next)) continue
+        return openAskModalById(next)
+      }
+    }
+
+    function openAskModalById(chipId) {
+      const spec = _askChipMap.get(chipId)
+      if (!spec) return
+      const overlay = document.getElementById('ask-modal-overlay')
+      const qEl = document.getElementById('ask-modal-q')
+      const optsEl = document.getElementById('ask-modal-options')
+      if (!overlay || !qEl || !optsEl) return
+      _askActiveChipId = chipId
+      qEl.textContent = spec.question
+      const optHtml = spec.options.map(opt => {
+        const label = String(opt.label || opt.id || 'Option').slice(0, 80)
+        const desc = String(opt.desc || opt.description || '').slice(0, 200)
+        const isRec = !!opt.recommended
+        const dataLabel = label.replace(/"/g, '&quot;')
+        return `<button class="ask-mod-option${isRec ? ' recommended' : ''}" onclick="askModalSubmit(this)" data-label="${dataLabel}">
+          <span class="ask-mod-row">
+            ${isRec ? '<span class="ask-mod-badge">★ Recommended</span>' : ''}
+            <span class="ask-mod-label">${escapeHtml(label)}</span>
+          </span>
+          ${desc ? `<span class="ask-mod-desc">${escapeHtml(desc)}</span>` : ''}
+        </button>`
+      }).join('')
+      optsEl.innerHTML = optHtml
+      overlay.classList.add('show')
+    }
+
+    // Track which chip is currently displayed so close/submit can mark it engaged.
+    let _askActiveChipId = null
+
+    function closeAskModal() {
+      const overlay = document.getElementById('ask-modal-overlay')
+      if (overlay) overlay.classList.remove('show')
+      // Mark the chip the user just dismissed as engaged so re-renders
+      // don't re-pop it.
+      if (_askActiveChipId) {
+        _askChipsAnswered.add(_askActiveChipId)
+        _askActiveChipId = null
+      }
+      // Drain any other queued questions after a short delay — user
+      // may want a beat between popups.
+      setTimeout(() => _drainPendingAsks(), 250)
+    }
+
+    function askModalSubmit(btn) {
+      try {
+        const label = btn?.dataset?.label || ''
+        if (!label) return closeAskModal()
+        const ta = document.getElementById('input')
+        if (!ta) return closeAskModal()
+        ta.value = label
+        ta.dispatchEvent(new Event('input', { bubbles: true }))
+        closeAskModal()  // also marks the chip engaged
+        setTimeout(() => {
+          try { sendMessage() } catch (e) { console.warn('[ask-modal] send failed:', e?.message) }
+        }, 50)
+      } catch (e) {
+        console.warn('[ask-modal] submit failed:', e?.message)
+        closeAskModal()
+      }
+    }
+
+    // Esc closes the modal — common modal behavior the user expects.
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const overlay = document.getElementById('ask-modal-overlay')
+        if (overlay && overlay.classList.contains('show')) {
+          e.stopPropagation()
+          closeAskModal()
+        }
+      }
+    }, true)
+
     const CHART_COLORS = ['#2ecc71', '#3498db', '#e67e22', '#9b59b6', '#e74c3c', '#f1c40f', '#1abc9c', '#95a5a6']
     function renderChartBlock(rawJson) {
       let spec
@@ -13108,6 +13543,10 @@ Title:`
       s = s.replace(new RegExp(`${CODE_TOKEN}(\\d+)${CODE_TOKEN}`, 'g'), (_m, i) => {
         const { lang, code } = codeBlocks[+i]
         const lc = lang.toLowerCase()
+        // v0.7.67 — Ask-user-question widget. JSON: { question, options:[{label,desc,recommended}] }
+        if (lc === 'ask') {
+          return renderAskBlock(code)
+        }
         // Mermaid diagrams: lazy-rendered below after the HTML is inserted.
         // We emit a placeholder with the raw source encoded as a data attr.
         if (lc === 'mermaid') {
