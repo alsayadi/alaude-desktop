@@ -3828,29 +3828,49 @@
       overflow-y: auto;
       padding: 24px;
       box-shadow: var(--shadow);
+      /* v0.7.71: anchor for the absolutely-positioned modal-close ×.
+         Previously the close button lived inline in the h2 via flex
+         margin-inline-start:auto. That breaks at narrow widths because
+         when the title wraps to two lines the × falls onto the second
+         line (or worse, overlaps the wrapped title). Now the × floats
+         in the modal's corner regardless of title length. */
+      position: relative;
     }
 
     .modal h2 {
       font-size: 16px;
       margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      /* Reserve right padding (LTR) / left padding (RTL) for the
+         absolutely-positioned close × so the title text never collides
+         with it, even on narrow windows where it might otherwise wrap
+         underneath. */
+      padding-inline-end: 36px;
     }
 
     .modal-close {
-      /* v0.7.71: was margin-left:auto (physical), which always pushes
-         the × to the visual right. In RTL the parent flex flows
-         right-to-left so the × should land on the visual LEFT — the
-         logical version (margin-inline-start:auto) auto-flips with the
-         document direction. */
-      margin-inline-start: auto;
+      /* v0.7.71 (rev2): floated to the modal's top-end corner.
+         `inset-inline-end: 16px` is the logical equivalent of
+         `right:16px` in LTR / `left:16px` in RTL — it auto-flips with
+         the document direction without needing a separate [dir="rtl"]
+         override. Sits 12px from the top so it visually aligns with
+         the h2 title's vertical center. */
+      position: absolute;
+      top: 12px;
+      inset-inline-end: 16px;
+      z-index: 1;
       background: none;
       border: none;
       color: var(--text-faint);
-      font-size: 18px;
+      font-size: 22px;
+      line-height: 1;
       cursor: pointer;
       padding: 4px 8px;
+      border-radius: 4px;
+      transition: color 0.12s, background 0.12s;
+    }
+    .modal-close:hover {
+      color: var(--text);
+      background: var(--bg);
     }
 
     .key-row {
