@@ -1962,21 +1962,25 @@
     [dir="rtl"] .welcome,
     [dir="rtl"] .starter-chips,
     [dir="rtl"] .template-section-label { text-align: center; }
-    /* Per-message action bar reads naturally right-to-left */
-    [dir="rtl"] .msg-actions { flex-direction: row-reverse; }
-    /* Topbar actions also read right-to-left so the active controls
-       (lang, theme, memory) sit closest to the user's reading start */
-    [dir="rtl"] .topbar-actions { flex-direction: row-reverse; }
-    /* Composer: the attach paperclip flips to the right side */
-    [dir="rtl"] .input-wrap { flex-direction: row-reverse; }
-    /* Mirror the scroll-fab arrow (↓ stays as-is — vertical) but flip
-       any chevrons that imply forward / backward */
+    /* v0.7.71 (rev2): removed the row-reverse overrides that used to live
+       here. Lesson learned: `<html dir="rtl">` already reverses the
+       natural inline flow of flex containers, so adding flex-direction:
+       row-reverse double-reverses it back to LTR order — exactly the
+       wrong outcome. The flex children of msg-actions, topbar-actions,
+       input-wrap, plan-mode-approve-bar, plan-mode-banner now flow
+       right-to-left automatically from the document dir attribute. */
+    /* Mirror chevrons that imply forward / backward */
     [dir="rtl"] .ask-modal-collapse,
     [dir="rtl"] .radar-chevron { transform: scaleX(-1); }
-    /* Plan-mode banner + approve bar: reverse so the action button
-       sits where the eye lands first in RTL */
-    [dir="rtl"] .plan-mode-approve-bar,
-    [dir="rtl"] .plan-mode-banner { flex-direction: row-reverse; }
+    /* Topbar layout fix: .topbar-actions is position:absolute pinned to
+       the physical right edge. In RTL the flex-flowed .topbar-leading
+       (model picker etc) lands on the physical right too — collision.
+       Move topbar-actions to the physical LEFT in RTL so they end up
+       on opposite sides like LTR. */
+    [dir="rtl"] .topbar-actions {
+      right: auto;
+      left: 16px;
+    }
     /* Floating chrome — these use position:fixed/absolute with
        physical left/right values that don't auto-flip with the
        global dir attribute. Each one is anchored to a side that
@@ -2020,9 +2024,9 @@
       right: auto;
       left: 0;
     }
-    /* Slash-menu popover above the composer: flip to keep its
-       arrow / alignment consistent with the Arabic reading flow. */
-    [dir="rtl"] .slash-menu-item { flex-direction: row-reverse; text-align: right; }
+    /* Slash-menu popover above the composer: text-align right; flex
+       direction handled by document dir attribute already. */
+    [dir="rtl"] .slash-menu-item { text-align: right; }
     /* Per-message action chips already flex-row-reversed in the
        earlier RTL block. Make sure the close X on session items
        has enough breathing room when sidebar text is RTL. */
