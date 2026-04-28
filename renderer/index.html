@@ -1946,6 +1946,50 @@
 
     @keyframes msgSlideIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
+    /* ── RTL pass (Arabic) ─────────────────────────────────────────
+       v0.7.71 — most layout flips are handled automatically by the
+       browser when <html dir="rtl"> is set + we use flex/grid. The
+       overrides below cover the cases that need manual help: text
+       alignment in the chat (so Arabic reads naturally right-to-left
+       inside an LTR-anchored container), composer + topbar inner
+       order, and the few chevron/arrow glyphs that visually point in
+       a direction we want mirrored. We *don't* flip the sidebar
+       position — the macOS / Apple convention for native RTL apps is
+       to keep navigation on the left even in Arabic locales. */
+    [dir="rtl"] { text-align: right; }
+    [dir="rtl"] .msg-content { text-align: start; }
+    [dir="rtl"] .welcome-title,
+    [dir="rtl"] .welcome,
+    [dir="rtl"] .starter-chips,
+    [dir="rtl"] .template-section-label { text-align: center; }
+    /* Per-message action bar reads naturally right-to-left */
+    [dir="rtl"] .msg-actions { flex-direction: row-reverse; }
+    /* Topbar actions also read right-to-left so the active controls
+       (lang, theme, memory) sit closest to the user's reading start */
+    [dir="rtl"] .topbar-actions { flex-direction: row-reverse; }
+    /* Composer: the attach paperclip flips to the right side */
+    [dir="rtl"] .input-wrap { flex-direction: row-reverse; }
+    /* Mirror the scroll-fab arrow (↓ stays as-is — vertical) but flip
+       any chevrons that imply forward / backward */
+    [dir="rtl"] .ask-modal-collapse,
+    [dir="rtl"] .radar-chevron { transform: scaleX(-1); }
+    /* Plan-mode banner + approve bar: reverse so the action button
+       sits where the eye lands first in RTL */
+    [dir="rtl"] .plan-mode-approve-bar,
+    [dir="rtl"] .plan-mode-banner { flex-direction: row-reverse; }
+    /* Arabic UI font — system Arabic faces have better legibility at
+       small sizes than the default -apple-system Latin stack which
+       falls through to a Hebrew-leaning Arabic */
+    [dir="rtl"] body {
+      font-family: -apple-system-ui-arabic, "SF Arabic", "Geeza Pro",
+                   ui-sans-serif, system-ui, sans-serif;
+    }
+    /* Chinese UI font — improves CJK rendering on macOS */
+    [lang="zh"] body {
+      font-family: -apple-system, "PingFang SC", "Hiragino Sans GB",
+                   "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    }
+
     .scroll-fab {
       position: absolute;
       bottom: 92px;
@@ -5811,10 +5855,17 @@
         <!-- v0.7.50: tighter topbar. Only theme + memory visible; everything
              else (including Crew) lives in the ⋯ dropdown. Crew's active
              state is reflected in the menu item via a class hook. -->
-        <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
+        <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" data-i18n-attr="title:topbar.theme.title,aria-label:topbar.theme.title" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
-        <button class="topbar-keys-btn" onclick="toggleMemoryModal()" title="Memory Lens — facts Labaik remembers across sessions">🧠 Memory</button>
+        <!-- v0.7.71 — Language picker. Cycles en → zh → ar → en. Title
+             reflects the *current* language so the user knows what's
+             active without needing to open a dropdown. -->
+        <button class="topbar-keys-btn" id="lang-btn" onclick="i18n.cycle()"
+                data-i18n-attr="title:topbar.lang.title" title="Language" aria-label="Language">
+          <span id="lang-label">🌐 EN</span>
+        </button>
+        <button class="topbar-keys-btn" onclick="toggleMemoryModal()" data-i18n="topbar.memory">🧠 Memory</button>
         <!-- Hidden-but-present so toggleCrewMode() can still find the element
              to flip its .active class. Visual state lives in the menu item. -->
         <button class="topbar-keys-btn crew-toggle" id="crew-toggle" onclick="toggleCrewMode()" style="display:none" title="Crew mode">👥 Crew</button>
@@ -5855,15 +5906,18 @@
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
-        <div class="welcome-title">What can I help you with?</div>
+        <div class="welcome-title" data-i18n="welcome.title">What can I help you with?</div>
         <div class="quick-actions" id="quick-actions"></div>
-        <!-- v0.7.68 — three category chips: Build, Office work, Ideate.
-             One chip per major use case so first-time users see the
-             breadth without information overload. Click → fill + send. -->
+        <!-- v0.7.71 — chips translated via i18n. Each chip stores its
+             current-language prompt in data-prompt; the I18n sweep
+             refreshes data-prompt whenever the language changes. -->
         <div class="starter-chips" id="first-run-coach" style="display:none">
-          <button class="starter-chip" onclick="coachFillAndSend('Build me a small playable game I can run right here — keep it in one HTML file with keyboard controls. Surprise me with the choice.')">🛠️ Build something</button>
-          <button class="starter-chip" onclick="coachFillAndSend('Draft a 4-slide PowerPoint pitch deck on a topic of your choice — title slide, problem, solution, the ask. I will edit from there.')">💼 Office work</button>
-          <button class="starter-chip" onclick="coachFillAndSend('Brainstorm 5 fresh side-project ideas I could ship in a weekend. For each: one-line pitch, main upside, biggest risk. Recommend your favorite and why.')">💡 Ideate</button>
+          <button class="starter-chip" data-i18n="chip.build" data-i18n-prompt="chip.build.prompt"
+                  onclick="coachFillAndSend(this.dataset.prompt)">🛠️ Build something</button>
+          <button class="starter-chip" data-i18n="chip.office" data-i18n-prompt="chip.office.prompt"
+                  onclick="coachFillAndSend(this.dataset.prompt)">💼 Office work</button>
+          <button class="starter-chip" data-i18n="chip.ideate" data-i18n-prompt="chip.ideate.prompt"
+                  onclick="coachFillAndSend(this.dataset.prompt)">💡 Ideate</button>
         </div>
       </div>
       <div class="drop-overlay" id="drop-overlay">
@@ -5904,8 +5958,8 @@
          least one assistant message (a plan to approve). Click → toggle
          plan mode off + auto-send "Proceed with the plan above." -->
     <div class="plan-mode-approve-bar" id="plan-mode-approve-bar">
-      <span class="plan-mode-approve-msg">📋 Read the plan above. Ready to execute it?</span>
-      <button class="plan-mode-approve-btn" onclick="approvePlanAndExecute()">✓ Approve &amp; execute</button>
+      <span class="plan-mode-approve-msg" data-i18n="plan.approve.msg">📋 Read the plan above. Ready to execute it?</span>
+      <button class="plan-mode-approve-btn" data-i18n="plan.approve.btn" onclick="approvePlanAndExecute()">✓ Approve &amp; execute</button>
     </div>
 
     <!-- v0.7.67 — Ask-user-question popup. Inline card above the composer.
@@ -5917,19 +5971,20 @@
       <div class="ask-modal" role="dialog" aria-modal="false">
         <div class="ask-modal-header">
           <span class="ask-modal-q-ico" aria-hidden="true">?</span>
-          <span class="ask-modal-q-text" id="ask-modal-q">Quick questions</span>
+          <span class="ask-modal-q-text" id="ask-modal-q" data-i18n="ask.title">Quick questions</span>
           <button class="ask-modal-collapse" id="ask-modal-collapse" onclick="toggleAskCollapse()" title="Collapse / expand">▾</button>
         </div>
         <div class="ask-modal-questions" id="ask-modal-questions"></div>
         <div class="ask-modal-custom">
-          <label class="ask-modal-custom-label" for="ask-modal-custom-input">Or type a custom answer / extra context (optional):</label>
+          <label class="ask-modal-custom-label" for="ask-modal-custom-input" data-i18n="ask.custom.label">Or type a custom answer / extra context (optional):</label>
           <input type="text" class="ask-modal-custom-input" id="ask-modal-custom-input"
+                 data-i18n-attr="placeholder:ask.custom.placeholder"
                  placeholder="e.g. use Postgres but with Drizzle ORM"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();askModalSubmitAll()}" />
         </div>
         <div class="ask-modal-footer">
-          <button class="ask-modal-skip" onclick="askModalSkip()">Skip — use defaults</button>
-          <button class="ask-modal-submit" id="ask-modal-submit" onclick="askModalSubmitAll()">✓ Submit answers</button>
+          <button class="ask-modal-skip" data-i18n="ask.skip" onclick="askModalSkip()">Skip — use defaults</button>
+          <button class="ask-modal-submit" id="ask-modal-submit" data-i18n="ask.submit" onclick="askModalSubmitAll()">✓ Submit answers</button>
         </div>
       </div>
     </div>
@@ -5937,12 +5992,12 @@
     <div class="input-area">
       <div class="input-wrap">
         <div class="slash-menu" id="slash-menu" role="listbox" aria-label="Prompt snippets"></div>
-        <button class="icon-btn" onclick="attachFile()" title="Attach file">
+        <button class="icon-btn" onclick="attachFile()" data-i18n-attr="title:input.attach.title" title="Attach file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <textarea class="input-field" id="input" rows="1" placeholder="Message Labaik..." autofocus></textarea>
+        <textarea class="input-field" id="input" rows="1" data-i18n-attr="placeholder:input.placeholder" placeholder="Message Labaik..." autofocus></textarea>
         <!-- v0.6.0 Screen Vision: snap a region, attach to composer, send to vision model. ⌘⇧V.
              v0.7.43: hidden — another composer icon trimmed for clarity.
              Still callable via ⌘⇧V shortcut if ever needed. -->
@@ -10558,6 +10613,269 @@ footer a { color: var(--accent); text-decoration: none; }
     // "never chose" and now means light.
     applyTheme(localStorage.getItem(LS_THEME) || 'light')
 
+    // ── i18n (English / Chinese / Arabic) ─────────────────────────
+    // OOP encapsulation: a single I18n instance owns the translations
+    // table, current language state, persistence, and DOM sweep. The
+    // rest of the app talks to it through `i18n.t(key)` for ad-hoc
+    // lookups, or tags DOM nodes with data-i18n="key" / data-i18n-attr=
+    // "attr:key" / data-i18n-prompt="key" and lets the sweep handle it.
+    // Phase 1 covers the high-traffic chrome (welcome, composer, action
+    // bar, plan mode, ask popup, language picker). Settings / Keys /
+    // command-palette stay English for now — proper nouns dominate.
+    const TRANSLATIONS = {
+      en: {
+        'welcome.title': 'What can I help you with?',
+        'chip.build': '🛠️ Build something',
+        'chip.office': '💼 Office work',
+        'chip.ideate': '💡 Ideate',
+        'chip.build.prompt': 'Build me a small playable game I can run right here — keep it in one HTML file with keyboard controls. Surprise me with the choice.',
+        'chip.office.prompt': 'Draft a 4-slide PowerPoint pitch deck on a topic of your choice — title slide, problem, solution, the ask. I will edit from there.',
+        'chip.ideate.prompt': 'Brainstorm 5 fresh side-project ideas I could ship in a weekend. For each: one-line pitch, main upside, biggest risk. Recommend your favorite and why.',
+        'template.section.label': 'Quick starts',
+        'template.onefileapp.name': 'One-file app',
+        'template.onefileapp.desc': 'A working web tool — runs right here in chat',
+        'template.onefileapp.starter': 'Build me a small, genuinely useful web tool — pick something you think I would actually use day-to-day (unit converter, regex tester, color picker, stopwatch, password generator, etc). One self-contained HTML file, clean styling, fully keyboard-accessible. Surprise me with the choice.',
+        'template.budget.name': 'Budget spreadsheet',
+        'template.budget.desc': 'Real .xlsx with formulas — open in Excel or Numbers',
+        'template.budget.starter': 'Build me a personal-finance starter spreadsheet covering 12 months and 5 spending categories with realistic mock numbers, a monthly net row, a savings-rate column, and yearly totals. Use formulas, not hardcoded sums. Use the ```xlsx block so I can save it as a real .xlsx file and edit it later.',
+        'template.idea.name': 'Idea + critique',
+        'template.idea.desc': '5 niche product ideas, then which one actually wins',
+        'template.idea.starter': 'Pick a specific niche (e.g. "tools for solo restaurant owners", "side projects for tired parents", "AI for high-school teachers"). Generate 5 product ideas in that niche. For each: who it is for, the wedge that makes it work, and why now. Then crown the strongest one and tell me what would have to be true for it to ship in 90 days.',
+        'input.placeholder': 'Message Labaik...',
+        'input.attach.title': 'Attach file',
+        'plan.banner.off': 'Turn off',
+        'plan.approve.msg': '📋 Read the plan above. Ready to execute it?',
+        'plan.approve.btn': '✓ Approve & execute',
+        'ask.title': 'Quick questions',
+        'ask.custom.label': 'Or type a custom answer / extra context (optional):',
+        'ask.custom.placeholder': 'e.g. use Postgres but with Drizzle ORM',
+        'ask.skip': 'Skip — use defaults',
+        'ask.submit': '✓ Submit answers',
+        'action.pin': '📌 Pin',
+        'action.pinned': '📌 Pinned',
+        'action.save': '💾 Save',
+        'action.copy': '📋 Copy',
+        'action.branch': '⎇ Branch',
+        'topbar.theme.title': 'Toggle theme (⌘⇧L)',
+        'topbar.memory': '🧠 Memory',
+        'topbar.crew': '👥 Crew',
+        'topbar.more.title': 'More actions',
+        'topbar.lang.title': 'Language',
+        'lang.label': 'Language',
+        'lang.en': 'English',
+        'lang.zh': '中文',
+        'lang.ar': 'العربية',
+      },
+      zh: {
+        'welcome.title': '我能帮你做什么？',
+        'chip.build': '🛠️ 做点东西',
+        'chip.office': '💼 办公任务',
+        'chip.ideate': '💡 找灵感',
+        'chip.build.prompt': '帮我做一个可以直接在这里运行的小游戏——单个 HTML 文件，键盘可控。题材你来定，给我个惊喜。',
+        'chip.office.prompt': '帮我写一份 4 张幻灯片的 PowerPoint 演示稿，主题你来定——封面、问题、方案、行动呼吁。我会在此基础上修改。',
+        'chip.ideate.prompt': '帮我发想 5 个一个周末就能做出来的副项目点子。每个点子给一句话简介、最大优势、最大风险。最后挑出你最看好的并说明原因。',
+        'template.section.label': '快速开始',
+        'template.onefileapp.name': '单文件应用',
+        'template.onefileapp.desc': '可运行的小工具——直接在对话里打开',
+        'template.onefileapp.starter': '帮我做一个真正实用的小型网页工具——选一个你觉得我会日常用的（单位换算、正则测试、取色器、秒表、密码生成器之类）。单个 HTML 文件，样式干净，完整键盘支持。题材你来定，给我个惊喜。',
+        'template.budget.name': '预算表格',
+        'template.budget.desc': '带公式的真实 .xlsx——可在 Excel 或 Numbers 打开',
+        'template.budget.starter': '帮我做一个个人财务起步表格：12 个月 × 5 个支出类别，填入合理的示例数字，包含每月结余行、储蓄率列、年度合计。使用公式而非硬编码求和。请用 ```xlsx 代码块，方便我保存成真实的 .xlsx 文件后续编辑。',
+        'template.idea.name': '想法 + 评估',
+        'template.idea.desc': '5 个细分领域的产品点子，再判断哪个真能跑出来',
+        'template.idea.starter': '选一个具体的细分领域（例如「单店餐厅老板的工具」、「疲惫父母的副业」、「高中老师的 AI 工具」）。给出 5 个产品点子。每个点子说明：目标用户、独特切入点、为什么是现在。然后选出最强的一个，告诉我要让它在 90 天内上线，哪些前提必须成立。',
+        'input.placeholder': '和 Labaik 聊聊...',
+        'input.attach.title': '附加文件',
+        'plan.banner.off': '关闭',
+        'plan.approve.msg': '📋 看完上面的方案了吗？可以执行了吗？',
+        'plan.approve.btn': '✓ 通过并执行',
+        'ask.title': '几个问题',
+        'ask.custom.label': '或自行输入回答 / 额外说明（可选）：',
+        'ask.custom.placeholder': '例如：用 Postgres 配 Drizzle ORM',
+        'ask.skip': '跳过——使用默认',
+        'ask.submit': '✓ 提交回答',
+        'action.pin': '📌 置顶',
+        'action.pinned': '📌 已置顶',
+        'action.save': '💾 保存',
+        'action.copy': '📋 复制',
+        'action.branch': '⎇ 分支',
+        'topbar.theme.title': '切换主题 (⌘⇧L)',
+        'topbar.memory': '🧠 记忆',
+        'topbar.crew': '👥 团队',
+        'topbar.more.title': '更多操作',
+        'topbar.lang.title': '语言',
+        'lang.label': '语言',
+        'lang.en': 'English',
+        'lang.zh': '中文',
+        'lang.ar': 'العربية',
+      },
+      ar: {
+        'welcome.title': 'بماذا يمكنني مساعدتك؟',
+        'chip.build': '🛠️ ابنِ شيئًا',
+        'chip.office': '💼 عمل مكتبي',
+        'chip.ideate': '💡 توليد أفكار',
+        'chip.build.prompt': 'ابنِ لي لعبة صغيرة قابلة للعب أستطيع تشغيلها هنا مباشرة — احتفظ بها في ملف HTML واحد بدعم كامل للوحة المفاتيح. اختر اللعبة بنفسك وفاجئني.',
+        'chip.office.prompt': 'حضِّر لي عرضًا تقديميًا (PowerPoint) من 4 شرائح حول موضوع تختاره — شريحة عنوان، المشكلة، الحل، الطلب. سأعدّله من هناك.',
+        'chip.ideate.prompt': 'اقترح 5 أفكار لمشاريع جانبية يمكنني إطلاقها في عطلة نهاية أسبوع. لكل فكرة: عرض من سطر واحد، الفائدة الأكبر، أكبر مخاطرة. ثم اختر المفضّلة لديك واشرح السبب.',
+        'template.section.label': 'بدايات سريعة',
+        'template.onefileapp.name': 'تطبيق بملف واحد',
+        'template.onefileapp.desc': 'أداة ويب تعمل مباشرة داخل المحادثة',
+        'template.onefileapp.starter': 'ابنِ لي أداة ويب صغيرة ومفيدة فعلًا — اختر شيئًا تظنّ أنني سأستخدمه يوميًا (محوِّل وحدات، مختبر تعابير منتظمة، منتقي ألوان، ساعة إيقاف، مولِّد كلمات مرور، إلخ). ملف HTML واحد مكتفٍ بذاته، تصميم نظيف، يعمل بالكامل بلوحة المفاتيح. فاجئني بالاختيار.',
+        'template.budget.name': 'جدول ميزانية',
+        'template.budget.desc': 'ملف .xlsx حقيقي بالمعادلات — يُفتح في Excel أو Numbers',
+        'template.budget.starter': 'ابنِ لي جدولًا للبداية في الميزانية الشخصية يغطّي 12 شهرًا و5 فئات إنفاق بأرقام واقعية تجريبية، مع صف صافي الشهر، وعمود نسبة الادخار، ومجاميع سنوية. استخدم المعادلات لا المجاميع الثابتة. استخدم كتلة ```xlsx حتى أتمكّن من حفظه ملف .xlsx حقيقي وتعديله لاحقًا.',
+        'template.idea.name': 'فكرة + نقد',
+        'template.idea.desc': '5 أفكار منتجات في مجال محدّد، ثم أيها الفائز فعلًا',
+        'template.idea.starter': 'اختر مجالًا محدّدًا (مثلًا «أدوات لأصحاب المطاعم الفردية»، «مشاريع جانبية للآباء المنهكين»، «الذكاء الاصطناعي لمعلّمي الثانوية»). ولّد 5 أفكار منتجات في ذلك المجال. لكل فكرة: لمن هي، الزاوية المميِّزة التي تجعلها تنجح، ولماذا الآن. ثم توّج الأقوى وأخبرني ما الذي يجب أن يكون صحيحًا حتى تُطلق خلال 90 يومًا.',
+        'input.placeholder': 'تحدّث إلى لبيك...',
+        'input.attach.title': 'إرفاق ملف',
+        'plan.banner.off': 'إيقاف',
+        'plan.approve.msg': '📋 اطّلع على الخطة أعلاه. جاهز لتنفيذها؟',
+        'plan.approve.btn': '✓ موافق ونفّذ',
+        'ask.title': 'أسئلة سريعة',
+        'ask.custom.label': 'أو اكتب إجابة مخصّصة / سياقًا إضافيًا (اختياري):',
+        'ask.custom.placeholder': 'مثلًا: استخدم Postgres مع Drizzle ORM',
+        'ask.skip': 'تخطٍّ — استخدم الافتراضيات',
+        'ask.submit': '✓ إرسال الإجابات',
+        'action.pin': '📌 تثبيت',
+        'action.pinned': '📌 مثبَّت',
+        'action.save': '💾 حفظ',
+        'action.copy': '📋 نسخ',
+        'action.branch': '⎇ تفرّع',
+        'topbar.theme.title': 'تبديل المظهر (⌘⇧L)',
+        'topbar.memory': '🧠 الذاكرة',
+        'topbar.crew': '👥 الفريق',
+        'topbar.more.title': 'المزيد من الإجراءات',
+        'topbar.lang.title': 'اللغة',
+        'lang.label': 'اللغة',
+        'lang.en': 'English',
+        'lang.zh': '中文',
+        'lang.ar': 'العربية',
+      },
+    }
+
+    class I18n {
+      static LS_KEY = 'alaude:lang:v1'
+      static SUPPORTED = ['en', 'zh', 'ar']
+      static RTL = new Set(['ar'])
+
+      constructor(translations) {
+        this._translations = translations
+        this._lang = this._readStored() || this._detectFromBrowser() || 'en'
+      }
+
+      // ── Public API ───────────────────────────────────────────────
+      get lang() { return this._lang }
+
+      isRTL(lang = this._lang) { return I18n.RTL.has(lang) }
+
+      // Lookup with sensible fallback chain: current → en → fallback → key.
+      // Never throws, so it's safe to call before apply().
+      t(key, fallback) {
+        const cur = this._translations[this._lang] || {}
+        if (cur[key] != null) return cur[key]
+        const en = this._translations.en || {}
+        if (en[key] != null) return en[key]
+        return fallback != null ? fallback : key
+      }
+
+      // Set + persist + sweep DOM. Validates the language; falls back to 'en'.
+      apply(lang = this._lang) {
+        if (!I18n.SUPPORTED.includes(lang)) lang = 'en'
+        this._lang = lang
+        this._persist(lang)
+        this._applyHtmlAttrs(lang)
+        this._sweep()
+        // Notify other parts of the app that re-render dynamic content
+        // (templates grid, message list, plan card) so they pick up the
+        // new language without a full reload.
+        document.dispatchEvent(new CustomEvent('alaude:lang-changed', { detail: { lang } }))
+      }
+
+      // Cycle through supported languages — wired to the topbar 🌐 button.
+      cycle() {
+        const idx = I18n.SUPPORTED.indexOf(this._lang)
+        const next = I18n.SUPPORTED[(idx + 1) % I18n.SUPPORTED.length]
+        this.apply(next)
+      }
+
+      // Public sweep — for HTML that's been injected after boot
+      // (renderMessages, command palette, modals, etc). Same convention
+      // as `apply()` but doesn't change the persisted language.
+      applyTo(root) {
+        if (root) this._sweep(root)
+      }
+
+      // ── Private helpers ──────────────────────────────────────────
+      _readStored() {
+        try { return localStorage.getItem(I18n.LS_KEY) } catch { return null }
+      }
+
+      _persist(lang) {
+        try { localStorage.setItem(I18n.LS_KEY, lang) } catch {}
+      }
+
+      // Best-effort browser-language sniff: zh-* → zh, ar-* → ar, else en.
+      // Only used on first install; the explicit picker overrides.
+      _detectFromBrowser() {
+        try {
+          const nav = (navigator.language || '').toLowerCase()
+          if (nav.startsWith('zh')) return 'zh'
+          if (nav.startsWith('ar')) return 'ar'
+        } catch {}
+        return null
+      }
+
+      _applyHtmlAttrs(lang) {
+        const html = document.documentElement
+        html.setAttribute('lang', lang)
+        html.setAttribute('dir', this.isRTL(lang) ? 'rtl' : 'ltr')
+      }
+
+      // Walk three attribute conventions:
+      //   data-i18n="key"             → element.textContent
+      //   data-i18n-attr="attr:key"   → element[attr]= ... (commas separate multiple)
+      //   data-i18n-prompt="key"      → element.dataset.prompt (used by chips)
+      _sweep(root = document) {
+        root.querySelectorAll('[data-i18n]').forEach(el => {
+          el.textContent = this.t(el.getAttribute('data-i18n'))
+        })
+        root.querySelectorAll('[data-i18n-attr]').forEach(el => {
+          const spec = el.getAttribute('data-i18n-attr')
+          for (const pair of spec.split(',')) {
+            const [attr, key] = pair.split(':').map(s => s && s.trim())
+            if (attr && key) el.setAttribute(attr, this.t(key))
+          }
+        })
+        root.querySelectorAll('[data-i18n-prompt]').forEach(el => {
+          el.dataset.prompt = this.t(el.getAttribute('data-i18n-prompt'))
+        })
+      }
+    }
+
+    const i18n = new I18n(TRANSLATIONS)
+    // Expose on window so inline onclick handlers (`onclick="i18n.cycle()"`)
+    // can find it — classic scripts don't auto-bind const declarations to
+    // the window object the way var does.
+    window.i18n = i18n
+    // Global helper for ad-hoc lookups in dynamically rendered HTML.
+    // Kept tiny on purpose — most call sites should prefer data-i18n attrs.
+    window.t = (key, fallback) => i18n.t(key, fallback)
+
+    // Visible language indicator on the topbar 🌐 button. Maps
+    // language code → 1-2 char glyph + label so the user can see
+    // what's active without opening a menu.
+    const LANG_LABELS = { en: '🌐 EN', zh: '🌐 中', ar: '🌐 ع' }
+    document.addEventListener('alaude:lang-changed', (e) => {
+      const label = document.getElementById('lang-label')
+      if (label) label.textContent = LANG_LABELS[e.detail.lang] || LANG_LABELS.en
+      // Re-render the message list and welcome if they're using inline t()
+      // calls — the data-i18n sweep doesn't reach those.
+      try { if (typeof renderMessages === 'function') renderMessages() } catch {}
+    })
+
+    i18n.apply()
+
     // ── Sidebar collapse + resize ─────────────────────────────────
     const LS_SIDEBAR = 'alaude:sidebar-collapsed:v1'
     const LS_SIDEBAR_W = 'alaude:sidebar-width:v1'
@@ -11916,12 +12234,14 @@ Title:`
         // The functions still exist — reachable via command palette or
         // shortcuts — they're just not cluttering the per-message action
         // row every time you get a reply.
+        // v0.7.71: action labels resolved via t() so they translate
+        // alongside the rest of the chrome.
         const actions = (!msg.streaming && msg.role === 'assistant' && (msg.content || '').length > 20)
           ? `<div class="msg-actions">
-              <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? '📌 Pinned' : '📌 Pin'}</button>
-              <button class="msg-action-btn" onclick="saveMessage(${i})" title="Save response to a file">💾 Save</button>
-              <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">📋 Copy</button>
-              <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">⎇ Branch</button>
+              <button class="msg-action-btn" onclick="togglePin(${i})" title="${msg.pinned ? 'Unpin' : 'Pin this message to the top'}">${msg.pinned ? escapeHtml(t('action.pinned')) : escapeHtml(t('action.pin'))}</button>
+              <button class="msg-action-btn" onclick="saveMessage(${i})" title="Save response to a file">${escapeHtml(t('action.save'))}</button>
+              <button class="msg-action-btn" onclick="copyMessage(${i}, this)" title="Copy">${escapeHtml(t('action.copy'))}</button>
+              <button class="msg-action-btn" onclick="branchFrom(${i})" title="Fork a new conversation starting from here">${escapeHtml(t('action.branch'))}</button>
              </div>`
           : ''
         // Render inline file-diff cards (attached to assistant messages during tool calls)
@@ -12069,13 +12389,12 @@ Title:`
       const templateCards = (typeof renderTemplatePickerHtml === 'function')
         ? renderTemplatePickerHtml()
         : ''
-      // v0.7.67 — minimalist welcome. Dropped subtitle, dropped keyboard
-      // hints footer (⌘P palette covers discovery). Kept space cards +
-      // templates because they're real entry points, not promo. Title
-      // matches the first-paint welcome.
+      // v0.7.71 — i18n-aware welcome. Title pulled from the translation
+      // table so language switch refreshes via the renderMessages re-run
+      // wired to the alaude:lang-changed event.
       const welcomeHtml = `<div class="welcome">
         <img class="welcome-logo" src="${logoSrc}" />
-        <div class="welcome-title">What can I help you with?</div>
+        <div class="welcome-title">${escapeHtml(t('welcome.title'))}</div>
         ${spaceCardsHtml}
         <div class="quick-actions" id="quick-actions"></div>
         ${templateCards}
@@ -14248,35 +14567,49 @@ Title:`
     // SEE — a runnable artifact, a real .xlsx, or a structured analysis.
     // Differs from the first-run starter chips so returning users get
     // fresh entry points instead of duplicate prompts.
+    // v0.7.71 — templates store i18n keys instead of static strings.
+    // The renderer (renderTemplatePickerHtml) and launcher (startFromTemplate)
+    // resolve via t() at call time so a language switch refreshes the
+    // visible labels and the prompt the model receives.
     const SESSION_TEMPLATES = [
       {
         id: 'one-file-app',
         icon: '🛠️',
-        name: 'One-file app',
-        desc: 'A working web tool — runs right here in chat',
+        i18nName: 'template.onefileapp.name',
+        i18nDesc: 'template.onefileapp.desc',
+        i18nStarter: 'template.onefileapp.starter',
         goal: 'Build a small, self-contained HTML utility',
         tags: ['build', 'artifact'],
-        starter: 'Build me a small, genuinely useful web tool — pick something you think I would actually use day-to-day (unit converter, regex tester, color picker, stopwatch, password generator, etc). One self-contained HTML file, clean styling, fully keyboard-accessible. Surprise me with the choice.',
       },
       {
         id: 'budget-sheet',
         icon: '💼',
-        name: 'Budget spreadsheet',
-        desc: 'Real .xlsx with formulas — open in Excel or Numbers',
+        i18nName: 'template.budget.name',
+        i18nDesc: 'template.budget.desc',
+        i18nStarter: 'template.budget.starter',
         goal: 'Produce an editable .xlsx workbook',
         tags: ['office', 'xlsx'],
-        starter: 'Build me a personal-finance starter spreadsheet covering 12 months and 5 spending categories with realistic mock numbers, a monthly net row, a savings-rate column, and yearly totals. Use formulas, not hardcoded sums. Use the ```xlsx block so I can save it as a real .xlsx file and edit it later.',
       },
       {
         id: 'idea-with-critique',
         icon: '💡',
-        name: 'Idea + critique',
-        desc: '5 niche product ideas, then which one actually wins',
+        i18nName: 'template.idea.name',
+        i18nDesc: 'template.idea.desc',
+        i18nStarter: 'template.idea.starter',
         goal: 'Generate ideas with built-in critique',
         tags: ['ideate', 'brainstorm'],
-        starter: 'Pick a specific niche (e.g. "tools for solo restaurant owners", "side projects for tired parents", "AI for high-school teachers"). Generate 5 product ideas in that niche. For each: who it is for, the wedge that makes it work, and why now. Then crown the strongest one and tell me what would have to be true for it to ship in 90 days.',
       },
     ]
+    // Resolve a template's user-visible fields. Falls back to the raw
+    // .name / .desc / .starter for user-saved custom templates that
+    // don't have i18n keys.
+    function templateFields(t_) {
+      return {
+        name:    t_.i18nName    ? t(t_.i18nName)    : (t_.name || ''),
+        desc:    t_.i18nDesc    ? t(t_.i18nDesc)    : (t_.desc || ''),
+        starter: t_.i18nStarter ? t(t_.i18nStarter) : (t_.starter || ''),
+      }
+    }
     // User-saved custom templates live in localStorage, merged with the
     // built-in set above. Each has the same shape as SESSION_TEMPLATES.
     const LS_CUSTOM_TEMPLATES = 'alaude:templates:v1'
@@ -14340,48 +14673,56 @@ Title:`
 
     function renderTemplatePickerHtml() {
       // Merge built-in + user templates for the welcome-screen grid.
-      const cards = allTemplates().map(t => {
-        const delX = t.custom
-          ? `<button class="tmpl-del" onclick="event.stopPropagation(); if(confirm('Delete this template?')) deleteCustomTemplate('${escapeHtml(t.id)}')" title="Delete custom template">×</button>`
+      // v0.7.71: name/desc resolved via templateFields() so i18n keys
+      // expand at render time (and again when language changes).
+      const cards = allTemplates().map(tpl => {
+        const f = templateFields(tpl)
+        const delX = tpl.custom
+          ? `<button class="tmpl-del" onclick="event.stopPropagation(); if(confirm('Delete this template?')) deleteCustomTemplate('${escapeHtml(tpl.id)}')" title="Delete custom template">×</button>`
           : ''
         return `
-          <div class="template-card" onclick="startFromTemplate('${escapeHtml(t.id)}')" title="${escapeHtml(t.desc || '')}">
-            <span class="template-icon">${t.icon}</span>
+          <div class="template-card" onclick="startFromTemplate('${escapeHtml(tpl.id)}')" title="${escapeHtml(f.desc)}">
+            <span class="template-icon">${tpl.icon}</span>
             <div class="template-body">
-              <div class="template-name">${escapeHtml(t.name)}</div>
-              <div class="template-desc">${escapeHtml(t.desc || '')}</div>
+              <div class="template-name">${escapeHtml(f.name)}</div>
+              <div class="template-desc">${escapeHtml(f.desc)}</div>
             </div>
             ${delX}
           </div>`
       }).join('')
       return `
         <div class="template-section">
-          <div class="template-section-label">Quick starts</div>
+          <div class="template-section-label">${escapeHtml(t('template.section.label'))}</div>
           <div class="template-grid">${cards}</div>
         </div>`
     }
     function startFromTemplate(id) {
-      const t = allTemplates().find(x => x.id === id)
-      if (!t) return
+      // Param renamed from `t` → `tpl` to avoid shadowing the global
+      // translation helper window.t. The fields object resolves i18n
+      // keys (or falls back to literal name/desc/starter for custom
+      // user-saved templates).
+      const tpl = allTemplates().find(x => x.id === id)
+      if (!tpl) return
+      const f = templateFields(tpl)
       newSession()
       const s = sessions.find(s => s.id === currentSessionId)
       if (!s) return
-      s.title = t.name
-      s.tags = [...(t.tags || [])]
-      if (t.goal) s.goal = { text: t.goal, status: 'active', setAt: Date.now() }
+      s.title = f.name
+      s.tags = [...(tpl.tags || [])]
+      if (tpl.goal) s.goal = { text: tpl.goal, status: 'active', setAt: Date.now() }
       persistSessions()
       renderSessions?.()
       renderGoalCard?.()
       // Pre-fill the input with the starter prompt and drop the caret at
       // the first blank line so the user can just start typing.
-      input.value = t.starter || ''
+      input.value = f.starter
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      const firstEmptyLineIdx = t.starter ? (t.starter.indexOf('\n\n\n\n') >= 0 ? t.starter.indexOf('\n\n\n\n') + 2 : t.starter.length) : 0
+      const firstEmptyLineIdx = f.starter ? (f.starter.indexOf('\n\n\n\n') >= 0 ? f.starter.indexOf('\n\n\n\n') + 2 : f.starter.length) : 0
       try {
         input.focus()
         input.setSelectionRange(firstEmptyLineIdx, firstEmptyLineIdx)
       } catch {}
-      showRewindToast?.(`${t.icon} ${t.name} template ready`, false)
+      showRewindToast?.(`${tpl.icon} ${f.name} template ready`, false)
     }
 
     function newSession() {
