@@ -6232,29 +6232,24 @@
       <!-- Not-installed state -->
       <div id="lm-not-installed" class="lm-empty" style="display:none">
         <div class="lm-empty-icon">🦙</div>
-        <div class="lm-empty-title">Local models in 60 seconds</div>
-        <div class="lm-empty-sub">
-          Labaik uses Ollama to run models on your own hardware — free, private, offline.
-          Click below and we'll install and launch it for you.
-        </div>
-        <button class="key-save-btn" id="lm-install-btn" onclick="installOllamaInApp()">🦙 Install Ollama</button>
-        <!-- Live progress surface — hidden until install starts -->
+        <div class="lm-empty-title" data-i18n="lm.empty.title">Local models in 60 seconds</div>
+        <div class="lm-empty-sub" data-i18n="lm.empty.sub">Labaik uses Ollama to run models on your own hardware — free, private, offline. Click below and we'll install and launch it for you.</div>
+        <button class="key-save-btn" id="lm-install-btn" data-i18n="lm.installBtn" onclick="installOllamaInApp()">🦙 Install Ollama</button>
         <div id="lm-install-progress" class="lm-progress" style="display:none; margin-top:16px">
           <div class="lm-progress-head">
-            <span id="lm-install-msg" class="lm-progress-name">Starting…</span>
+            <span id="lm-install-msg" class="lm-progress-name" data-i18n="lm.starting">Starting…</span>
             <span id="lm-install-pct" class="lm-progress-pct"></span>
           </div>
           <div class="lm-progress-bar"><div class="lm-progress-fill" id="lm-install-bar" style="width:0%"></div></div>
         </div>
-        <!-- Manual link as a last-resort escape hatch. -->
+        <!-- v0.7.71: lead + literal links + tail. ollama.com URL stays literal. -->
         <div style="margin-top:12px; font-size:11px; color:var(--text-faint)">
-          Prefer to install it yourself? <a href="#" onclick="window.alaude.openExternal('https://ollama.com/download'); return false" style="color:var(--green); text-decoration:none">Download from ollama.com</a> · <a href="#" onclick="refreshLocalModels(); return false" style="color:var(--text-dim); text-decoration:none">Recheck</a>
+          <span data-i18n="lm.preferOwn">Prefer to install it yourself?</span> <a href="#" data-i18n="lm.fromOllamaCom" onclick="window.alaude.openExternal('https://ollama.com/download'); return false" style="color:var(--green); text-decoration:none">Download from ollama.com</a> · <a href="#" data-i18n="lm.recheck" onclick="refreshLocalModels(); return false" style="color:var(--text-dim); text-decoration:none">Recheck</a>
         </div>
       </div>
 
       <!-- Connected state -->
       <div id="lm-connected" class="lm-scroll" style="display:none">
-        <!-- Active download -->
         <div id="lm-download-progress" class="lm-progress">
           <div class="lm-progress-head">
             <span id="lm-progress-model" class="lm-progress-name">...</span>
@@ -6262,34 +6257,31 @@
           </div>
           <div class="lm-progress-bar"><div id="lm-progress-bar" class="lm-progress-bar-fill"></div></div>
           <div class="lm-progress-foot">
-            <span id="lm-progress-status">Starting…</span>
-            <button id="lm-cancel-btn" class="lm-cancel-btn">Cancel</button>
+            <span id="lm-progress-status" data-i18n="lm.starting">Starting…</span>
+            <button id="lm-cancel-btn" class="lm-cancel-btn" data-i18n="lm.cancel">Cancel</button>
           </div>
         </div>
 
-        <!-- Installed -->
         <div class="lm-section-title">
-          Installed
+          <span data-i18n="lm.installed">Installed</span>
           <span class="lm-count" id="lm-installed-count"></span>
         </div>
         <div id="lm-installed-list">
-          <div class="lm-list-empty">No models installed yet — pick one below to get started.</div>
+          <div class="lm-list-empty" data-i18n="lm.list.empty">No models installed yet — pick one below to get started.</div>
         </div>
 
-        <!-- Catalog (grouped by family) -->
         <div class="lm-section-title">
-          Available to download
+          <span data-i18n="lm.available">Available to download</span>
           <span class="lm-count" id="lm-catalog-count"></span>
         </div>
         <div id="lm-catalog-list"></div>
 
-        <!-- Custom pull -->
-        <div class="lm-section-title">Pull custom tag</div>
+        <div class="lm-section-title" data-i18n="lm.customTag">Pull custom tag</div>
         <div class="lm-custom-row">
-          <input id="lm-custom-input" class="lm-custom-input" placeholder="e.g. qwen3.6:latest, gemma4:e4b, llama3.2" />
-          <button class="key-save-btn lm-custom-btn" onclick="pullCustomModel()">Download</button>
+          <input id="lm-custom-input" class="lm-custom-input" data-i18n-attr="placeholder:lm.custom.placeholder" placeholder="e.g. qwen3.6:latest, gemma4:e4b, llama3.2" />
+          <button class="key-save-btn lm-custom-btn" data-i18n="lm.custom.btn" onclick="pullCustomModel()">Download</button>
         </div>
-        <div class="lm-custom-hint">Any tag from <a href="#" onclick="window.alaude.openExternal('https://ollama.com/library'); return false" style="color:var(--green);text-decoration:none">ollama.com/library</a> works.</div>
+        <div class="lm-custom-hint"><span data-i18n="lm.custom.hint.lead">Any tag from</span> <a href="#" onclick="window.alaude.openExternal('https://ollama.com/library'); return false" style="color:var(--green);text-decoration:none">ollama.com/library</a> <span data-i18n="lm.custom.hint.tail">works.</span></div>
       </div>
     </div>
   </div>
@@ -6409,7 +6401,7 @@
   <div class="modal-overlay" id="compare-modal">
     <div class="modal ux-modal" style="max-width:90vw;width:1100px">
       <h2>
-        ⚖ Compare messages
+        <span data-i18n="compare.title">⚖ Compare messages</span>
         <button class="modal-close" onclick="closeCompareModal()">&times;</button>
       </h2>
       <div id="compare-body" class="ux-scroll" style="max-height:70vh"></div>
@@ -6420,11 +6412,11 @@
   <div class="modal-overlay" id="whats-in-modal">
     <div class="modal ux-modal" style="max-width:720px;width:94vw">
       <h2>
-        🎉 What's in Labaik
+        <span data-i18n="whatsin.title">🎉 What's in Labaik</span>
         <button class="modal-close" onclick="toggleWhatsInLabaik()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
-        Every feature shipped in the v0.2 line. Click <em>Try it</em> to jump straight in.
+        <span data-i18n="whatsin.intro.lead">Every feature shipped in the v0.2 line. Click</span> <em data-i18n="whatsin.tryit">Try it</em> <span data-i18n="whatsin.intro.tail">to jump straight in.</span>
       </div>
       <div id="whats-in-body" class="ux-scroll" style="max-height:70vh"></div>
     </div>
@@ -6434,74 +6426,66 @@
   <div class="modal-overlay" id="skills-modal">
     <div class="modal" style="max-width:760px;width:94vw">
       <h2>
-        ⏰ Routines
+        <span data-i18n="skills.title">⏰ Routines</span>
         <button class="modal-close" onclick="toggleSkillsModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
-        Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.
-      </div>
+      <div data-i18n="skills.intro" style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.</div>
 
-      <!-- Starter templates — click one to pre-fill the Add form. -->
       <div style="margin-bottom:14px">
-        <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Starter templates</div>
+        <div data-i18n="skills.starterTemplates" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Starter templates</div>
         <div id="skills-templates" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
 
       <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
-        <input id="skill-name" type="text" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
-        <textarea id="skill-prompt" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
-        <!-- v0.5.23 friendly schedule picker. Converts to cron internally; -->
-        <!-- raw cron input hidden but kept for advanced/custom mode. -->
+        <div data-i18n="skills.add.section" style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
+        <input id="skill-name" type="text" data-i18n-attr="placeholder:skills.name.placeholder" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
+        <textarea id="skill-prompt" data-i18n-attr="placeholder:skills.prompt.placeholder" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
         <div style="background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px">
-          <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
+          <div data-i18n="skills.schedule" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <select id="skill-freq" onchange="onSkillFreqChange()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;flex:1;min-width:180px">
-              <optgroup label="Daily / weekly">
-                <option value="daily">Every day</option>
-                <option value="weekday">Every weekday (Mon–Fri)</option>
-                <option value="weekend">Every weekend (Sat–Sun)</option>
-                <option value="mon">Every Monday</option>
-                <option value="tue">Every Tuesday</option>
-                <option value="wed">Every Wednesday</option>
-                <option value="thu">Every Thursday</option>
-                <option value="fri">Every Friday</option>
-                <option value="sat">Every Saturday</option>
-                <option value="sun">Every Sunday</option>
+              <optgroup label="Daily / weekly" data-i18n-attr="label:skills.freq.dailyWeekly">
+                <option value="daily" data-i18n="skills.freq.daily">Every day</option>
+                <option value="weekday" data-i18n="skills.freq.weekday">Every weekday (Mon–Fri)</option>
+                <option value="weekend" data-i18n="skills.freq.weekend">Every weekend (Sat–Sun)</option>
+                <option value="mon" data-i18n="skills.freq.mon">Every Monday</option>
+                <option value="tue" data-i18n="skills.freq.tue">Every Tuesday</option>
+                <option value="wed" data-i18n="skills.freq.wed">Every Wednesday</option>
+                <option value="thu" data-i18n="skills.freq.thu">Every Thursday</option>
+                <option value="fri" data-i18n="skills.freq.fri">Every Friday</option>
+                <option value="sat" data-i18n="skills.freq.sat">Every Saturday</option>
+                <option value="sun" data-i18n="skills.freq.sun">Every Sunday</option>
               </optgroup>
-              <optgroup label="Intervals">
-                <option value="every-15min">Every 15 minutes</option>
-                <option value="every-30min">Every 30 minutes</option>
-                <option value="every-hour">Every hour</option>
-                <option value="every-2h">Every 2 hours</option>
-                <option value="every-4h">Every 4 hours</option>
-                <option value="every-6h">Every 6 hours</option>
-                <option value="every-12h">Every 12 hours</option>
+              <optgroup label="Intervals" data-i18n-attr="label:skills.freq.intervals">
+                <option value="every-15min" data-i18n="skills.freq.15min">Every 15 minutes</option>
+                <option value="every-30min" data-i18n="skills.freq.30min">Every 30 minutes</option>
+                <option value="every-hour" data-i18n="skills.freq.hour">Every hour</option>
+                <option value="every-2h" data-i18n="skills.freq.2h">Every 2 hours</option>
+                <option value="every-4h" data-i18n="skills.freq.4h">Every 4 hours</option>
+                <option value="every-6h" data-i18n="skills.freq.6h">Every 6 hours</option>
+                <option value="every-12h" data-i18n="skills.freq.12h">Every 12 hours</option>
               </optgroup>
-              <optgroup label="Advanced">
-                <option value="custom">Custom cron…</option>
+              <optgroup label="Advanced" data-i18n-attr="label:skills.freq.advanced">
+                <option value="custom" data-i18n="skills.freq.custom">Custom cron…</option>
               </optgroup>
             </select>
-            <!-- Only shown for daily / weekly modes -->
             <div id="skill-time-wrap" style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:12px;color:var(--text-dim)">at</span>
+              <span data-i18n="skills.at" style="font-size:12px;color:var(--text-dim)">at</span>
               <input id="skill-time" type="time" value="08:00" onchange="updateSkillCronPreview()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
             </div>
-            <!-- Only shown in custom mode -->
-            <input id="skill-cron-custom" type="text" placeholder="Cron — e.g. 0 8 * * *" oninput="updateSkillCronPreview()" style="display:none;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace);flex:1;min-width:160px" />
+            <input id="skill-cron-custom" type="text" data-i18n-attr="placeholder:skills.cron.placeholder" placeholder="Cron — e.g. 0 8 * * *" oninput="updateSkillCronPreview()" style="display:none;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace);flex:1;min-width:160px" />
           </div>
           <div id="skill-cron-preview" style="font-size:11px;color:var(--text-faint);margin-top:6px;font-family:var(--mono,ui-monospace,monospace)"></div>
-          <!-- Hidden: holds the final cron string we submit. -->
           <input id="skill-cron" type="hidden" />
         </div>
 
         <div style="display:flex;gap:8px;align-items:center">
           <select id="skill-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
-          <button class="key-save-btn" onclick="addSkill()">Add</button>
+          <button class="key-save-btn" data-i18n="skills.add" onclick="addSkill()">Add</button>
         </div>
       </div>
 
-      <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
+      <div data-i18n="skills.your" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
       <div id="skills-list"></div>
     </div>
   </div>
@@ -6510,13 +6494,13 @@
   <div class="modal-overlay" id="taskboard-modal">
     <div class="modal ux-modal" style="max-width:760px;width:94vw">
       <h2>
-        ✓ Task Board
+        <span data-i18n="tb.title">✓ Task Board</span>
         <button class="modal-close" onclick="toggleTaskBoard()">&times;</button>
       </h2>
       <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
-        <button class="msg-action-btn tb-filter" data-filter="open" onclick="setTaskBoardFilter('open')">Open</button>
-        <button class="msg-action-btn tb-filter" data-filter="done" onclick="setTaskBoardFilter('done')">Done</button>
-        <button class="msg-action-btn tb-filter" data-filter="all" onclick="setTaskBoardFilter('all')">All</button>
+        <button class="msg-action-btn tb-filter" data-filter="open" data-i18n="tb.filter.open" onclick="setTaskBoardFilter('open')">Open</button>
+        <button class="msg-action-btn tb-filter" data-filter="done" data-i18n="tb.filter.done" onclick="setTaskBoardFilter('done')">Done</button>
+        <button class="msg-action-btn tb-filter" data-filter="all" data-i18n="tb.filter.all" onclick="setTaskBoardFilter('all')">All</button>
       </div>
       <div id="taskboard-body" class="ux-scroll" style="max-height:60vh"></div>
     </div>
@@ -6526,12 +6510,10 @@
   <div class="modal-overlay" id="heatmap-modal">
     <div class="modal ux-modal" style="max-width:820px;width:92vw">
       <h2>
-        📊 Activity Heatmap
+        <span data-i18n="heatmap.title">📊 Activity Heatmap</span>
         <button class="modal-close" onclick="toggleHeatmapModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
-        One cell per day for the last year. Darker = more assistant replies.
-      </div>
+      <div data-i18n="heatmap.intro" style="font-size:12px;color:var(--text-faint);margin-bottom:10px">One cell per day for the last year. Darker = more assistant replies.</div>
       <div id="heatmap-body"></div>
     </div>
   </div>
@@ -6540,17 +6522,17 @@
   <div class="modal-overlay" id="digest-modal">
     <div class="modal ux-modal">
       <h2>
-        📅 Daily Digest
+        <span data-i18n="digest.title">📅 Daily Digest</span>
         <button class="modal-close" onclick="toggleDigestModal()">&times;</button>
       </h2>
       <div style="display:flex;gap:6px;margin-bottom:10px;font-size:11px">
-        <button class="msg-action-btn" onclick="renderDigestBody(1)">Today</button>
-        <button class="msg-action-btn" onclick="renderDigestBody(7)">Last 7 days</button>
-        <button class="msg-action-btn" onclick="renderDigestBody(30)">Last 30 days</button>
+        <button class="msg-action-btn" data-i18n="digest.today" onclick="renderDigestBody(1)">Today</button>
+        <button class="msg-action-btn" data-i18n="digest.7days" onclick="renderDigestBody(7)">Last 7 days</button>
+        <button class="msg-action-btn" data-i18n="digest.30days" onclick="renderDigestBody(30)">Last 30 days</button>
       </div>
       <div id="digest-body" class="ux-scroll"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-        <button class="msg-action-btn" onclick="exportDigestMarkdown()">📥 Export as Markdown</button>
+        <button class="msg-action-btn" data-i18n="digest.exportMd" onclick="exportDigestMarkdown()">📥 Export as Markdown</button>
       </div>
     </div>
   </div>
@@ -6559,16 +6541,13 @@
   <div class="modal-overlay" id="feedback-modal">
     <div class="modal ux-modal">
       <h2>
-        📒 Feedback Journal
+        <span data-i18n="feedback.title">📒 Feedback Journal</span>
         <button class="modal-close" onclick="toggleFeedbackModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
-        Every 👍 and 👎 you've tapped on an assistant reply, across every session.
-        Click any row to jump back to the message.
-      </div>
+      <div data-i18n="feedback.intro" style="font-size:12px;color:var(--text-faint);margin-bottom:10px">Every 👍 and 👎 you've tapped on an assistant reply, across every session. Click any row to jump back to the message.</div>
       <div id="feedback-body" class="ux-scroll"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-        <button class="msg-action-btn" onclick="exportFeedbackJsonl()">📥 Export JSONL</button>
+        <button class="msg-action-btn" data-i18n="feedback.exportJsonl" onclick="exportFeedbackJsonl()">📥 Export JSONL</button>
       </div>
     </div>
   </div>
@@ -6577,16 +6556,13 @@
   <div class="modal-overlay" id="model-perf-modal">
     <div class="modal ux-modal">
       <h2>
-        📈 Model Performance
+        <span data-i18n="modelperf.title">📈 Model Performance</span>
         <button class="modal-close" onclick="toggleModelPerfModal()">&times;</button>
       </h2>
-      <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px">
-        Aggregated across every session you've ever had.
-        Stats are from the streaming telemetry — no network round-trip.
-      </div>
+      <div data-i18n="modelperf.intro" style="font-size:12px;color:var(--text-faint);margin-bottom:10px">Aggregated across every session you've ever had. Stats are from the streaming telemetry — no network round-trip.</div>
       <div id="model-perf-body" class="ux-scroll"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
-        <button class="msg-action-btn" onclick="exportModelPerfCsv()">📥 Export CSV</button>
+        <button class="msg-action-btn" data-i18n="modelperf.exportCsv" onclick="exportModelPerfCsv()">📥 Export CSV</button>
       </div>
     </div>
   </div>
@@ -10797,6 +10773,85 @@ footer a { color: var(--accent); text-decoration: none; }
         'sidebar.peek.title': 'Show sidebar (⌘\\)',
         'livingdoc.badge': '📝 Document · exit',
         'livingdoc.title': 'Exit Living Document mode (⌘⇧D)',
+        // Local Models full flow
+        'lm.empty.title': 'Local models in 60 seconds',
+        'lm.empty.sub': "Labaik uses Ollama to run models on your own hardware — free, private, offline. Click below and we'll install and launch it for you.",
+        'lm.installBtn': '🦙 Install Ollama',
+        'lm.starting': 'Starting…',
+        'lm.preferOwn': 'Prefer to install it yourself?',
+        'lm.fromOllamaCom': 'Download from ollama.com',
+        'lm.recheck': 'Recheck',
+        'lm.cancel': 'Cancel',
+        'lm.installed': 'Installed',
+        'lm.available': 'Available to download',
+        'lm.customTag': 'Pull custom tag',
+        'lm.list.empty': 'No models installed yet — pick one below to get started.',
+        'lm.custom.placeholder': 'e.g. qwen3.6:latest, gemma4:e4b, llama3.2',
+        'lm.custom.btn': 'Download',
+        'lm.custom.hint.lead': 'Any tag from',
+        'lm.custom.hint.tail': 'works.',
+        // Compare modal
+        'compare.title': '⚖ Compare messages',
+        // What's-in modal
+        'whatsin.title': "🎉 What's in Labaik",
+        'whatsin.intro.lead': 'Every feature shipped in the v0.2 line. Click',
+        'whatsin.intro.tail': 'to jump straight in.',
+        'whatsin.tryit': 'Try it',
+        // Routines modal
+        'skills.title': '⏰ Routines',
+        'skills.intro': 'Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.',
+        'skills.starterTemplates': 'Starter templates',
+        'skills.add.section': 'Add a routine',
+        'skills.name.placeholder': 'Name — e.g. Morning HN digest',
+        'skills.prompt.placeholder': 'Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs.',
+        'skills.schedule': 'Schedule',
+        'skills.at': 'at',
+        'skills.cron.placeholder': 'Cron — e.g. 0 8 * * *',
+        'skills.add': 'Add',
+        'skills.your': 'Your routines',
+        'skills.freq.dailyWeekly': 'Daily / weekly',
+        'skills.freq.intervals': 'Intervals',
+        'skills.freq.advanced': 'Advanced',
+        'skills.freq.daily': 'Every day',
+        'skills.freq.weekday': 'Every weekday (Mon–Fri)',
+        'skills.freq.weekend': 'Every weekend (Sat–Sun)',
+        'skills.freq.mon': 'Every Monday',
+        'skills.freq.tue': 'Every Tuesday',
+        'skills.freq.wed': 'Every Wednesday',
+        'skills.freq.thu': 'Every Thursday',
+        'skills.freq.fri': 'Every Friday',
+        'skills.freq.sat': 'Every Saturday',
+        'skills.freq.sun': 'Every Sunday',
+        'skills.freq.15min': 'Every 15 minutes',
+        'skills.freq.30min': 'Every 30 minutes',
+        'skills.freq.hour': 'Every hour',
+        'skills.freq.2h': 'Every 2 hours',
+        'skills.freq.4h': 'Every 4 hours',
+        'skills.freq.6h': 'Every 6 hours',
+        'skills.freq.12h': 'Every 12 hours',
+        'skills.freq.custom': 'Custom cron…',
+        // Task Board
+        'tb.title': '✓ Task Board',
+        'tb.filter.open': 'Open',
+        'tb.filter.done': 'Done',
+        'tb.filter.all': 'All',
+        // Heatmap
+        'heatmap.title': '📊 Activity Heatmap',
+        'heatmap.intro': 'One cell per day for the last year. Darker = more assistant replies.',
+        // Digest
+        'digest.title': '📅 Daily Digest',
+        'digest.today': 'Today',
+        'digest.7days': 'Last 7 days',
+        'digest.30days': 'Last 30 days',
+        'digest.exportMd': '📥 Export as Markdown',
+        // Feedback Journal
+        'feedback.title': '📒 Feedback Journal',
+        'feedback.intro': "Every 👍 and 👎 you've tapped on an assistant reply, across every session. Click any row to jump back to the message.",
+        'feedback.exportJsonl': '📥 Export JSONL',
+        // Model Performance
+        'modelperf.title': '📈 Model Performance',
+        'modelperf.intro': "Aggregated across every session you've ever had. Stats are from the streaming telemetry — no network round-trip.",
+        'modelperf.exportCsv': '📥 Export CSV',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10952,6 +11007,76 @@ footer a { color: var(--accent); text-decoration: none; }
         'sidebar.peek.title': '展开侧栏 (⌘\\)',
         'livingdoc.badge': '📝 文档 · 退出',
         'livingdoc.title': '退出活文档模式 (⌘⇧D)',
+        'lm.empty.title': '60 秒接入本地模型',
+        'lm.empty.sub': 'Labaik 使用 Ollama 在你的本地硬件上运行模型 —— 免费、私密、可离线。点击下方按钮，我们会自动为你安装并启动。',
+        'lm.installBtn': '🦙 安装 Ollama',
+        'lm.starting': '正在启动…',
+        'lm.preferOwn': '想自己安装？',
+        'lm.fromOllamaCom': '从 ollama.com 下载',
+        'lm.recheck': '重新检测',
+        'lm.cancel': '取消',
+        'lm.installed': '已安装',
+        'lm.available': '可下载',
+        'lm.customTag': '拉取自定义标签',
+        'lm.list.empty': '还没有已安装的模型 —— 从下方挑一个开始。',
+        'lm.custom.placeholder': '例如：qwen3.6:latest、gemma4:e4b、llama3.2',
+        'lm.custom.btn': '下载',
+        'lm.custom.hint.lead': '可使用任意来自',
+        'lm.custom.hint.tail': '的标签。',
+        'compare.title': '⚖ 对比消息',
+        'whatsin.title': '🎉 Labaik 新功能',
+        'whatsin.intro.lead': 'v0.2 系列发布的全部功能。点击',
+        'whatsin.intro.tail': '即可直达。',
+        'whatsin.tryit': '试一试',
+        'skills.title': '⏰ 例程',
+        'skills.intro': '例程会按计划自动运行提示。适合每日摘要、站会准备、定期检查等。',
+        'skills.starterTemplates': '入门模板',
+        'skills.add.section': '添加例程',
+        'skills.name.placeholder': '名称 —— 例如：早间 HN 摘要',
+        'skills.prompt.placeholder': '提示词 —— 例如：总结过去 24 小时 Hacker News 前 10 条新闻并附链接。',
+        'skills.schedule': '计划',
+        'skills.at': '于',
+        'skills.cron.placeholder': 'Cron —— 例如：0 8 * * *',
+        'skills.add': '添加',
+        'skills.your': '你的例程',
+        'skills.freq.dailyWeekly': '每日 / 每周',
+        'skills.freq.intervals': '间隔',
+        'skills.freq.advanced': '高级',
+        'skills.freq.daily': '每天',
+        'skills.freq.weekday': '工作日 (周一至周五)',
+        'skills.freq.weekend': '周末 (周六、周日)',
+        'skills.freq.mon': '每周一',
+        'skills.freq.tue': '每周二',
+        'skills.freq.wed': '每周三',
+        'skills.freq.thu': '每周四',
+        'skills.freq.fri': '每周五',
+        'skills.freq.sat': '每周六',
+        'skills.freq.sun': '每周日',
+        'skills.freq.15min': '每 15 分钟',
+        'skills.freq.30min': '每 30 分钟',
+        'skills.freq.hour': '每小时',
+        'skills.freq.2h': '每 2 小时',
+        'skills.freq.4h': '每 4 小时',
+        'skills.freq.6h': '每 6 小时',
+        'skills.freq.12h': '每 12 小时',
+        'skills.freq.custom': '自定义 cron…',
+        'tb.title': '✓ 任务板',
+        'tb.filter.open': '未完成',
+        'tb.filter.done': '已完成',
+        'tb.filter.all': '全部',
+        'heatmap.title': '📊 活跃热力图',
+        'heatmap.intro': '过去一年每天一格，颜色越深表示助手回复越多。',
+        'digest.title': '📅 每日摘要',
+        'digest.today': '今天',
+        'digest.7days': '最近 7 天',
+        'digest.30days': '最近 30 天',
+        'digest.exportMd': '📥 导出为 Markdown',
+        'feedback.title': '📒 反馈日志',
+        'feedback.intro': '你在所有会话中点过的每一个 👍 和 👎。点任意一行跳回原消息。',
+        'feedback.exportJsonl': '📥 导出 JSONL',
+        'modelperf.title': '📈 模型表现',
+        'modelperf.intro': '汇总你所有会话的数据。统计来自流式传输遥测，不发起额外网络请求。',
+        'modelperf.exportCsv': '📥 导出 CSV',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11107,6 +11232,76 @@ footer a { color: var(--accent); text-decoration: none; }
         'sidebar.peek.title': 'إظهار الشريط الجانبي (⌘\\)',
         'livingdoc.badge': '📝 المستند · خروج',
         'livingdoc.title': 'الخروج من وضع المستند الحيّ (⌘⇧D)',
+        'lm.empty.title': 'نماذج محلية في 60 ثانية',
+        'lm.empty.sub': 'يستخدم لبيك Ollama لتشغيل النماذج على جهازك — مجانًا وبخصوصية وبدون اتصال. انقر بالأسفل وسنثبّته ونشغّله نيابةً عنك.',
+        'lm.installBtn': '🦙 تثبيت Ollama',
+        'lm.starting': 'البدء…',
+        'lm.preferOwn': 'تفضّل تثبيتها بنفسك؟',
+        'lm.fromOllamaCom': 'تنزيل من ollama.com',
+        'lm.recheck': 'إعادة الفحص',
+        'lm.cancel': 'إلغاء',
+        'lm.installed': 'مثبَّت',
+        'lm.available': 'متاح للتنزيل',
+        'lm.customTag': 'سحب علامة مخصّصة',
+        'lm.list.empty': 'لا نماذج مثبَّتة بعد — اختر واحدًا من الأسفل للبدء.',
+        'lm.custom.placeholder': 'مثلًا: qwen3.6:latest، gemma4:e4b، llama3.2',
+        'lm.custom.btn': 'تنزيل',
+        'lm.custom.hint.lead': 'أي علامة من',
+        'lm.custom.hint.tail': 'تعمل.',
+        'compare.title': '⚖ مقارنة الرسائل',
+        'whatsin.title': '🎉 ما الجديد في لبيك',
+        'whatsin.intro.lead': 'كل ميزة شُحنت في إصدارات v0.2. انقر',
+        'whatsin.intro.tail': 'للانتقال مباشرة.',
+        'whatsin.tryit': 'جرّبها',
+        'skills.title': '⏰ المهام الدورية',
+        'skills.intro': 'تشغّل المهام الدورية تلقائيًا حسب جدول. مفيدة للملخّصات اليومية، التحضير للاجتماعات، الفحوصات الدورية.',
+        'skills.starterTemplates': 'قوالب جاهزة',
+        'skills.add.section': 'إضافة مهمة دورية',
+        'skills.name.placeholder': 'الاسم — مثلًا: ملخّص HN الصباحي',
+        'skills.prompt.placeholder': 'التلقين — مثلًا: لخّص أعلى 10 قصص في Hacker News خلال آخر 24 ساعة، مع الروابط.',
+        'skills.schedule': 'الجدول',
+        'skills.at': 'عند',
+        'skills.cron.placeholder': 'Cron — مثلًا: 0 8 * * *',
+        'skills.add': 'إضافة',
+        'skills.your': 'مهامك الدورية',
+        'skills.freq.dailyWeekly': 'يومي / أسبوعي',
+        'skills.freq.intervals': 'فواصل',
+        'skills.freq.advanced': 'متقدّم',
+        'skills.freq.daily': 'كل يوم',
+        'skills.freq.weekday': 'أيام الأسبوع (الإثنين–الجمعة)',
+        'skills.freq.weekend': 'عطلة الأسبوع (السبت–الأحد)',
+        'skills.freq.mon': 'كل إثنين',
+        'skills.freq.tue': 'كل ثلاثاء',
+        'skills.freq.wed': 'كل أربعاء',
+        'skills.freq.thu': 'كل خميس',
+        'skills.freq.fri': 'كل جمعة',
+        'skills.freq.sat': 'كل سبت',
+        'skills.freq.sun': 'كل أحد',
+        'skills.freq.15min': 'كل 15 دقيقة',
+        'skills.freq.30min': 'كل 30 دقيقة',
+        'skills.freq.hour': 'كل ساعة',
+        'skills.freq.2h': 'كل ساعتين',
+        'skills.freq.4h': 'كل 4 ساعات',
+        'skills.freq.6h': 'كل 6 ساعات',
+        'skills.freq.12h': 'كل 12 ساعة',
+        'skills.freq.custom': 'Cron مخصّص…',
+        'tb.title': '✓ لوحة المهام',
+        'tb.filter.open': 'مفتوحة',
+        'tb.filter.done': 'منجزة',
+        'tb.filter.all': 'الكل',
+        'heatmap.title': '📊 خريطة النشاط',
+        'heatmap.intro': 'خلية لكل يوم خلال السنة الماضية. الأغمق = ردود مساعد أكثر.',
+        'digest.title': '📅 الموجز اليومي',
+        'digest.today': 'اليوم',
+        'digest.7days': 'آخر 7 أيام',
+        'digest.30days': 'آخر 30 يومًا',
+        'digest.exportMd': '📥 تصدير كـ Markdown',
+        'feedback.title': '📒 سجلّ الملاحظات',
+        'feedback.intro': 'كل 👍 و 👎 ضغطته على رد المساعد، عبر كل الجلسات. انقر أي صف للعودة إلى الرسالة.',
+        'feedback.exportJsonl': '📥 تصدير JSONL',
+        'modelperf.title': '📈 أداء النماذج',
+        'modelperf.intro': 'مُجمَّعة عبر كل جلسة سبق أن خضتها. الإحصاءات من القياس البثّي — دون اتصال شبكي إضافي.',
+        'modelperf.exportCsv': '📥 تصدير CSV',
       },
     }
 
