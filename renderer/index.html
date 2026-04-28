@@ -5650,20 +5650,21 @@
     <!-- v0.7.52: close button for users who opened the screen via
          "Add Account" and want to back out without connecting. Hidden on
          first run (checkLoginStatus reveals it when hasAny=true). -->
-    <button class="login-close" id="login-close-btn" onclick="hideLogin()" title="Close" aria-label="Close" style="display:none">×</button>
+    <button class="login-close" id="login-close-btn" onclick="hideLogin()" data-i18n-attr="title:login.close.title,aria-label:login.close.title" title="Close" aria-label="Close" style="display:none">×</button>
     <div class="login-card">
       <img class="login-logo" src="logo.jpg" alt="Labaik" />
-      <h1 class="login-title">Welcome to Labaik</h1>
-      <p class="login-sub">Connect a provider — you can always add more later.</p>
+      <h1 class="login-title" data-i18n="login.title">Welcome to Labaik</h1>
+      <p class="login-sub" data-i18n="login.sub">Connect a provider — you can always add more later.</p>
 
       <div class="login-paths">
         <!-- Path 1 (primary) — BYO API key, form expanded by default -->
-        <div class="login-path primary" aria-label="Connect with your API key">
+        <div class="login-path primary" data-i18n-attr="aria-label:login.byok.title" aria-label="Connect with your API key">
           <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🔑</div>
           <div class="login-path-body" style="flex:1">
-            <div class="login-path-title">Connect with your API key <span class="login-path-badge">Recommended</span></div>
-            <div class="login-path-desc" style="margin-bottom:10px">Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.</div>
+            <div class="login-path-title"><span data-i18n="login.byok.title">Connect with your API key</span> <span class="login-path-badge" data-i18n="login.byok.badge">Recommended</span></div>
+            <div class="login-path-desc" data-i18n="login.byok.desc" style="margin-bottom:10px">Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.</div>
             <div class="login-key-form" id="login-key-form" style="display:flex">
+              <!-- Provider names stay literal — proper nouns / brand names. -->
               <select class="login-provider-select" id="login-provider-select">
                 <option value="openai">OpenAI (GPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
@@ -5677,18 +5678,18 @@
                 <option value="hunyuan">Tencent Hunyuan</option>
                 <option value="deepseek">DeepSeek</option>
               </select>
-              <input class="login-key-input" id="login-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();submitLoginKey()}" />
-              <button class="login-key-submit" onclick="submitLoginKey()">Connect</button>
+              <input class="login-key-input" id="login-key-input" type="password" data-i18n-attr="placeholder:login.key.placeholder" placeholder="Paste your API key here…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();submitLoginKey()}" />
+              <button class="login-key-submit" data-i18n="login.connect" onclick="submitLoginKey()">Connect</button>
             </div>
           </div>
         </div>
 
         <!-- Path 2 — local runtime -->
-        <button class="login-path" onclick="loginLocalPath()" aria-label="Run models locally">
+        <button class="login-path" onclick="loginLocalPath()" data-i18n-attr="aria-label:login.local.title" aria-label="Run models locally">
           <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 12%, var(--bg))">🦙</div>
           <div class="login-path-body">
-            <div class="login-path-title">Run models locally <span class="login-path-badge" style="color: var(--text); background: var(--bg)">FREE · PRIVATE</span></div>
-            <div class="login-path-desc">Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.</div>
+            <div class="login-path-title"><span data-i18n="login.local.title">Run models locally</span> <span class="login-path-badge" data-i18n="login.local.badge" style="color: var(--text); background: var(--bg)">FREE · PRIVATE</span></div>
+            <div class="login-path-desc" data-i18n="login.local.desc">Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.</div>
           </div>
           <div class="login-path-chevron">›</div>
         </button>
@@ -5696,23 +5697,25 @@
 
       <div class="login-status" id="login-status"></div>
 
+      <!-- Footer disclaimer: lead + literal credentials path + tail.
+           The path stays literal regardless of locale. -->
       <p style="font-size:11px; color:var(--text-faint); margin-top:24px; line-height:1.5">
-        Keys stay on this device in <code style="font-size:10.5px">~/.labaik/credentials.json</code>.<br/>
-        Labaik sends messages directly to the provider you chose — no middleman.
+        <span data-i18n="login.footer.lead">Keys stay on this device in</span> <code style="font-size:10.5px">~/.labaik/credentials.json</code>.<br/>
+        <span data-i18n="login.footer.tail">Labaik sends messages directly to the provider you chose — no middleman.</span>
       </p>
     </div>
   </div>
 
   <!-- Sidebar -->
-  <button class="sidebar-peek" onclick="toggleSidebar()" title="Show sidebar (⌘\)">›</button>
-  <button class="ld-badge" onclick="toggleLivingDoc()" title="Exit Living Document mode (⌘⇧D)">📝 Document · exit</button>
+  <button class="sidebar-peek" onclick="toggleSidebar()" data-i18n-attr="title:sidebar.peek.title" title="Show sidebar (⌘\)">›</button>
+  <button class="ld-badge" onclick="toggleLivingDoc()" data-i18n="livingdoc.badge" data-i18n-attr="title:livingdoc.title" title="Exit Living Document mode (⌘⇧D)">📝 Document · exit</button>
   <div class="findbar" id="findbar">
     <span style="color:var(--text-faint);font-size:13px">🔍</span>
-    <input id="findbar-input" type="text" placeholder="Find in this session…" autocomplete="off" spellcheck="false" />
+    <input id="findbar-input" type="text" data-i18n-attr="placeholder:findbar.placeholder" placeholder="Find in this session…" autocomplete="off" spellcheck="false" />
     <span class="fb-count" id="findbar-count">0/0</span>
-    <button class="fb-btn" onclick="findNavigate(-1)" title="Previous match (⇧↵)">↑</button>
-    <button class="fb-btn" onclick="findNavigate(1)" title="Next match (↵)">↓</button>
-    <button class="fb-btn fb-close" onclick="closeFindbar()" title="Close (Esc)">×</button>
+    <button class="fb-btn" onclick="findNavigate(-1)" data-i18n-attr="title:findbar.prev.title" title="Previous match (⇧↵)">↑</button>
+    <button class="fb-btn" onclick="findNavigate(1)" data-i18n-attr="title:findbar.next.title" title="Next match (↵)">↓</button>
+    <button class="fb-btn fb-close" onclick="closeFindbar()" data-i18n-attr="title:findbar.close.title" title="Close (Esc)">×</button>
   </div>
   <div class="sidebar">
     <div class="sidebar-header">
@@ -10771,6 +10774,29 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.close': 'close',
         // Other modal headers
         'ux.title': 'UX Insights',
+        // Login screen
+        'login.title': 'Welcome to Labaik',
+        'login.sub': 'Connect a provider — you can always add more later.',
+        'login.byok.title': 'Connect with your API key',
+        'login.byok.badge': 'Recommended',
+        'login.byok.desc': 'Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.',
+        'login.key.placeholder': 'Paste your API key here…',
+        'login.connect': 'Connect',
+        'login.local.title': 'Run models locally',
+        'login.local.badge': 'FREE · PRIVATE',
+        'login.local.desc': 'Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.',
+        'login.footer.lead': 'Keys stay on this device in',
+        'login.footer.tail': 'Labaik sends messages directly to the provider you chose — no middleman.',
+        'login.close.title': 'Close',
+        // Findbar (in-session search)
+        'findbar.placeholder': 'Find in this session…',
+        'findbar.prev.title': 'Previous match (⇧↵)',
+        'findbar.next.title': 'Next match (↵)',
+        'findbar.close.title': 'Close (Esc)',
+        // Sidebar peek + Living-Document badge
+        'sidebar.peek.title': 'Show sidebar (⌘\\)',
+        'livingdoc.badge': '📝 Document · exit',
+        'livingdoc.title': 'Exit Living Document mode (⌘⇧D)',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10906,6 +10932,26 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.jump': '跳转',
         'gsearch.foot.close': '关闭',
         'ux.title': '体验洞察',
+        'login.title': '欢迎使用 Labaik',
+        'login.sub': '连接一个服务商 —— 之后随时可以添加更多。',
+        'login.byok.title': '使用你的 API 密钥连接',
+        'login.byok.badge': '推荐',
+        'login.byok.desc': 'Claude、GPT、Gemini、Grok、Kimi、Qwen、GLM、MiniMax、混元 —— 你的密钥，你的选择。',
+        'login.key.placeholder': '在此粘贴你的 API 密钥…',
+        'login.connect': '连接',
+        'login.local.title': '在本地运行模型',
+        'login.local.badge': '免费 · 私密',
+        'login.local.desc': 'Qwen 3、Gemma 3 等模型通过 Ollama 运行。可离线使用，不向云端发送任何内容。',
+        'login.footer.lead': '密钥保存在本机：',
+        'login.footer.tail': 'Labaik 直接将消息发送到你选择的服务商 —— 没有中间环节。',
+        'login.close.title': '关闭',
+        'findbar.placeholder': '在此会话中查找…',
+        'findbar.prev.title': '上一处 (⇧↵)',
+        'findbar.next.title': '下一处 (↵)',
+        'findbar.close.title': '关闭 (Esc)',
+        'sidebar.peek.title': '展开侧栏 (⌘\\)',
+        'livingdoc.badge': '📝 文档 · 退出',
+        'livingdoc.title': '退出活文档模式 (⌘⇧D)',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11041,6 +11087,26 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.jump': 'القفز',
         'gsearch.foot.close': 'إغلاق',
         'ux.title': 'تحليلات الاستخدام',
+        'login.title': 'مرحبًا بك في لبيك',
+        'login.sub': 'اربط مزوّدًا — يمكنك إضافة المزيد لاحقًا.',
+        'login.byok.title': 'الاتصال بمفتاح API الخاص بك',
+        'login.byok.badge': 'موصى به',
+        'login.byok.desc': 'Claude، GPT، Gemini، Grok، Kimi، Qwen، GLM، MiniMax، Hunyuan — مفاتيحك، اختيارك.',
+        'login.key.placeholder': 'الصق مفتاح API هنا…',
+        'login.connect': 'اتصل',
+        'login.local.title': 'تشغيل النماذج محليًّا',
+        'login.local.badge': 'مجاني · خاص',
+        'login.local.desc': 'Qwen 3 وGemma 3 وغيرها عبر Ollama. تعمل دون اتصال، ولا يُرسَل شيء إلى السحابة.',
+        'login.footer.lead': 'تُحفَظ المفاتيح على هذا الجهاز في',
+        'login.footer.tail': 'يرسل لبيك الرسائل مباشرة إلى المزوّد الذي اخترته — دون وسيط.',
+        'login.close.title': 'إغلاق',
+        'findbar.placeholder': 'بحث في هذه الجلسة…',
+        'findbar.prev.title': 'النتيجة السابقة (⇧↵)',
+        'findbar.next.title': 'النتيجة التالية (↵)',
+        'findbar.close.title': 'إغلاق (Esc)',
+        'sidebar.peek.title': 'إظهار الشريط الجانبي (⌘\\)',
+        'livingdoc.badge': '📝 المستند · خروج',
+        'livingdoc.title': 'الخروج من وضع المستند الحيّ (⌘⇧D)',
       },
     }
 
