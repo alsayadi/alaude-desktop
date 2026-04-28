@@ -7312,7 +7312,7 @@
           <span class="snippet-row-trigger">${escapeHtml(s.trigger)}</span>
           <span class="snippet-row-body" title="${escapeHtml(s.body || '')}">${escapeHtml(s.name)}${s.desc ? ' — ' + escapeHtml(s.desc) : ''}</span>
           <span class="snippet-row-actions">
-            <button class="msg-action-btn" onclick="snippetEdit('${escapeHtml(s.id)}')">Edit</button>
+            <button class="msg-action-btn" onclick="snippetEdit('${escapeHtml(s.id)}')">${escapeHtml(t('snippet.edit'))}</button>
             <button class="msg-action-btn" onclick="snippetDelete('${escapeHtml(s.id)}')">×</button>
           </span>
         </div>`).join('')
@@ -8730,7 +8730,7 @@ ${lang} TRANSLATION:` }]
           <tbody id="cmp-tbody">${collapsedRows.join('')}</tbody>
         </table>
         <div style="margin-top:10px;text-align:center">
-          <button class="msg-action-btn" onclick="expandCompareView()">Show all lines</button>
+          <button class="msg-action-btn" onclick="expandCompareView()">${escapeHtml(t('compare.showAll'))}</button>
         </div>`
       // Stash the full rows so "Show all" can swap.
       body.dataset.allRows = rows.join('')
@@ -10852,6 +10852,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'modelperf.title': '📈 Model Performance',
         'modelperf.intro': "Aggregated across every session you've ever had. Stats are from the streaming telemetry — no network round-trip.",
         'modelperf.exportCsv': '📥 Export CSV',
+        // User-message action buttons + misc inline buttons
+        'userAction.remember': '🧠 Remember',
+        'userAction.remember.title': "Save to this workspace's memory — Shift-click to save globally",
+        'userAction.snippet': '✨ Save as snippet',
+        'userAction.snippet.title': 'Turn this prompt into a reusable snippet',
+        'snippet.edit': 'Edit',
+        'compare.showAll': 'Show all lines',
+        'whatsin.tryit.btn': 'Try it →',
+        'lm.download': 'Download',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -11077,6 +11086,14 @@ footer a { color: var(--accent); text-decoration: none; }
         'modelperf.title': '📈 模型表现',
         'modelperf.intro': '汇总你所有会话的数据。统计来自流式传输遥测，不发起额外网络请求。',
         'modelperf.exportCsv': '📥 导出 CSV',
+        'userAction.remember': '🧠 记住',
+        'userAction.remember.title': '保存到当前工作区的记忆 —— 按住 Shift 点击保存为全局',
+        'userAction.snippet': '✨ 存为片段',
+        'userAction.snippet.title': '把这条提示变成可复用的片段',
+        'snippet.edit': '编辑',
+        'compare.showAll': '显示全部行',
+        'whatsin.tryit.btn': '试一试 →',
+        'lm.download': '下载',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11302,6 +11319,14 @@ footer a { color: var(--accent); text-decoration: none; }
         'modelperf.title': '📈 أداء النماذج',
         'modelperf.intro': 'مُجمَّعة عبر كل جلسة سبق أن خضتها. الإحصاءات من القياس البثّي — دون اتصال شبكي إضافي.',
         'modelperf.exportCsv': '📥 تصدير CSV',
+        'userAction.remember': '🧠 تذكَّر',
+        'userAction.remember.title': 'احفظ في ذاكرة مساحة العمل — اضغط Shift للحفظ عالميًّا',
+        'userAction.snippet': '✨ احفظ كمقطع',
+        'userAction.snippet.title': 'حوِّل هذا التلقين إلى مقطع قابل لإعادة الاستخدام',
+        'snippet.edit': 'تعديل',
+        'compare.showAll': 'إظهار كل الأسطر',
+        'whatsin.tryit.btn': 'جرّبها →',
+        'lm.download': 'تنزيل',
       },
     }
 
@@ -12880,10 +12905,11 @@ Title:`
           : ''
         // Remember + Save-as-Snippet buttons on user messages.
         // Remember → long-term facts memory. Save-as-Snippet → reusable prompt template.
+        // v0.7.71: user-message action buttons routed through t().
         const userRememberBtn = (msg.role === 'user' && (msg.content || '').length > 2)
           ? `<div class="msg-actions">
-               <button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i}, event)" title="Save to this workspace's memory — Shift-click to save globally">🧠 Remember</button>
-               <button class="msg-action-btn" onclick="snippetFromMessage(${i})" title="Turn this prompt into a reusable snippet">✨ Save as snippet</button>
+               <button class="msg-action-btn memory-remember-btn" onclick="memoryRememberMessage(${i}, event)" title="${escapeHtml(t('userAction.remember.title'))}">${escapeHtml(t('userAction.remember'))}</button>
+               <button class="msg-action-btn" onclick="snippetFromMessage(${i})" title="${escapeHtml(t('userAction.snippet.title'))}">${escapeHtml(t('userAction.snippet'))}</button>
              </div>`
           : ''
         // v0.7.0: profile-promote approval chip — offered when an identity/
@@ -17476,7 +17502,7 @@ Title:`
                   <div class="lm-card-tags">${tagsHtml}</div>
                 </div>
                 <div class="lm-card-action">
-                  <button class="key-save-btn lm-download-btn" onclick="downloadLocalModel('${escapeHtml(c.id).replace(/'/g, "\\'")}')">Download</button>
+                  <button class="key-save-btn lm-download-btn" onclick="downloadLocalModel('${escapeHtml(c.id).replace(/'/g, "\\'")}')">${escapeHtml(t('lm.download'))}</button>
                   ${ctxK ? `<div class="lm-card-context">${ctxK}</div>` : ''}
                 </div>
               </div>
@@ -17668,7 +17694,7 @@ Title:`
       const rows = entries.map((e, idx) => {
         const canTry = typeof e.try === 'function'
         const tryBtn = canTry
-          ? `<button class="msg-action-btn" onclick="closeWhatsInModal(); FEATURE_TIMELINE[${FEATURE_TIMELINE.length - 1 - idx}].try()">Try it →</button>`
+          ? `<button class="msg-action-btn" onclick="closeWhatsInModal(); FEATURE_TIMELINE[${FEATURE_TIMELINE.length - 1 - idx}].try()">${escapeHtml(t('whatsin.tryit.btn'))}</button>`
           : ''
         return `
           <div style="display:grid;grid-template-columns:56px 1fr auto;gap:12px;padding:10px 4px;border-bottom:1px dashed var(--border);align-items:flex-start">
