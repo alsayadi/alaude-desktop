@@ -711,10 +711,18 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // file_edit, thinking) resets the timer. Only a genuinely silent
     // provider/worker bails out.
     const isLocalModel = provider === 'ollama'
-    // Shorter idle cap because "no activity for N seconds" is a much
-    // stronger signal than total elapsed time. Local gets longer to
-    // account for weight loading on first call.
-    const IDLE_MS = isLocalModel ? 5 * 60 * 1000 : 90 * 1000
+    // v0.7.69: reasoning-model carve-out. Models that "think" before
+    // emitting visible tokens (DeepSeek V4 / Reasoner, OpenAI o1/o3,
+    // any *-thinking variant, GLM-4.5-thinking, Qwen3-thinking) can
+    // legitimately be silent for 2-5 minutes mid-analysis. The default
+    // cloud cap of 90s killed those requests with the misleading
+    // "Provider is silent" error. Real-world repro: DeepSeek-v4-pro
+    // on a multi-file code review crashed at the 90s mark.
+    const isReasoningModel = /reasoner|thinking|^o[13]|^gpt-5.*think|deepseek-v4|deepseek-reasoner/i.test(model || '')
+    // Idle (no-activity) cap. Reasoning + local both get 5 min; other
+    // cloud models get 3 min (was 90s — still strong enough to surface
+    // a genuinely dead socket without amputating legit long thinking).
+    const IDLE_MS = (isLocalModel || isReasoningModel) ? 5 * 60 * 1000 : 3 * 60 * 1000
     // Absolute ceiling so a model in an infinite tool-loop doesn't burn
     // credits forever even if it keeps emitting activity.
     const ABS_MS = isLocalModel ? 30 * 60 * 1000 : 15 * 60 * 1000
