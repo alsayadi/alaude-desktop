@@ -1976,10 +1976,25 @@
        the physical right edge. In RTL the flex-flowed .topbar-leading
        (model picker etc) lands on the physical right too — collision.
        Move topbar-actions to the physical LEFT in RTL so they end up
-       on opposite sides like LTR. */
+       on opposite sides like LTR.
+       v0.7.71 (rev2): the macOS traffic-light buttons (close/min/max)
+       are anchored to the top-LEFT of the window via titleBarStyle.
+       In LTR they sit on top of the SIDEBAR (which is on the left and
+       has its own header to make room). In RTL the sidebar moves to
+       the right and the topbar's left side is exposed — the traffic
+       lights now overlap whatever's there. Push topbar-actions past
+       the ~78px traffic-light cluster (84px = 78 + 6px buffer). */
     [dir="rtl"] .topbar-actions {
       right: auto;
-      left: 16px;
+      left: 84px;
+    }
+    /* Also reserve the same 84px on the topbar's start side so the
+       topbar's drag-region content (and any visible padding hint)
+       doesn't collide with the OS buttons. Same idea as the
+       body.sidebar-collapsed .topbar rule that already exists for
+       the sidebar-collapsed LTR state. */
+    [dir="rtl"] .topbar {
+      padding-left: 84px;
     }
     /* Per-message header (role + model badge + stats + cost + timestamp)
        contains mostly Latin tech metadata with `·` separators, numbers
