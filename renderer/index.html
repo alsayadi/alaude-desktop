@@ -1981,6 +1981,15 @@
       right: auto;
       left: 16px;
     }
+    /* Per-message header (role + model badge + stats + cost + timestamp)
+       contains mostly Latin tech metadata with `·` separators, numbers
+       and units. The Unicode bidi algorithm reorders these chunks when
+       the surrounding container is RTL, producing visually scrambled
+       output (numbers and badges overlapping each other). Force the
+       header itself to LTR — the role label (e.g. "LABAIK") is a short
+       proper-noun token that reads the same direction either way, so
+       this only fixes the metadata flow without breaking anything. */
+    [dir="rtl"] .msg-header { direction: ltr; }
     /* Floating chrome — these use position:fixed/absolute with
        physical left/right values that don't auto-flip with the
        global dir attribute. Each one is anchored to a side that
