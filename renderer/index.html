@@ -3839,7 +3839,12 @@
     }
 
     .modal-close {
-      margin-left: auto;
+      /* v0.7.71: was margin-left:auto (physical), which always pushes
+         the × to the visual right. In RTL the parent flex flows
+         right-to-left so the × should land on the visual LEFT — the
+         logical version (margin-inline-start:auto) auto-flips with the
+         document direction. */
+      margin-inline-start: auto;
       background: none;
       border: none;
       color: var(--text-faint);
@@ -11572,7 +11577,15 @@ footer a { color: var(--accent); text-decoration: none; }
       let startX = 0
       let startW = 0
       const onMove = (e) => {
-        const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (e.clientX - startX)))
+        // v0.7.71: in RTL the sidebar lives on the right and the resize
+        // handle on its inner (left) edge. Dragging the pointer RIGHT
+        // would shrink the sidebar (because the sidebar's left edge moves
+        // toward its right edge); dragging LEFT would grow it. The
+        // original LTR-only formula `startW + (clientX - startX)` got
+        // both inverted in RTL — drag direction felt opposite to user
+        // intent. Flip the sign of the delta when document is RTL.
+        const dir = document.documentElement.dir === 'rtl' ? -1 : 1
+        const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + dir * (e.clientX - startX)))
         document.documentElement.style.setProperty('--sidebar-w', w + 'px')
       }
       const onUp = (e) => {
