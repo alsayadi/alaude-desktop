@@ -6178,26 +6178,30 @@
   <div class="modal-overlay" id="snippet-modal">
     <div class="modal snippet-modal">
       <h2>
-        ✨ Prompt Snippets
+        <span data-i18n="snippet.title">✨ Prompt Snippets</span>
         <button class="modal-close" onclick="toggleSnippetModal()">&times;</button>
       </h2>
+      <!-- v0.7.71: split the intro into 3 fragments so the inline <code>
+           samples stay literal but the surrounding prose translates.
+           The /<code>/</code> sample stays English even in zh/ar — it's a
+           literal keystroke, not a word. -->
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
-        Type <code>/</code> at the start of your message to pick one. Use <code>{{variable}}</code> placeholders — Tab cycles through them.
+        <span data-i18n="snippet.intro.lead">Type</span> <code>/</code> <span data-i18n="snippet.intro.tail">at the start of your message to pick one. Use</span> <code>{{variable}}</code> <span data-i18n="snippet.intro.placeholders">placeholders — Tab cycles through them.</span>
       </div>
       <div class="snippet-list" id="snippet-list"></div>
       <div class="snippet-editor" id="snippet-editor" style="display:none">
-        <input id="snip-trigger" placeholder="/trigger (e.g. /review)" maxlength="24" />
-        <input id="snip-name" placeholder="Name (e.g. Code review)" maxlength="60" />
-        <input id="snip-desc" placeholder="Description (optional)" maxlength="120" />
-        <textarea id="snip-body" placeholder="Prompt body. Use {{variable}} placeholders."></textarea>
+        <input id="snip-trigger" data-i18n-attr="placeholder:snippet.placeholder.trigger" placeholder="/trigger (e.g. /review)" maxlength="24" />
+        <input id="snip-name" data-i18n-attr="placeholder:snippet.placeholder.name" placeholder="Name (e.g. Code review)" maxlength="60" />
+        <input id="snip-desc" data-i18n-attr="placeholder:snippet.placeholder.desc" placeholder="Description (optional)" maxlength="120" />
+        <textarea id="snip-body" data-i18n-attr="placeholder:snippet.placeholder.body" placeholder="Prompt body. Use {{variable}} placeholders."></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="msg-action-btn" onclick="snippetCancel()">Cancel</button>
-          <button class="msg-action-btn" onclick="snippetSave()" style="border-color:var(--green);color:var(--green)">Save</button>
+          <button class="msg-action-btn" data-i18n="snippet.cancel" onclick="snippetCancel()">Cancel</button>
+          <button class="msg-action-btn" data-i18n="snippet.save" onclick="snippetSave()" style="border-color:var(--green);color:var(--green)">Save</button>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:12px">
-        <button class="msg-action-btn" onclick="snippetResetDefaults()" title="Restore built-in snippets">↺ Restore defaults</button>
-        <button class="msg-action-btn" onclick="snippetNew()" style="border-color:var(--green);color:var(--green)">+ New snippet</button>
+        <button class="msg-action-btn" data-i18n="snippet.restoreDefaults" data-i18n-attr="title:snippet.restoreDefaults.title" onclick="snippetResetDefaults()" title="Restore built-in snippets">↺ Restore defaults</button>
+        <button class="msg-action-btn" data-i18n="snippet.new" onclick="snippetNew()" style="border-color:var(--green);color:var(--green)">+ New snippet</button>
       </div>
     </div>
   </div>
@@ -6362,10 +6366,11 @@
   <!-- Global Search (⌘F / Ctrl+F) — full-text across every session -->
   <div class="gsearch-overlay" id="gsearch-overlay" onclick="if(event.target===this)closeGlobalSearch()">
     <div class="gsearch">
-      <input id="gsearch-input" class="gsearch-input" type="text" placeholder="Search everything you've ever chatted about…" autocomplete="off" spellcheck="false" />
+      <input id="gsearch-input" class="gsearch-input" type="text" data-i18n-attr="placeholder:gsearch.placeholder" placeholder="Search everything you've ever chatted about…" autocomplete="off" spellcheck="false" />
       <div id="gsearch-results" class="gsearch-results"></div>
       <div class="gsearch-footer">
-        <span><kbd>↑↓</kbd> navigate <kbd>↵</kbd> jump <kbd>esc</kbd> close</span>
+        <!-- v0.7.71 — kbd glyphs stay literal; only the verb labels translate -->
+        <span><kbd>↑↓</kbd> <span data-i18n="gsearch.foot.navigate">navigate</span> <kbd>↵</kbd> <span data-i18n="gsearch.foot.jump">jump</span> <kbd>esc</kbd> <span data-i18n="gsearch.foot.close">close</span></span>
         <span id="gsearch-count"></span>
       </div>
     </div>
@@ -6374,7 +6379,7 @@
   <!-- Command Palette (⌘P / Ctrl+P) -->
   <div class="cmd-palette-overlay" id="cmd-palette-overlay" onclick="if(event.target===this)closeCmdPalette()">
     <div class="cmd-palette">
-      <input id="cmd-palette-input" class="cmd-palette-input" type="text" placeholder="Jump to session, space, model…" autocomplete="off" spellcheck="false" />
+      <input id="cmd-palette-input" class="cmd-palette-input" type="text" data-i18n-attr="placeholder:cmdp.placeholder" placeholder="Jump to session, space, model…" autocomplete="off" spellcheck="false" />
       <div id="cmd-palette-list" class="cmd-palette-list"></div>
     </div>
   </div>
@@ -6383,7 +6388,7 @@
   <div class="modal-overlay" id="ux-modal">
     <div class="modal ux-modal">
       <h2>
-        UX Insights
+        <span data-i18n="ux.title">UX Insights</span>
         <button class="modal-close" onclick="toggleUxInsightsModal()">&times;</button>
       </h2>
       <div id="ux-body" class="ux-scroll"></div>
@@ -7231,7 +7236,8 @@
         return !query || hay.includes(query)
       })
       if (!slashFiltered.length) {
-        menu.innerHTML = `<div class="slash-menu-header">Snippets <span class="slash-menu-hint">no match</span></div><div class="slash-menu-empty">No snippet matches "/${escapeHtml(query)}". Press <kbd>Esc</kbd> to dismiss.</div>`
+        // v0.7.71: route fully-dynamic slash menu strings through t().
+        menu.innerHTML = `<div class="slash-menu-header">${escapeHtml(t('slash.header'))} <span class="slash-menu-hint">${escapeHtml(t('slash.noMatch'))}</span></div><div class="slash-menu-empty">${escapeHtml(t('slash.empty'))} "/${escapeHtml(query)}". ${escapeHtml(t('slash.dismiss'))}</div>`
         menu.classList.add('show')
         return
       }
@@ -7244,10 +7250,11 @@
             <div class="slash-menu-desc">${escapeHtml(s.desc || '')}</div>
           </div>
         </div>`).join('')
+      const matchLabel = slashFiltered.length === 1 ? t('slash.match') : t('slash.matches')
       menu.innerHTML = `
-        <div class="slash-menu-header">Snippets <span class="slash-menu-hint">${slashFiltered.length} match${slashFiltered.length === 1 ? '' : 'es'}</span></div>
+        <div class="slash-menu-header">${escapeHtml(t('slash.header'))} <span class="slash-menu-hint">${slashFiltered.length} ${escapeHtml(matchLabel)}</span></div>
         ${items}
-        <div class="slash-menu-footer"><span><kbd>↑↓</kbd> navigate</span><span><kbd>↵</kbd> insert</span><span><kbd>Tab</kbd> next field</span><span><kbd>Esc</kbd> dismiss</span></div>`
+        <div class="slash-menu-footer"><span><kbd>↑↓</kbd> ${escapeHtml(t('slash.foot.navigate'))}</span><span><kbd>↵</kbd> ${escapeHtml(t('slash.foot.insert'))}</span><span><kbd>Tab</kbd> ${escapeHtml(t('slash.foot.nextField'))}</span><span><kbd>Esc</kbd> ${escapeHtml(t('slash.foot.dismiss'))}</span></div>`
       menu.classList.add('show')
     }
     function closeSlashMenu() {
@@ -10731,6 +10738,39 @@ footer a { color: var(--accent); text-decoration: none; }
         'keys.title': 'API Keys',
         'keys.save': 'Save Keys',
         'lm.title': 'Local Models',
+        // Snippet manager
+        'snippet.title': '✨ Prompt Snippets',
+        'snippet.intro.lead': 'Type',
+        'snippet.intro.tail': "at the start of your message to pick one. Use",
+        'snippet.intro.placeholders': 'placeholders — Tab cycles through them.',
+        'snippet.placeholder.trigger': '/trigger (e.g. /review)',
+        'snippet.placeholder.name': 'Name (e.g. Code review)',
+        'snippet.placeholder.desc': 'Description (optional)',
+        'snippet.placeholder.body': 'Prompt body. Use {{variable}} placeholders.',
+        'snippet.cancel': 'Cancel',
+        'snippet.save': 'Save',
+        'snippet.restoreDefaults': '↺ Restore defaults',
+        'snippet.restoreDefaults.title': 'Restore built-in snippets',
+        'snippet.new': '+ New snippet',
+        // Slash-menu (rendered dynamically — looked up via t())
+        'slash.header': 'Snippets',
+        'slash.match': 'match',
+        'slash.matches': 'matches',
+        'slash.noMatch': 'no match',
+        'slash.empty': 'No snippet matches',
+        'slash.dismiss': 'Press Esc to dismiss.',
+        'slash.foot.navigate': 'navigate',
+        'slash.foot.insert': 'insert',
+        'slash.foot.nextField': 'next field',
+        'slash.foot.dismiss': 'dismiss',
+        // Command palette + global search
+        'cmdp.placeholder': 'Jump to session, space, model…',
+        'gsearch.placeholder': "Search everything you've ever chatted about…",
+        'gsearch.foot.navigate': 'navigate',
+        'gsearch.foot.jump': 'jump',
+        'gsearch.foot.close': 'close',
+        // Other modal headers
+        'ux.title': 'UX Insights',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10837,6 +10877,35 @@ footer a { color: var(--accent); text-decoration: none; }
         'keys.title': 'API 密钥',
         'keys.save': '保存密钥',
         'lm.title': '本地模型',
+        'snippet.title': '✨ 提示词片段',
+        'snippet.intro.lead': '在消息开头输入',
+        'snippet.intro.tail': '即可选择片段。使用',
+        'snippet.intro.placeholders': '占位符 —— Tab 键在它们之间循环。',
+        'snippet.placeholder.trigger': '/触发词（例如 /review）',
+        'snippet.placeholder.name': '名称（例如：代码审查）',
+        'snippet.placeholder.desc': '描述（可选）',
+        'snippet.placeholder.body': '提示词正文。可用 {{变量}} 占位符。',
+        'snippet.cancel': '取消',
+        'snippet.save': '保存',
+        'snippet.restoreDefaults': '↺ 恢复默认',
+        'snippet.restoreDefaults.title': '恢复内置片段',
+        'snippet.new': '+ 新建片段',
+        'slash.header': '片段',
+        'slash.match': '条匹配',
+        'slash.matches': '条匹配',
+        'slash.noMatch': '无匹配',
+        'slash.empty': '没有片段匹配',
+        'slash.dismiss': '按 Esc 关闭。',
+        'slash.foot.navigate': '导航',
+        'slash.foot.insert': '插入',
+        'slash.foot.nextField': '下一字段',
+        'slash.foot.dismiss': '关闭',
+        'cmdp.placeholder': '跳转到会话、空间、模型…',
+        'gsearch.placeholder': '搜索你聊过的一切…',
+        'gsearch.foot.navigate': '导航',
+        'gsearch.foot.jump': '跳转',
+        'gsearch.foot.close': '关闭',
+        'ux.title': '体验洞察',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -10943,6 +11012,35 @@ footer a { color: var(--accent); text-decoration: none; }
         'keys.title': 'مفاتيح API',
         'keys.save': 'حفظ المفاتيح',
         'lm.title': 'النماذج المحلية',
+        'snippet.title': '✨ مقاطع التلقين',
+        'snippet.intro.lead': 'اكتب',
+        'snippet.intro.tail': 'في بداية رسالتك لاختيار واحد. استخدم',
+        'snippet.intro.placeholders': 'كعناصر نائبة — Tab يتنقّل بينها.',
+        'snippet.placeholder.trigger': '/مُشغِّل (مثلًا /review)',
+        'snippet.placeholder.name': 'الاسم (مثلًا: مراجعة الكود)',
+        'snippet.placeholder.desc': 'وصف (اختياري)',
+        'snippet.placeholder.body': 'نص التلقين. استخدم {{متغيِّر}} كعناصر نائبة.',
+        'snippet.cancel': 'إلغاء',
+        'snippet.save': 'حفظ',
+        'snippet.restoreDefaults': '↺ استعادة الافتراضيات',
+        'snippet.restoreDefaults.title': 'استعادة المقاطع المضمَّنة',
+        'snippet.new': '+ مقطع جديد',
+        'slash.header': 'مقاطع',
+        'slash.match': 'مطابقة',
+        'slash.matches': 'مطابقات',
+        'slash.noMatch': 'لا مطابقات',
+        'slash.empty': 'لا يوجد مقطع يطابق',
+        'slash.dismiss': 'اضغط Esc للإغلاق.',
+        'slash.foot.navigate': 'التنقّل',
+        'slash.foot.insert': 'إدراج',
+        'slash.foot.nextField': 'الحقل التالي',
+        'slash.foot.dismiss': 'إغلاق',
+        'cmdp.placeholder': 'اقفز إلى جلسة، مساحة، نموذج…',
+        'gsearch.placeholder': 'ابحث في كل ما تحدّثت عنه…',
+        'gsearch.foot.navigate': 'التنقّل',
+        'gsearch.foot.jump': 'القفز',
+        'gsearch.foot.close': 'إغلاق',
+        'ux.title': 'تحليلات الاستخدام',
       },
     }
 
