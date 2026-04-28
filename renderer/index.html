@@ -6068,29 +6068,28 @@
   <!-- v0.7.0 Profile Onboarding Modal — fires once on first Memory Lens open -->
   <div class="modal-overlay" id="profile-onboard-modal">
     <div class="modal" style="max-width:540px;width:92vw">
-      <h2 style="margin-bottom:4px">👋 Teach Labaik about you</h2>
-      <div style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">
-        A few facts go a long way. These ship with <strong>every</strong> conversation,
-        so Labaik stops re-asking what you code in, what you prefer, or what you're building.
-        Skippable — you can add or edit anything later in Memory Lens.
-      </div>
+      <h2 style="margin-bottom:4px" data-i18n="onboard.title">👋 Teach Labaik about you</h2>
+      <div data-i18n="onboard.intro" style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.</div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <label style="font-size:12px;color:var(--text)">👤 What should Labaik call you?
+        <!-- v0.7.71: each label wraps the input, but data-i18n on the
+             <label> would clobber the <input> child. So we use a
+             dedicated child <span data-i18n="…"> for the prompt text. -->
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q1">👤 What should Labaik call you?</span>
           <input id="onb-name" type="text" placeholder="Ahmed" maxlength="100" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)">🛠️ Main stack / languages / frameworks?
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q2">🛠️ Main stack / languages / frameworks?</span>
           <input id="onb-tools" type="text" placeholder="Electron, JavaScript, Python" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)">💡 A coding preference or two?
-          <input id="onb-prefs" type="text" placeholder="Prefer async/await, avoid classes when possible" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q3">💡 A coding preference or two?</span>
+          <input id="onb-prefs" type="text" data-i18n-attr="placeholder:onboard.q3.placeholder" placeholder="Prefer async/await, avoid classes when possible" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)">📌 Anything else I should always know?
-          <textarea id="onb-context" placeholder="I'm building a desktop AI app. Timezone UTC+3." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q4">📌 Anything else I should always know?</span>
+          <textarea id="onb-context" data-i18n-attr="placeholder:onboard.q4.placeholder" placeholder="I'm building a desktop AI app. Timezone UTC+3." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
         </label>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
-        <button class="msg-action-btn" onclick="profileOnboardingClose(false)">Skip</button>
-        <button class="msg-action-btn" onclick="profileOnboardingClose(true)" style="border-color:var(--green);color:var(--green)">Save & continue</button>
+        <button class="msg-action-btn" data-i18n="onboard.skip" onclick="profileOnboardingClose(false)">Skip</button>
+        <button class="msg-action-btn" data-i18n="onboard.save" onclick="profileOnboardingClose(true)" style="border-color:var(--green);color:var(--green)">Save & continue</button>
       </div>
     </div>
   </div>
@@ -6099,33 +6098,31 @@
   <div class="modal-overlay" id="memory-modal">
     <div class="modal" style="max-width:720px;width:94vw;max-height:82vh;display:flex;flex-direction:column">
       <h2>
-        🧠 Memory Lens
+        <span data-i18n="memory.title">🧠 Memory Lens</span>
         <button class="modal-close" onclick="toggleMemoryModal()">&times;</button>
       </h2>
       <div style="font-size:12px;color:var(--text-faint);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <span>Labaik remembers key facts about you across all sessions. Relevant memories
-        are silently attached to each prompt so responses feel less amnesic.</span>
+        <span data-i18n="memory.intro">Labaik remembers key facts about you across all sessions. Relevant memories are silently attached to each prompt so responses feel less amnesic.</span>
         <label id="memory-incognito-toggle" title="Suppress profile + memories for the next turn" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap;padding:3px 8px;border-radius:5px;border:1px solid var(--border)">
           <input type="checkbox" id="memory-incognito-check" onchange="setMemoryIncognito(this.checked)" style="margin:0" />
-          🕶️ Incognito
+          <span data-i18n="memory.incognito">🕶️ Incognito</span>
         </label>
       </div>
-      <!-- v0.7.0 About You — always-on profile -->
       <div id="profile-section" style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;background:var(--bg-input)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <strong style="font-size:13px">👤 About You <span id="profile-count" style="font-size:10px;color:var(--text-faint);font-weight:normal">0/20</span></strong>
-          <span style="font-size:10px;color:var(--text-faint)">Sent with every turn</span>
+          <strong style="font-size:13px"><span data-i18n="memory.aboutYou">👤 About You</span> <span id="profile-count" style="font-size:10px;color:var(--text-faint);font-weight:normal">0/20</span></strong>
+          <span data-i18n="memory.aboutYou.note" style="font-size:10px;color:var(--text-faint)">Sent with every turn</span>
         </div>
         <div id="profile-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
         <div id="profile-add-row" style="display:flex;gap:6px">
           <select id="profile-add-cat" style="padding:5px 7px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
-            <option value="identity">👤 Identity</option>
-            <option value="preferences">💡 Preferences</option>
-            <option value="tools">🛠️ Tools</option>
-            <option value="context">📌 Context</option>
+            <option value="identity" data-i18n="memory.profile.identity">👤 Identity</option>
+            <option value="preferences" data-i18n="memory.profile.preferences">💡 Preferences</option>
+            <option value="tools" data-i18n="memory.profile.tools">🛠️ Tools</option>
+            <option value="context" data-i18n="memory.profile.context">📌 Context</option>
           </select>
-          <input id="profile-add-text" type="text" placeholder="Add a fact — e.g. I prefer Vue over React" maxlength="200" onkeydown="if(event.key==='Enter') profileAddFromUI()" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px" />
-          <button class="msg-action-btn" onclick="profileAddFromUI()" style="font-size:11px;border-color:var(--green);color:var(--green)">+ Add</button>
+          <input id="profile-add-text" type="text" data-i18n-attr="placeholder:memory.profile.add.placeholder" placeholder="Add a fact — e.g. I prefer Vue over React" maxlength="200" onkeydown="if(event.key==='Enter') profileAddFromUI()" style="flex:1;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px" />
+          <button class="msg-action-btn" data-i18n="memory.add.btn" onclick="profileAddFromUI()" style="font-size:11px;border-color:var(--green);color:var(--green)">+ Add</button>
         </div>
       </div>
       <!-- v0.6.0 Semantic recall status + controls -->
@@ -6133,21 +6130,21 @@
         <span id="memory-semantic-icon">🧭</span>
         <span id="memory-semantic-text" style="flex:1;color:var(--text-dim)">Checking semantic recall…</span>
         <select id="memory-recall-mode" onchange="setMemoryRecallMode(this.value)" style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
-          <option value="auto">Auto</option>
-          <option value="semantic">Semantic only</option>
-          <option value="keyword">Keyword only</option>
+          <option value="auto" data-i18n="memory.recall.auto">Auto</option>
+          <option value="semantic" data-i18n="memory.recall.semantic">Semantic only</option>
+          <option value="keyword" data-i18n="memory.recall.keyword">Keyword only</option>
         </select>
-        <button class="msg-action-btn" id="memory-reindex-btn" onclick="reindexMemoryEmbeddings()" style="font-size:11px">Re-index</button>
+        <button class="msg-action-btn" id="memory-reindex-btn" data-i18n="memory.reindex" onclick="reindexMemoryEmbeddings()" style="font-size:11px">Re-index</button>
       </div>
-      <!-- v0.7.0: scope filter tabs -->
       <div class="memory-tabs" style="display:flex;gap:4px;margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px">
-        <button id="memory-tab-all" class="memory-tab active" onclick="setMemoryScopeFilter('all')">All <span class="tab-count">0</span></button>
-        <button id="memory-tab-global" class="memory-tab" onclick="setMemoryScopeFilter('global')">🌐 Global <span class="tab-count">0</span></button>
-        <button id="memory-tab-workspace" class="memory-tab" onclick="setMemoryScopeFilter('workspace')">📁 This workspace <span class="tab-count">0</span></button>
+        <!-- v0.7.71 — tab labels split from the count badge so data-i18n
+             can replace the text without removing the dynamic count. -->
+        <button id="memory-tab-all" class="memory-tab active" onclick="setMemoryScopeFilter('all')"><span data-i18n="memory.tab.all">All</span> <span class="tab-count">0</span></button>
+        <button id="memory-tab-global" class="memory-tab" onclick="setMemoryScopeFilter('global')"><span data-i18n="memory.tab.global">🌐 Global</span> <span class="tab-count">0</span></button>
+        <button id="memory-tab-workspace" class="memory-tab" onclick="setMemoryScopeFilter('workspace')"><span data-i18n="memory.tab.workspace">📁 This workspace</span> <span class="tab-count">0</span></button>
       </div>
-      <!-- Search + stats row -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <input id="memory-search" type="text" placeholder="🔍 Search memories…" oninput="renderMemoryModal()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <input id="memory-search" type="text" data-i18n-attr="placeholder:memory.search.placeholder" placeholder="🔍 Search memories…" oninput="renderMemoryModal()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         <span id="memory-count" style="font-size:11px;color:var(--text-faint);font-family:var(--mono,monospace)"></span>
       </div>
       <!-- Scrollable list -->
@@ -6155,26 +6152,24 @@
 
       <!-- Bulk add / import / export -->
       <details style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:0">
-        <summary style="padding:10px 12px;cursor:pointer;font-size:12.5px;color:var(--text);font-weight:600;list-style:none">
-          ＋ Add memories — paste, import, or export
-        </summary>
+        <summary data-i18n="memory.bulk.summary" style="padding:10px 12px;cursor:pointer;font-size:12.5px;color:var(--text);font-weight:600;list-style:none">＋ Add memories — paste, import, or export</summary>
         <div style="padding:0 12px 12px">
-          <textarea id="memory-bulk-input" placeholder="Paste one fact per line. Example:&#10;I prefer TypeScript over JavaScript.&#10;My co-founder is Sara.&#10;I'm based in Dubai." rows="5" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;margin:8px 0"></textarea>
+          <textarea id="memory-bulk-input" placeholder="Paste one fact per line." rows="5" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;margin:8px 0"></textarea>
           <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
             <select id="memory-bulk-scope" title="Scope for new entries" style="padding:6px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
-              <option value="workspace">📁 This workspace</option>
-              <option value="global">🌐 Global</option>
+              <option value="workspace" data-i18n="memory.tab.workspace">📁 This workspace</option>
+              <option value="global" data-i18n="memory.tab.global">🌐 Global</option>
             </select>
-            <button class="msg-action-btn" onclick="memoryAddBulk()" style="border-color:var(--green);color:var(--green)">+ Add these</button>
-            <button class="msg-action-btn" onclick="memoryImportFile()" title="Pick a .txt / .md / .json file — imported as global so it's available in every workspace">📥 Import</button>
-            <button class="msg-action-btn" onclick="memoryExport()" title="Download all memories as plain text for backup">📤 Export</button>
+            <button class="msg-action-btn" data-i18n="memory.bulk.add" onclick="memoryAddBulk()" style="border-color:var(--green);color:var(--green)">+ Add these</button>
+            <button class="msg-action-btn" data-i18n="memory.import" onclick="memoryImportFile()" title="Pick a .txt / .md / .json file — imported as global so it's available in every workspace">📥 Import</button>
+            <button class="msg-action-btn" data-i18n="memory.export" onclick="memoryExport()" title="Download all memories as plain text for backup">📤 Export</button>
             <input type="file" id="memory-import-input" accept=".txt,.md,.json" style="display:none" onchange="memoryImportFromInput(event)" />
           </div>
         </div>
       </details>
 
       <div style="margin-top:12px;display:flex;justify-content:flex-end">
-        <button class="msg-action-btn" onclick="memoryClearAll()" title="Delete all stored memories" style="color:#c66">↺ Clear all</button>
+        <button class="msg-action-btn" data-i18n="memory.clearAll" onclick="memoryClearAll()" title="Delete all stored memories" style="color:#c66">↺ Clear all</button>
       </div>
     </div>
   </div>
@@ -6211,11 +6206,11 @@
   <div class="modal-overlay" id="keys-modal">
     <div class="modal">
       <h2>
-        API Keys
+        <span data-i18n="keys.title">API Keys</span>
         <button class="modal-close" onclick="toggleKeysModal()">&times;</button>
       </h2>
       <div id="key-fields"></div>
-      <button class="key-save-btn" onclick="saveKeys()">Save Keys</button>
+      <button class="key-save-btn" data-i18n="keys.save" onclick="saveKeys()">Save Keys</button>
     </div>
   </div>
 
@@ -6223,7 +6218,7 @@
   <div class="modal-overlay" id="local-models-modal">
     <div class="modal lm-modal">
       <h2>
-        Local Models
+        <span data-i18n="lm.title">Local Models</span>
         <button class="modal-close" onclick="toggleLocalModelsModal()">&times;</button>
       </h2>
 
@@ -10696,6 +10691,46 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.lead': 'Plan mode is on.',
         'plan.banner.body': 'Labaik will write a plan — no tool calls, no file changes. Send a request to get started.',
         'plan.banner.off.title': 'Turn off plan mode',
+        // Onboarding modal
+        'onboard.title': '👋 Teach Labaik about you',
+        'onboard.intro': "A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.",
+        'onboard.q1': '👤 What should Labaik call you?',
+        'onboard.q2': '🛠️ Main stack / languages / frameworks?',
+        'onboard.q3': '💡 A coding preference or two?',
+        'onboard.q3.placeholder': 'Prefer async/await, avoid classes when possible',
+        'onboard.q4': '📌 Anything else I should always know?',
+        'onboard.q4.placeholder': "I'm building a desktop AI app. Timezone UTC+3.",
+        'onboard.skip': 'Skip',
+        'onboard.save': 'Save & continue',
+        // Memory Lens
+        'memory.title': '🧠 Memory Lens',
+        'memory.intro': 'Labaik remembers key facts about you across all sessions. Relevant memories are silently attached to each prompt so responses feel less amnesic.',
+        'memory.incognito': '🕶️ Incognito',
+        'memory.aboutYou': '👤 About You',
+        'memory.aboutYou.note': 'Sent with every turn',
+        'memory.search.placeholder': '🔍 Search memories…',
+        'memory.tab.all': 'All',
+        'memory.tab.global': '🌐 Global',
+        'memory.tab.workspace': '📁 This workspace',
+        'memory.recall.auto': 'Auto',
+        'memory.recall.semantic': 'Semantic only',
+        'memory.recall.keyword': 'Keyword only',
+        'memory.reindex': 'Re-index',
+        'memory.profile.identity': '👤 Identity',
+        'memory.profile.preferences': '💡 Preferences',
+        'memory.profile.tools': '🛠️ Tools',
+        'memory.profile.context': '📌 Context',
+        'memory.profile.add.placeholder': 'Add a fact — e.g. I prefer Vue over React',
+        'memory.add.btn': '+ Add',
+        'memory.bulk.summary': '＋ Add memories — paste, import, or export',
+        'memory.bulk.add': '+ Add these',
+        'memory.import': '📥 Import',
+        'memory.export': '📤 Export',
+        'memory.clearAll': '↺ Clear all',
+        // API Keys + Local Models headers
+        'keys.title': 'API Keys',
+        'keys.save': 'Save Keys',
+        'lm.title': 'Local Models',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10765,6 +10800,43 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.lead': '方案模式已开启。',
         'plan.banner.body': 'Labaik 将先写出方案 —— 不调用工具、不改文件。发送请求开始。',
         'plan.banner.off.title': '关闭方案模式',
+        'onboard.title': '👋 让 Labaik 认识你',
+        'onboard.intro': '几条事实就够了。这些信息会随每次对话发送，让 Labaik 不再反复询问你的技术栈、偏好或正在做的事。可跳过 —— 之后随时在「记忆」里添加或修改。',
+        'onboard.q1': '👤 Labaik 该怎么称呼你？',
+        'onboard.q2': '🛠️ 主要技术栈 / 语言 / 框架？',
+        'onboard.q3': '💡 一两条编码偏好？',
+        'onboard.q3.placeholder': '偏好 async/await，尽量避免使用 class',
+        'onboard.q4': '📌 还有什么希望我始终记住的？',
+        'onboard.q4.placeholder': '我在做一个桌面 AI 应用。时区 UTC+3。',
+        'onboard.skip': '跳过',
+        'onboard.save': '保存并继续',
+        'memory.title': '🧠 记忆视图',
+        'memory.intro': 'Labaik 会跨会话记住你的关键信息，相关记忆会悄悄附加到每次提问，让回答不再健忘。',
+        'memory.incognito': '🕶️ 隐身',
+        'memory.aboutYou': '👤 关于你',
+        'memory.aboutYou.note': '随每次发送',
+        'memory.search.placeholder': '🔍 搜索记忆…',
+        'memory.tab.all': '全部',
+        'memory.tab.global': '🌐 全局',
+        'memory.tab.workspace': '📁 当前工作区',
+        'memory.recall.auto': '自动',
+        'memory.recall.semantic': '仅语义',
+        'memory.recall.keyword': '仅关键词',
+        'memory.reindex': '重建索引',
+        'memory.profile.identity': '👤 身份',
+        'memory.profile.preferences': '💡 偏好',
+        'memory.profile.tools': '🛠️ 工具',
+        'memory.profile.context': '📌 背景',
+        'memory.profile.add.placeholder': '添加一条信息 —— 例如：我更喜欢 Vue 而非 React',
+        'memory.add.btn': '+ 添加',
+        'memory.bulk.summary': '＋ 添加记忆 —— 粘贴、导入或导出',
+        'memory.bulk.add': '+ 添加以上',
+        'memory.import': '📥 导入',
+        'memory.export': '📤 导出',
+        'memory.clearAll': '↺ 清空全部',
+        'keys.title': 'API 密钥',
+        'keys.save': '保存密钥',
+        'lm.title': '本地模型',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -10834,6 +10906,43 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.lead': 'وضع التخطيط مفعَّل.',
         'plan.banner.body': 'سيكتب لبيك خطة — دون استدعاء أدوات أو تعديل ملفات. أرسل طلبًا للبدء.',
         'plan.banner.off.title': 'إيقاف وضع التخطيط',
+        'onboard.title': '👋 عرِّف لبيك بنفسك',
+        'onboard.intro': 'بضع حقائق تكفي. تُرسَل مع كل محادثة كي لا يُعيد لبيك سؤالك عن لغتك المفضّلة أو ما الذي تبنيه. يمكنك تخطّيها وإضافتها لاحقًا في «عدسة الذاكرة».',
+        'onboard.q1': '👤 بماذا يناديك لبيك؟',
+        'onboard.q2': '🛠️ التقنيات / اللغات / الإطارات الرئيسية؟',
+        'onboard.q3': '💡 تفضيل أو اثنان في البرمجة؟',
+        'onboard.q3.placeholder': 'أفضّل async/await، وأتجنّب classes إن أمكن',
+        'onboard.q4': '📌 شيء آخر يجب أن أعرفه دائمًا؟',
+        'onboard.q4.placeholder': 'أبني تطبيق ذكاء اصطناعي للسطح. المنطقة الزمنية UTC+3.',
+        'onboard.skip': 'تخطّي',
+        'onboard.save': 'حفظ ومتابعة',
+        'memory.title': '🧠 عدسة الذاكرة',
+        'memory.intro': 'يتذكّر لبيك حقائق مهمة عنك عبر كل الجلسات. تُلحَق الذكريات الملائمة بصمت في كل رسالة، فتشعر بأن الردود ليست عديمة الذاكرة.',
+        'memory.incognito': '🕶️ متخفٍّ',
+        'memory.aboutYou': '👤 عنك',
+        'memory.aboutYou.note': 'تُرسَل مع كل دور',
+        'memory.search.placeholder': '🔍 ابحث في الذكريات…',
+        'memory.tab.all': 'الكل',
+        'memory.tab.global': '🌐 عام',
+        'memory.tab.workspace': '📁 مساحة العمل هذه',
+        'memory.recall.auto': 'تلقائي',
+        'memory.recall.semantic': 'دلالي فقط',
+        'memory.recall.keyword': 'كلمات مفتاحية فقط',
+        'memory.reindex': 'إعادة الفهرسة',
+        'memory.profile.identity': '👤 الهوية',
+        'memory.profile.preferences': '💡 التفضيلات',
+        'memory.profile.tools': '🛠️ الأدوات',
+        'memory.profile.context': '📌 السياق',
+        'memory.profile.add.placeholder': 'أضِف حقيقة — مثلًا: أفضّل Vue على React',
+        'memory.add.btn': '+ إضافة',
+        'memory.bulk.summary': '＋ أضِف ذكريات — ألصِق أو استورد أو صدِّر',
+        'memory.bulk.add': '+ أضِف هذه',
+        'memory.import': '📥 استيراد',
+        'memory.export': '📤 تصدير',
+        'memory.clearAll': '↺ مسح الكل',
+        'keys.title': 'مفاتيح API',
+        'keys.save': 'حفظ المفاتيح',
+        'lm.title': 'النماذج المحلية',
       },
     }
 
