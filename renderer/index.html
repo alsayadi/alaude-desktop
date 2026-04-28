@@ -1977,6 +1977,57 @@
        sits where the eye lands first in RTL */
     [dir="rtl"] .plan-mode-approve-bar,
     [dir="rtl"] .plan-mode-banner { flex-direction: row-reverse; }
+    /* Floating chrome — these use position:fixed/absolute with
+       physical left/right values that don't auto-flip with the
+       global dir attribute. Each one is anchored to a side that
+       only makes sense in LTR; mirror them for RTL.
+       v0.7.71 — adds the missing flips that surfaced in Arabic mode. */
+    [dir="rtl"] .sidebar-peek {
+      /* Was: left: 0 (sidebar on the LEFT in LTR). In RTL the sidebar
+         lives on the right, so the peek button must move to the right
+         edge. The rounded-corner geometry also flips so the rounded
+         side faces inward toward the chat area. */
+      left: auto;
+      right: 0;
+      border-left: 1px solid var(--border);
+      border-right: 0;
+      border-radius: 6px 0 0 6px;
+    }
+    [dir="rtl"] .sidebar-resize-handle {
+      /* Was: right: -2px. The handle has to live on the INNER edge
+         of the sidebar — that's the left edge when the sidebar sits
+         on the right side of the window. */
+      right: auto;
+      left: -2px;
+    }
+    [dir="rtl"] .scroll-fab {
+      /* Bottom-right looks weird when the sidebar is on the right
+         (overlaps the workspace controls). Flip to bottom-left. */
+      right: auto;
+      left: 22px;
+    }
+    /* Top-right floaters (findbar, ld-badge) intentionally stay
+       top-right in RTL — they're page-level chrome that doesn't
+       belong to the directional reading flow, and macOS users
+       expect close-buttons / mode badges in the top-right of the
+       window regardless of locale. */
+    /* Topbar `⋯` dropdown menu: in LTR it anchors to the right
+       edge of its wrapper button. In RTL the wrapper is on the
+       left side of the topbar (since topbar-actions is reversed),
+       so the menu should drop down anchored to the left edge to
+       avoid clipping off the window. */
+    [dir="rtl"] .topbar-menu {
+      right: auto;
+      left: 0;
+    }
+    /* Slash-menu popover above the composer: flip to keep its
+       arrow / alignment consistent with the Arabic reading flow. */
+    [dir="rtl"] .slash-menu-item { flex-direction: row-reverse; text-align: right; }
+    /* Per-message action chips already flex-row-reversed in the
+       earlier RTL block. Make sure the close X on session items
+       has enough breathing room when sidebar text is RTL. */
+    [dir="rtl"] .session-item { text-align: right; }
+    [dir="rtl"] .session-item-title { direction: rtl; unicode-bidi: plaintext; }
     /* Arabic UI font — system Arabic faces have better legibility at
        small sizes than the default -apple-system Latin stack which
        falls through to a Hebrew-leaning Arabic */
@@ -7562,7 +7613,7 @@
         `<button class="tag-sg-chip" onclick="acceptTagSuggestion('${escapeHtml(t)}')" title="Add #${escapeHtml(t)} to this session">+ #${escapeHtml(t)}</button>`
       ).join('')
       host.innerHTML = `
-        <span class="tag-sg-label">🏷️ Tag this session?</span>
+        <span class="tag-sg-label">${escapeHtml(t('tag.suggest.label'))}</span>
         ${chips}
         <button class="tag-sg-dismiss" onclick="dismissTagSuggest()" title="Dismiss">×</button>`
       host.classList.add('show')
@@ -10867,6 +10918,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.tryit.btn': 'Try it →',
         'lm.download': 'Download',
         'session.defaultTitle': 'New session',
+        'tag.suggest.label': '🏷️ Tag this session?',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -11103,6 +11155,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.tryit.btn': '试一试 →',
         'lm.download': '下载',
         'session.defaultTitle': '新会话',
+        'tag.suggest.label': '🏷️ 给会话加标签？',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11339,6 +11392,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.tryit.btn': 'جرّبها →',
         'lm.download': 'تنزيل',
         'session.defaultTitle': 'جلسة جديدة',
+        'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
       },
     }
 
@@ -17210,8 +17264,11 @@ Title:`
       if (welcomeSub) welcomeSub.textContent = ''
 
       // Update input placeholder. space.placeholder is space-defined data
-      // (English in current spaces.js) — fall back to translated default.
-      document.getElementById('input').placeholder = space.placeholder || t('input.placeholder')
+      // (English-only in current spaces.js). When the user is in zh/ar mode,
+      // mixing in an English placeholder reads jarring — fall back to the
+      // localized default and let the rest of the chrome carry the language.
+      const ph = (i18n.lang === 'en' && space.placeholder) ? space.placeholder : t('input.placeholder')
+      document.getElementById('input').placeholder = ph
 
       // Update quick actions
       renderQuickActions(space)
