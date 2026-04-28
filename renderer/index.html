@@ -10136,22 +10136,25 @@ footer a { color: var(--accent); text-decoration: none; }
       const btn = document.getElementById('plan-mode-btn')
       if (btn) {
         btn.classList.toggle('on', planMode)
-        btn.textContent = planMode ? '📋 Plan mode · ON' : '📋 Plan mode'
+        // v0.7.71: route through i18n. Update data-i18n key to reflect
+        // on/off state so the next sweep picks the right translation.
+        const key = planMode ? 'workspace.planMode.on' : 'workspace.planMode'
+        btn.setAttribute('data-i18n', key)
+        btn.textContent = t(key)
       }
       // Banner across the top of the chat — impossible to miss.
       const banner = document.getElementById('plan-mode-banner')
       if (banner) banner.classList.toggle('show', planMode)
       // macOS dock title / window title — telegraphs mode in Cmd-Tab.
       try {
-        const baseTitle = document.title.replace(/\s*·\s*📋 Plan mode\s*$/, '')
-        document.title = planMode ? `${baseTitle} · 📋 Plan mode` : baseTitle
+        const planSuffix = t('workspace.planMode')
+        const baseTitle = document.title.split(' · ')[0]
+        document.title = planMode ? `${baseTitle} · ${planSuffix}` : baseTitle
       } catch {}
       // Composer placeholder reinforcement.
       const ta = document.getElementById('input')
       if (ta && !ta.value) {
-        ta.placeholder = planMode
-          ? 'Describe the task — Labaik will plan it before touching anything.'
-          : 'Message Labaik...'
+        ta.placeholder = planMode ? t('input.placeholder.plan') : t('input.placeholder')
       }
       // Approve bar: only show if plan mode is on AND the active session has
       // an assistant message to approve.
@@ -10670,7 +10673,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'workspace.perm.flow': '🌊 Flow · auto-edit, ask dangerous',
         'workspace.perm.autopilot': '🚀 Autopilot · run everything',
         'workspace.planMode': '📋 Plan mode',
+        'workspace.planMode.on': '📋 Plan mode · ON',
         'workspace.planMode.title': 'Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute.',
+        'input.placeholder.plan': 'Describe the task — Labaik will plan it before touching anything.',
         // Push-to-talk
         'ptt.listening': 'Listening… release Space to send',
         'ptt.cancel': 'Esc cancels',
@@ -10861,6 +10866,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': 'Show all lines',
         'whatsin.tryit.btn': 'Try it →',
         'lm.download': 'Download',
+        'session.defaultTitle': 'New session',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10924,7 +10930,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'workspace.perm.flow': '🌊 流畅 · 自动编辑，危险操作询问',
         'workspace.perm.autopilot': '🚀 自动驾驶 · 全部执行',
         'workspace.planMode': '📋 方案模式',
+        'workspace.planMode.on': '📋 方案模式 · 已开启',
         'workspace.planMode.title': '方案模式 —— Labaik 先写出分步方案，不调用工具、不改文件。批准后执行。',
+        'input.placeholder.plan': '描述任务 —— Labaik 会先做计划，不会动任何东西。',
         'ptt.listening': '正在收听… 松开空格键发送',
         'ptt.cancel': 'Esc 取消',
         'plan.banner.lead': '方案模式已开启。',
@@ -11094,6 +11102,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': '显示全部行',
         'whatsin.tryit.btn': '试一试 →',
         'lm.download': '下载',
+        'session.defaultTitle': '新会话',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11157,7 +11166,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'workspace.perm.flow': '🌊 انسياب · تعديل تلقائي، يسأل للخطير',
         'workspace.perm.autopilot': '🚀 طيار آلي · ينفّذ كل شيء',
         'workspace.planMode': '📋 وضع التخطيط',
+        'workspace.planMode.on': '📋 وضع التخطيط · مفعَّل',
         'workspace.planMode.title': 'وضع التخطيط — يكتب لبيك خطة خطوة بخطوة أولًا، دون استدعاء أدوات أو تعديل ملفات. وافق للتنفيذ.',
+        'input.placeholder.plan': 'صِف المهمة — سيخطّط لها لبيك قبل أن يلمس شيئًا.',
         'ptt.listening': 'جارٍ الاستماع… أفلت Space للإرسال',
         'ptt.cancel': 'Esc يلغي',
         'plan.banner.lead': 'وضع التخطيط مفعَّل.',
@@ -11327,6 +11338,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': 'إظهار كل الأسطر',
         'whatsin.tryit.btn': 'جرّبها →',
         'lm.download': 'تنزيل',
+        'session.defaultTitle': 'جلسة جديدة',
       },
     }
 
@@ -11437,6 +11449,17 @@ footer a { color: var(--accent); text-decoration: none; }
     // Global helper for ad-hoc lookups in dynamically rendered HTML.
     // Kept tiny on purpose — most call sites should prefer data-i18n attrs.
     window.t = (key, fallback) => i18n.t(key, fallback)
+
+    // Render-time helper: a session's title is "New session" by default
+    // (literal English) until the first user message. Recognise the
+    // sentinel in any of the three locales and substitute the current
+    // language so flipping the language updates already-existing
+    // default-titled sessions in the sidebar.
+    const SESSION_DEFAULT_SENTINELS = new Set(['New session', '新会话', 'جلسة جديدة'])
+    window.displaySessionTitle = (s) => {
+      const raw = s?.title || ''
+      return SESSION_DEFAULT_SENTINELS.has(raw) ? i18n.t('session.defaultTitle') : raw
+    }
 
     // Visible language indicator on the topbar 🌐 button. Maps
     // language code → 1-2 char glyph + label so the user can see
@@ -15119,11 +15142,12 @@ Title:`
         const colorDot = s.color
           ? `<span class="session-color-dot" onclick="event.stopPropagation(); cycleSessionColor(${s.id})" style="background:${escapeHtml(s.color)};border-color:${escapeHtml(s.color)}" title="Click to cycle color"></span>`
           : ''
-        return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(s.title)}${parentTip}${goalTip}">
+        const displayTitle = displaySessionTitle(s)
+        return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(displayTitle)}${parentTip}${goalTip}">
           ${starBtn}
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
             <div style="display:flex;align-items:center;gap:4px;min-width:0">
-              ${colorDot}${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(s.title)}</span>
+              ${colorDot}${forkMark}<span class="session-item-title" onclick="switchSession(${s.id})" style="flex:1;min-width:0">${goalPrefix}${escapeHtml(displayTitle)}</span>
               ${costPill}
             </div>
             ${tagsHtml}
@@ -17177,13 +17201,17 @@ Title:`
       // (SPACES_ENABLED = false) so showing "⚖️ Legal Assistant" etc. is
       // confusing — the user never explicitly picked "Legal", it's just
       // leftover session state. Keep the welcome inviting + modern.
+      // v0.7.71: route through t() so the language switch isn't clobbered
+      // by every applySpace() call. welcome-sub is removed in v0.7.68; the
+      // selector lookup stays in case any space-disabled fallback re-adds it.
       const welcomeTitle = document.querySelector('.welcome-title')
       const welcomeSub = document.querySelector('.welcome-sub')
-      if (welcomeTitle) welcomeTitle.textContent = 'What can I help you with?'
-      if (welcomeSub) welcomeSub.textContent = 'Drop a file, or just start typing.'
+      if (welcomeTitle) welcomeTitle.textContent = t('welcome.title')
+      if (welcomeSub) welcomeSub.textContent = ''
 
-      // Update input placeholder
-      document.getElementById('input').placeholder = space.placeholder || 'Message Labaik...'
+      // Update input placeholder. space.placeholder is space-defined data
+      // (English in current spaces.js) — fall back to translated default.
+      document.getElementById('input').placeholder = space.placeholder || t('input.placeholder')
 
       // Update quick actions
       renderQuickActions(space)
