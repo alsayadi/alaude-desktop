@@ -5718,7 +5718,7 @@
     <div class="sidebar-header">
       <img class="sidebar-logo" id="logo" />
       <span class="sidebar-title">Labaik</span>
-      <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Collapse sidebar (⌘\)">‹</button>
+      <button class="sidebar-collapse-btn" onclick="toggleSidebar()" data-i18n-attr="title:sidebar.collapse.title" title="Collapse sidebar (⌘\)">‹</button>
     </div>
     <!-- Drag handle on the right edge — resizes sidebar between 200–480px -->
     <div class="sidebar-resize-handle" id="sidebar-resize-handle" title="Drag to resize"></div>
@@ -5730,18 +5730,18 @@
       </button>
       <div class="space-dropdown" id="space-dropdown"></div>
     </div>
-    <button class="sidebar-new-btn" onclick="newSession()">+ New session</button>
+    <button class="sidebar-new-btn" data-i18n="sidebar.new" onclick="newSession()">+ New session</button>
     <div class="sidebar-search">
-      <input id="session-search" class="sidebar-search-input" type="text" placeholder="Search sessions…" oninput="onSessionSearchInput(event)" />
+      <input id="session-search" class="sidebar-search-input" type="text" data-i18n-attr="placeholder:sidebar.search.placeholder" placeholder="Search sessions…" oninput="onSessionSearchInput(event)" />
     </div>
-    <div class="sidebar-label">Recent</div>
+    <div class="sidebar-label" data-i18n="sidebar.recent">Recent</div>
     <div class="tag-filter-row" id="tag-filter-row" style="display:none"></div>
     <div class="sidebar-sessions" id="sessions"></div>
     <!-- v0.7.37: workspace files sidebar removed. It added visual clutter
          without much value — the AI can list/read files via its own tools,
          and the user sees file paths in the chat when the AI edits them. -->
     <div class="sidebar-footer">
-      <button class="sidebar-new-btn" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
+      <button class="sidebar-new-btn" data-i18n="sidebar.addAccount" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
         <optgroup label="Anthropic">
           <!-- v0.7.62 — 4.x family. Default model lives in the DeepSeek
@@ -5872,13 +5872,16 @@
         <div class="topbar-menu-wrap">
           <button class="topbar-keys-btn" id="topbar-more-btn" onclick="toggleTopbarMenu(event)" title="More actions" aria-label="More">⋯</button>
           <div class="topbar-menu" id="topbar-menu" role="menu">
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('search', event)">🔍 Search all sessions <span style="color:var(--text-faint);font-size:11px;margin-left:auto">⌘F</span></button>
-            <button class="topbar-menu-item" id="menu-crew" role="menuitem" onclick="runTopbarAction('crew', event)">👥 Crew</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('skills', event)">⏰ Routines</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
-            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('insights', event)">📊 UX insights</button>
+            <!-- v0.7.71 — menu items use a custom data-i18n-prefix pattern:
+                 <span class="i18n-text" data-i18n="key">…</span> + a sibling
+                 shortcut hint that stays untranslated. -->
+            <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('search', event)"><span data-i18n="menu.search">🔍 Search all sessions</span> <span style="color:var(--text-faint);font-size:11px;margin-left:auto">⌘F</span></button>
+            <button class="topbar-menu-item" id="menu-crew" role="menuitem" data-i18n="menu.crew" onclick="runTopbarAction('crew', event)">👥 Crew</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.routines" onclick="runTopbarAction('skills', event)">⏰ Routines</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.keys" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.localModels" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.thinkingMap" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.uxInsights" onclick="runTopbarAction('insights', event)">📊 UX insights</button>
           </div>
         </div>
       </div>
@@ -5898,9 +5901,11 @@
          when plan mode is on. Impossible to miss; click to disable. -->
     <div class="plan-mode-banner" id="plan-mode-banner" role="status" aria-live="polite">
       <span class="plan-mode-banner-ico">📋</span>
-      <span class="plan-mode-banner-msg"><b>Plan mode is on.</b> Labaik will write a plan — no tool calls, no file changes. Send a request to get started.</span>
+      <!-- v0.7.71: lead + body split into separate elements so data-i18n
+           can replace each independently without losing the bold weight. -->
+      <span class="plan-mode-banner-msg"><b data-i18n="plan.banner.lead">Plan mode is on.</b> <span data-i18n="plan.banner.body">Labaik will write a plan — no tool calls, no file changes. Send a request to get started.</span></span>
       <span class="plan-mode-banner-actions">
-        <button class="plan-mode-banner-btn" onclick="togglePlanMode()" title="Turn off plan mode">Turn off</button>
+        <button class="plan-mode-banner-btn" data-i18n="plan.banner.off" data-i18n-attr="title:plan.banner.off.title" onclick="togglePlanMode()" title="Turn off plan mode">Turn off</button>
       </span>
     </div>
     <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
@@ -6035,29 +6040,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          <span id="folder-label">Choose folder</span>
+          <span id="folder-label" data-i18n="workspace.chooseFolder">Choose folder</span>
         </button>
         <span class="workspace-path" id="folder-path"></span>
-        <!-- v0.7.37 Task Scope — passive breadcrumb only.
-             Appears when the app auto-creates a subfolder (based on prompt
-             context) or when the user explicitly asks for one ("save this
-             in a folder called X"). No manual create button — decisions
-             are automatic. × clears scope and marks session as opt-out. -->
         <span class="task-scope-breadcrumb" id="task-scope-breadcrumb" style="display:none"></span>
-        <!-- Permission mode dropdown — sits beside the folder chooser because
-             the two together define "what Labaik is allowed to touch". ⌘⇧A still cycles. -->
         <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Labaik is allowed to do without asking. ⌘⇧A to cycle.">
-          <option value="observe">👁️ Observe · read-only</option>
-          <option value="careful">🛡️ Careful · ask for writes &amp; commands</option>
-          <option value="flow">🌊 Flow · auto-edit, ask dangerous</option>
-          <option value="autopilot" selected>🚀 Autopilot · run everything</option>
+          <option value="observe" data-i18n="workspace.perm.observe">👁️ Observe · read-only</option>
+          <option value="careful" data-i18n="workspace.perm.careful">🛡️ Careful · ask for writes &amp; commands</option>
+          <option value="flow" data-i18n="workspace.perm.flow">🌊 Flow · auto-edit, ask dangerous</option>
+          <option value="autopilot" selected data-i18n="workspace.perm.autopilot">🚀 Autopilot · run everything</option>
         </select>
-        <!-- v0.7.67 Plan mode — model produces a step-by-step plan only,
-             no tool calls, no file writes. User reviews + approves to
-             execute. Toggle is sticky (persists across sessions). -->
         <button class="plan-mode-toggle" id="plan-mode-btn" onclick="togglePlanMode()"
+                data-i18n="workspace.planMode" data-i18n-attr="title:workspace.planMode.title"
                 title="Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute.">📋 Plan mode</button>
-        <span class="workspace-hint" id="workspace-hint">← pick a folder so this model can save files and run commands</span>
+        <span class="workspace-hint" id="workspace-hint" data-i18n="workspace.hint">← pick a folder so this model can save files and run commands</span>
       </div>
     </div>
   </div>
@@ -6065,8 +6061,8 @@
   <!-- Push-to-Talk overlay -->
   <div class="ptt-overlay" id="ptt-overlay">
     <span class="ptt-dot"></span>
-    <span id="ptt-text">Listening… release Space to send</span>
-    <span class="ptt-hint">Esc cancels</span>
+    <span id="ptt-text" data-i18n="ptt.listening">Listening… release Space to send</span>
+    <span class="ptt-hint" data-i18n="ptt.cancel">Esc cancels</span>
   </div>
 
   <!-- v0.7.0 Profile Onboarding Modal — fires once on first Memory Lens open -->
@@ -10280,7 +10276,12 @@ footer a { color: var(--accent); text-decoration: none; }
       // can see it at a glance before opening the menu.
       const menuItem = document.getElementById('menu-crew')
       if (menuItem) {
-        menuItem.textContent = crewMode ? '👥 Crew · on' : '👥 Crew'
+        // v0.7.71: route through i18n so the label respects the current
+        // language. Update the data-i18n key too so the next sweep picks
+        // the right translation.
+        const key = crewMode ? 'menu.crewOn' : 'menu.crew'
+        menuItem.setAttribute('data-i18n', key)
+        menuItem.textContent = t(key)
         menuItem.classList.toggle('active', crewMode)
       }
       const slots = document.getElementById('crew-slots')
@@ -10665,6 +10666,36 @@ footer a { color: var(--accent); text-decoration: none; }
         'lang.en': 'English',
         'lang.zh': '中文',
         'lang.ar': 'العربية',
+        // Sidebar
+        'sidebar.collapse.title': 'Collapse sidebar (⌘\\)',
+        'sidebar.new': '+ New session',
+        'sidebar.search.placeholder': 'Search sessions…',
+        'sidebar.recent': 'Recent',
+        'sidebar.addAccount': 'Add Account',
+        // Topbar more menu
+        'menu.search': '🔍 Search all sessions',
+        'menu.crew': '👥 Crew',
+        'menu.crewOn': '👥 Crew · on',
+        'menu.routines': '⏰ Routines',
+        'menu.keys': '🔑 API keys',
+        'menu.localModels': '🦙 Local models',
+        'menu.thinkingMap': '🌳 Thinking map',
+        'menu.uxInsights': '📊 UX insights',
+        // Workspace bar
+        'workspace.chooseFolder': 'Choose folder',
+        'workspace.hint': '← pick a folder so this model can save files and run commands',
+        'workspace.perm.observe': '👁️ Observe · read-only',
+        'workspace.perm.careful': '🛡️ Careful · ask for writes & commands',
+        'workspace.perm.flow': '🌊 Flow · auto-edit, ask dangerous',
+        'workspace.perm.autopilot': '🚀 Autopilot · run everything',
+        'workspace.planMode': '📋 Plan mode',
+        'workspace.planMode.title': 'Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute.',
+        // Push-to-talk
+        'ptt.listening': 'Listening… release Space to send',
+        'ptt.cancel': 'Esc cancels',
+        'plan.banner.lead': 'Plan mode is on.',
+        'plan.banner.body': 'Labaik will write a plan — no tool calls, no file changes. Send a request to get started.',
+        'plan.banner.off.title': 'Turn off plan mode',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -10708,6 +10739,32 @@ footer a { color: var(--accent); text-decoration: none; }
         'lang.en': 'English',
         'lang.zh': '中文',
         'lang.ar': 'العربية',
+        'sidebar.collapse.title': '收起侧栏 (⌘\\)',
+        'sidebar.new': '+ 新会话',
+        'sidebar.search.placeholder': '搜索会话…',
+        'sidebar.recent': '最近',
+        'sidebar.addAccount': '添加账号',
+        'menu.search': '🔍 搜索全部会话',
+        'menu.crew': '👥 团队',
+        'menu.crewOn': '👥 团队 · 已开启',
+        'menu.routines': '⏰ 例程',
+        'menu.keys': '🔑 API 密钥',
+        'menu.localModels': '🦙 本地模型',
+        'menu.thinkingMap': '🌳 思维图谱',
+        'menu.uxInsights': '📊 体验洞察',
+        'workspace.chooseFolder': '选择文件夹',
+        'workspace.hint': '← 选择文件夹，让模型可以保存文件并执行命令',
+        'workspace.perm.observe': '👁️ 观察 · 只读',
+        'workspace.perm.careful': '🛡️ 谨慎 · 写入和命令前询问',
+        'workspace.perm.flow': '🌊 流畅 · 自动编辑，危险操作询问',
+        'workspace.perm.autopilot': '🚀 自动驾驶 · 全部执行',
+        'workspace.planMode': '📋 方案模式',
+        'workspace.planMode.title': '方案模式 —— Labaik 先写出分步方案，不调用工具、不改文件。批准后执行。',
+        'ptt.listening': '正在收听… 松开空格键发送',
+        'ptt.cancel': 'Esc 取消',
+        'plan.banner.lead': '方案模式已开启。',
+        'plan.banner.body': 'Labaik 将先写出方案 —— 不调用工具、不改文件。发送请求开始。',
+        'plan.banner.off.title': '关闭方案模式',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -10751,6 +10808,32 @@ footer a { color: var(--accent); text-decoration: none; }
         'lang.en': 'English',
         'lang.zh': '中文',
         'lang.ar': 'العربية',
+        'sidebar.collapse.title': 'طيّ الشريط الجانبي (⌘\\)',
+        'sidebar.new': '+ جلسة جديدة',
+        'sidebar.search.placeholder': 'بحث في الجلسات…',
+        'sidebar.recent': 'الأخيرة',
+        'sidebar.addAccount': 'إضافة حساب',
+        'menu.search': '🔍 البحث في كل الجلسات',
+        'menu.crew': '👥 الفريق',
+        'menu.crewOn': '👥 الفريق · مفعّل',
+        'menu.routines': '⏰ المهام الدورية',
+        'menu.keys': '🔑 مفاتيح API',
+        'menu.localModels': '🦙 النماذج المحلية',
+        'menu.thinkingMap': '🌳 خريطة التفكير',
+        'menu.uxInsights': '📊 تحليلات الاستخدام',
+        'workspace.chooseFolder': 'اختر مجلدًا',
+        'workspace.hint': '← اختر مجلدًا حتى يحفظ النموذج الملفات ويشغّل الأوامر',
+        'workspace.perm.observe': '👁️ مراقبة · قراءة فقط',
+        'workspace.perm.careful': '🛡️ حذِر · يسأل قبل الكتابة والأوامر',
+        'workspace.perm.flow': '🌊 انسياب · تعديل تلقائي، يسأل للخطير',
+        'workspace.perm.autopilot': '🚀 طيار آلي · ينفّذ كل شيء',
+        'workspace.planMode': '📋 وضع التخطيط',
+        'workspace.planMode.title': 'وضع التخطيط — يكتب لبيك خطة خطوة بخطوة أولًا، دون استدعاء أدوات أو تعديل ملفات. وافق للتنفيذ.',
+        'ptt.listening': 'جارٍ الاستماع… أفلت Space للإرسال',
+        'ptt.cancel': 'Esc يلغي',
+        'plan.banner.lead': 'وضع التخطيط مفعَّل.',
+        'plan.banner.body': 'سيكتب لبيك خطة — دون استدعاء أدوات أو تعديل ملفات. أرسل طلبًا للبدء.',
+        'plan.banner.off.title': 'إيقاف وضع التخطيط',
       },
     }
 
