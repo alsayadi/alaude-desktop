@@ -1107,6 +1107,14 @@
       border-radius: 6px;
       color: var(--text);
       outline: none;
+      /* v0.7.71: the parent .sidebar has -webkit-app-region: drag so the
+         whole left column doubles as the macOS title-bar drag region.
+         Every other interactive child (.sidebar-new-btn, .space-btn,
+         .session-item, etc.) opts out via -webkit-app-region: no-drag.
+         This input was missing the opt-out — clicks landed as drag
+         gestures and the input never received focus, which is why
+         "search not working / can't input" got reported. */
+      -webkit-app-region: no-drag;
     }
     .sidebar-search-input:focus { border-color: var(--green); }
 
@@ -4745,11 +4753,14 @@
       overflow: auto;
     }
     .login-screen.hidden { display: none; }
-    /* v0.7.52: circular close button top-right of the login overlay. */
+    /* v0.7.52: circular close button top-corner of the login overlay.
+       v0.7.71: was `right: 22px` (physical) — in RTL the user expects
+       the × at the top-LEFT instead. `inset-inline-end: 22px` is the
+       logical equivalent — auto-flips with the document direction. */
     .login-close {
       position: absolute;
       top: 18px;
-      right: 22px;
+      inset-inline-end: 22px;
       width: 32px;
       height: 32px;
       background: var(--bg-input);
@@ -5935,7 +5946,7 @@
           <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite · cheap / fast</option>
           <option value="gemini-2.0-flash">Gemini 2.0 Flash · legacy</option>
         </optgroup>
-        <optgroup label="Local (Ollama)" id="model-select-local"></optgroup>
+        <optgroup label="Local (Ollama)" data-i18n-attr="label:model.optgroup.local" id="model-select-local"></optgroup>
       </select>
     </div>
   </div>
@@ -10972,6 +10983,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.download': 'Download',
         'session.defaultTitle': 'New session',
         'tag.suggest.label': '🏷️ Tag this session?',
+        'model.optgroup.local': 'Local (Ollama)',
       },
       zh: {
         'welcome.title': '我能帮你做什么？',
@@ -11209,6 +11221,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.download': '下载',
         'session.defaultTitle': '新会话',
         'tag.suggest.label': '🏷️ 给会话加标签？',
+        'model.optgroup.local': '本地 (Ollama)',
       },
       ar: {
         'welcome.title': 'بماذا يمكنني مساعدتك؟',
@@ -11446,6 +11459,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.download': 'تنزيل',
         'session.defaultTitle': 'جلسة جديدة',
         'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
+        'model.optgroup.local': 'محلي (Ollama)',
       },
     }
 
@@ -11581,6 +11595,19 @@ footer a { color: var(--accent); text-decoration: none; }
     })
 
     i18n.apply()
+
+    // v0.7.71: sync the topbar's model label with the dropdown's
+    // currently-selected option after boot. Previously the HTML
+    // hardcoded "GPT-4o" and only `changeModel()` updated it — so
+    // when the page loaded with a different model selected (the
+    // saved DeepSeek default, an Ollama pick, etc.), the topbar
+    // showed a stale "GPT-4o" until the user manually changed model.
+    try {
+      const _sel = document.getElementById('model-select')
+      const _opt = _sel && _sel.options[_sel.selectedIndex]
+      const _tbm = document.getElementById('topbar-model')
+      if (_opt && _tbm) _tbm.textContent = _opt.text
+    } catch {}
 
     // ── Sidebar collapse + resize ─────────────────────────────────
     const LS_SIDEBAR = 'alaude:sidebar-collapsed:v1'
