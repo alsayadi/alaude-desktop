@@ -11582,6 +11582,30 @@ footer a { color: var(--accent); text-decoration: none; }
       return SESSION_DEFAULT_SENTINELS.has(raw) ? i18n.t('session.defaultTitle') : raw
     }
 
+    // v0.7.72: pretty-print a model id for the per-message badge. The raw
+    // ids ("deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.4-thinking") read
+    // like API tokens; users want a short, readable label. Maps the
+    // common families to their marketing names; falls back to the raw id
+    // for anything we don't recognise (Ollama tags, custom IDs, etc).
+    window.prettyModelName = (id) => {
+      if (!id || typeof id !== 'string') return ''
+      const m = id
+      // Anthropic: "claude-sonnet-4-6" → "Sonnet 4.6", "claude-opus-4-7" → "Opus 4.7", etc.
+      let match = m.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)$/i)
+      if (match) return `${match[1].charAt(0).toUpperCase() + match[1].slice(1)} ${match[2]}.${match[3]}`
+      // OpenAI: gpt-5.4 / gpt-5.4-thinking / o3 / o4-mini stay as-is (already short)
+      // DeepSeek: "deepseek-v4-pro" → "DeepSeek V4 Pro"
+      match = m.match(/^deepseek-(v\d)(?:-(\w+))?$/i)
+      if (match) return `DeepSeek ${match[1].toUpperCase()}${match[2] ? ' ' + match[2].charAt(0).toUpperCase() + match[2].slice(1) : ''}`
+      if (m === 'deepseek-reasoner') return 'DeepSeek R1'
+      // Kimi: "kimi-k2.6" → "Kimi K2.6"
+      match = m.match(/^kimi-(k\d[.\d]*)/i)
+      if (match) return `Kimi ${match[1].toUpperCase()}`
+      // Ollama tags ("qwen3:14b", "gemma2:27b") — keep as-is, they're already concise
+      // Default: return raw
+      return m
+    }
+
     // Visible language indicator on the topbar 🌐 button. Maps
     // language code → 1-2 char glyph + label so the user can see
     // what's active without opening a menu.
@@ -13034,19 +13058,26 @@ Title:`
           body = diffsHtml + imgHtml + fileChipsHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
         }
         // Model + timestamp metadata on assistant responses
+        // v0.7.72: pretty-print the model id ("deepseek-v4-pro" → "DeepSeek V4 Pro"),
+        // hover for the raw id.
         const modelBadge = (msg.role === 'assistant' && msg.model && !msg.streaming)
-          ? `<span class="msg-model-badge">${escapeHtml(msg.model)}</span>`
+          ? `<span class="msg-model-badge" title="${escapeHtml(msg.model)}">${escapeHtml(prettyModelName(msg.model))}</span>`
           : ''
         // Streaming stats HUD: live badge while streaming, frozen final badge after.
+        // v0.7.72: trimmed default to {tokens} tok · {time}s. Full breakdown
+        // (avg tok/s, TTFT, etc) still available by clicking → stats panel.
+        // Rationale: TTFT and tok/s are debug-only for 99% of users — they
+        // just want "is this short?" + "did it stall?" answered at a glance.
         let statsBadge = ''
         let costBadge = ''
         if (msg.role === 'assistant') {
           if (msg.streaming && msg.uxMessageId) {
-            // Live badge — actual contents get filled in by updateStatsBadge on each token
-            statsBadge = `<span class="stats-badge" data-stats-id="${escapeHtml(msg.uxMessageId)}"><span class="stats-badge-dot"></span> waiting…</span>`
+            // Live badge — actual contents get filled in by updateStatsBadge on each token.
+            // v0.7.72: "waiting…" → "✨ generating…" — reads as alive instead of idle.
+            statsBadge = `<span class="stats-badge" data-stats-id="${escapeHtml(msg.uxMessageId)}"><span class="stats-badge-dot"></span> ✨ generating…</span>`
           } else if (msg.statsFinal) {
             const sf = msg.statsFinal
-            statsBadge = `<span class="stats-badge" onclick="toggleStatsPanel(${i})" title="Click for timeline"><span class="stats-badge-dot" style="background:var(--text-faint);animation:none"></span> ${sf.avgTps} tok/s · ${sf.totalTokens} tok · ${sf.ttft}ms TTFT · ${sf.totalSec.toFixed(1)}s</span>`
+            statsBadge = `<span class="stats-badge" onclick="toggleStatsPanel(${i})" title="Click for full breakdown — ${sf.avgTps} tok/s · ${sf.ttft}ms TTFT"><span class="stats-badge-dot" style="background:var(--text-faint);animation:none"></span> ${sf.totalTokens} tok · ${sf.totalSec.toFixed(1)}s</span>`
           }
           // Cost badge: only shown when we have both a final stats + known pricing
           const c = computeMessageCost(msg)
