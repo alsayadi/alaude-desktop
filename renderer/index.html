@@ -14775,6 +14775,51 @@ Title:`
         showRewindToast?.('📋 Copied source', false)
       } catch {}
     }
+    // v0.7.72 OODA cycle 4: dismiss the artifact's "click inside for
+    // keyboard focus" hint once-per-install. Persisted to localStorage
+    // so it doesn't re-appear after a restart. Also hides on every
+    // already-rendered artifact in the current page (so the dismiss
+    // feels global, not just for this one artifact).
+    function mdaDismissHint(key, hostEl) {
+      try { localStorage.setItem(`alaude:hint-dismissed:${key}`, '1') } catch {}
+      // Hide all currently-rendered hints with the same data-once key
+      try {
+        document.querySelectorAll(`.md-artifact-hint[data-once="${key}"]`).forEach(el => {
+          el.style.display = 'none'
+        })
+      } catch {}
+      if (hostEl) hostEl.style.display = 'none'
+    }
+    // On render, hide hints whose key has already been dismissed.
+    // Hooked into a MutationObserver so newly-streamed artifacts
+    // pick up the dismissal too.
+    ;(() => {
+      const checkAndHide = (root) => {
+        try {
+          const hints = root.querySelectorAll('.md-artifact-hint[data-once]')
+          for (const h of hints) {
+            const key = h.getAttribute('data-once')
+            if (localStorage.getItem(`alaude:hint-dismissed:${key}`) === '1') {
+              h.style.display = 'none'
+            }
+          }
+        } catch {}
+      }
+      // Initial sweep
+      document.addEventListener('DOMContentLoaded', () => checkAndHide(document))
+      // Stream-aware: re-sweep whenever messages mutate
+      const messages = document.getElementById('messages')
+      if (messages) {
+        const obs = new MutationObserver(() => checkAndHide(messages))
+        obs.observe(messages, { childList: true, subtree: true })
+      } else {
+        // DOM not built yet — hook later
+        document.addEventListener('DOMContentLoaded', () => {
+          const m = document.getElementById('messages')
+          if (m) new MutationObserver(() => checkAndHide(m)).observe(m, { childList: true, subtree: true })
+        })
+      }
+    })()
 
     // ── v0.5.8 Inline code runner ────────────────────────────────────────
     // Click ▶ Run on a ```python-run / ```js-run block → spawn a sandboxed
@@ -15304,10 +15349,20 @@ Title:`
             .replace(/&/g, '&amp;')
             .replace(/"/g, '&quot;')
           const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          // v0.7.72 OODA cycle 4: trimmed artifact chrome.
+          //   "✨ HTML Artifact · sandboxed" → "✨ Live preview"
+          //     ("sandboxed" is an implementation detail; the lock icon
+          //      via the iframe `sandbox` attribute is the real safety
+          //      contract — users don't need the prose.)
+          //   Run / Source button labels kept (action verbs are clearer
+          //     than icons here), Tall and Copy stay icon-only.
+          //   "Click inside to give keyboard focus" hint shows once per
+          //     session and is dismissable — burns visual budget if it
+          //     appears on every artifact in a long thread.
           return `
             <div class="md-artifact">
               <div class="md-artifact-head">
-                <span class="mda-label">✨ HTML Artifact · sandboxed</span>
+                <span class="mda-label">✨ Live preview</span>
                 <button class="mda-toggle-running active" onclick="mdaToggleSource(this, false)">▶ Run</button>
                 <button class="mda-toggle-source" onclick="mdaToggleSource(this, true)">&lt;&gt; Source</button>
                 <button onclick="mdaToggleTall(this)" title="Taller viewport">⤢</button>
@@ -15315,13 +15370,21 @@ Title:`
               </div>
               <div class="md-artifact-error-banner" style="display:none;padding:8px 12px;background:#fee;color:#a00;border-bottom:1px solid #fcc;font-family:monospace;font-size:11px;white-space:pre-wrap"></div>
               <iframe class="md-artifact-frame" tabindex="0" sandbox="allow-scripts allow-modals allow-popups allow-forms" onload="this.focus();try{this.contentWindow.focus()}catch(_){}" onclick="this.focus();try{this.contentWindow.focus()}catch(_){}" srcdoc="${srcdoc}"></iframe>
-              <div class="md-artifact-hint" style="padding:4px 10px;font-size:10px;color:var(--text-faint);font-style:italic;border-top:1px solid var(--border-soft)">💡 Click inside the preview to give it keyboard focus</div>
+              <div class="md-artifact-hint" data-once="kbfocus" style="padding:4px 10px;font-size:10px;color:var(--text-faint);font-style:italic;border-top:1px solid var(--border-soft);display:flex;align-items:center;gap:6px">
+                <span style="flex:1">💡 Click inside the preview to give it keyboard focus</span>
+                <button onclick="mdaDismissHint('kbfocus', this.closest('.md-artifact-hint'))" title="Got it" style="background:transparent;border:0;color:var(--text-faint);cursor:pointer;font-size:13px;padding:0 4px">×</button>
+              </div>
               <pre class="md-artifact-src"><code>${escCode}</code></pre>
             </div>`
         }
         const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         const langCls = lang ? ` data-lang="${lang}"` : ''
-        return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<span class="md-pre-actions"><button class="md-pre-btn md-pre-ask" title="Ask a follow-up about this code">💬 Ask</button><button class="md-pre-btn md-pre-insert" title="Insert this code into the input">↘ Insert</button><button class="md-pre-btn md-pre-copy-v2" title="Copy code">📋 Copy</button></span><code>${escCode}</code></pre>`
+        // v0.7.72 OODA cycle 4: code-block actions trimmed to icon-only.
+        // Copy first (most-used), then Insert, then Ask. Buttons appear
+        // on hover only — code reads clean while scrolling, full action
+        // surface still one mouse-move away. Tooltips carry the labels
+        // so the affordance is preserved without text clutter.
+        return `<pre class="md-pre"${langCls}>${lang ? `<span class="md-pre-lang">${lang}</span>` : ''}<span class="md-pre-actions"><button class="md-pre-btn md-pre-copy-v2" title="Copy code">📋</button><button class="md-pre-btn md-pre-insert" title="Insert into the input">↘</button><button class="md-pre-btn md-pre-ask" title="Ask a follow-up about this code">💬</button></span><code>${escCode}</code></pre>`
       })
 
       // 6b. Re-insert sanitized SVG blocks as their own block element
