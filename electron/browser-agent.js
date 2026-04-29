@@ -47,12 +47,21 @@ function _ensureWindow() {
 }
 
 async function navigate(url) {
+  // v0.7.72: backstop — reject speculative / meaningless URLs at the
+  // executor level. The model has been observed calling browser_navigate
+  // with about:blank, data:, javascript:, or empty strings to "warm up"
+  // the browser before unrelated work. The user sees a popped window
+  // they didn't ask for. Now the call fails fast with a clear error
+  // the model can read in its tool result.
+  const u = String(url || '').trim()
+  if (!u) throw new Error('browser_navigate refused: empty URL')
+  // Hard-deny non-web schemes including about:blank — there's no real
+  // user intent in opening a blank chrome tab.
+  if (!/^https?:\/\//i.test(u)) {
+    throw new Error(`browser_navigate refused: only http(s):// URLs allowed (got: ${u.slice(0, 60)}). Don't speculatively open a browser — write your answer from training and ask the user if they want a live lookup.`)
+  }
   const win = _ensureWindow()
-  // Guard against file:// or javascript: URLs — the model should only
-  // browse the open web via this tool.
-  const ok = /^https?:\/\//i.test(url) || url.startsWith('about:')
-  if (!ok) throw new Error(`Unsupported URL scheme for browser agent: ${url}`)
-  await win.loadURL(url)
+  await win.loadURL(u)
   // Wait for the page to settle (DOMContentLoaded already fired; give a short
   // beat for JS-heavy SPAs to hydrate).
   await new Promise(r => setTimeout(r, 800))

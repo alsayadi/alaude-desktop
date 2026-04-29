@@ -486,6 +486,48 @@ const BROWSER_TOOLS = [
   { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. For debugging or showing the user what the page looks like.', parameters: { type: 'object', properties: {} } } },
 ]
 
+// v0.7.72 — Browser-tools gating. The system prompt already says "browser
+// tools are opt-in", but reasoning models (DeepSeek V4 with thinking,
+// o1/o3, etc) sometimes call them speculatively anyway, e.g.
+// `browser_navigate("about:blank")` to "warm up" before a build task that
+// has nothing to do with browsing. The user sees a popped browser window
+// they didn't ask for and an `about:blank` chip in the activity stream.
+//
+// Cleaner fix: don't even OFFER browser tools to the model unless the
+// user's most recent message signals browser intent. Detection looks for
+// either an explicit http(s) URL or a small set of unambiguous keywords.
+// False negative (user wanted browser, didn't trip heuristic) → user can
+// rephrase. False positive (model still misuses) → executor-side URL
+// guard below catches the worst cases.
+function userWantsBrowserIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  // Only the latest user message matters — earlier turns don't justify
+  // re-exposing browser tools forever. Walk backwards to the most recent
+  // role:'user' entry.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    // Strong: explicit http(s) URL.
+    if (/https?:\/\/\S+/.test(text)) return true
+    // Strong: unambiguous browse-the-web keywords.
+    // "browse", "navigate to" + url-ish noun, "look up online", "search the web",
+    // "scrape", "fetch the page", "open <a website>", "the URL".
+    if (/\b(browse|navigate to|look (it|that|this) up online|look up online|search the web|scrape|fetch the page|open the (url|link|page|site|website))\b/.test(text)) return true
+    // The literal word "browser" almost always implies the tool.
+    if (/\bbrowser\b/.test(text)) return true
+    return false
+  }
+  return false
+}
+
+
 // ── Health-Specific Tools ──────────────────────────────────────────────────
 
 const HEALTH_TOOLS = [
@@ -1056,9 +1098,14 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // "analyze_lab_result" calls on random input).
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
+  // v0.7.72: gate browser tools by user intent. Drops them from the tool
+  // list entirely when the latest user message has no URL / no browse
+  // keywords. Stops the model from speculatively popping a browser window
+  // for tasks that don't need it.
+  const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...(offerBrowser ? BROWSER_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -1270,9 +1317,11 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   }))]
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
+  // v0.7.72: same browser-intent gating as chatOpenAI above.
+  const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...(offerBrowser ? BROWSER_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -1415,7 +1464,10 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   // v0.7.67 — plan mode strips ALL tools so the model physically can't act.
   const mcpTools = planMode ? [] : await getMcpTools().catch(() => [])
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  // v0.7.72: gate browser tools by user intent (same heuristic as the
+  // OpenAI/Ollama paths). Plan mode already strips everything anyway.
+  const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
