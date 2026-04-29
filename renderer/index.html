@@ -2199,6 +2199,12 @@
       display: block;
     }
     .msg-content .md-table {
+      /* v0.7.72 OODA cycle 6: softer table chrome.
+         - dropped per-cell borders; we keep only the bottom rule under
+           thead and a hairline above each tbody row, so the table reads
+           as horizontal rows of data instead of a heavy grid
+         - row hover gives a subtle affordance for "this is data you can
+           scan", consistent with sidebar list items */
       border-collapse: collapse;
       margin: 10px 0;
       font-size: 12.5px;
@@ -2208,21 +2214,46 @@
       display: block;
     }
     .msg-content .md-table th, .msg-content .md-table td {
-      border: 1px solid var(--border);
-      padding: 6px 10px;
+      padding: 6px 12px;
       text-align: left;
       vertical-align: top;
+      border-bottom: 1px solid var(--border);
     }
     .msg-content .md-table thead th {
-      background: var(--bg-input);
-      color: var(--text);
+      color: var(--text-dim);
       font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1.5px solid color-mix(in srgb, var(--text-dim) 30%, var(--border));
     }
-    .msg-content .md-table tbody tr:nth-child(even) td {
-      background: color-mix(in srgb, var(--border) 30%, transparent);
+    .msg-content .md-table tbody tr:hover td {
+      background: color-mix(in srgb, var(--text) 4%, transparent);
     }
+    .msg-content .md-table tbody tr:last-child td { border-bottom: 0; }
     .msg-content .md-table td[data-align="right"], .msg-content .md-table th[data-align="right"] { text-align: right; }
     .msg-content .md-table td[data-align="center"], .msg-content .md-table th[data-align="center"] { text-align: center; }
+    /* v0.7.72 OODA cycle 6: blockquote — left accent rule, slight indent,
+       muted text. The classic "this is a quoted aside" affordance. */
+    .msg-content .md-quote {
+      margin: 10px 0;
+      padding: 4px 14px;
+      border-left: 3px solid color-mix(in srgb, var(--green) 50%, var(--border));
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .msg-content .md-quote > p:first-child,
+    .msg-content .md-quote > .md-p:first-child { margin-top: 0; }
+    .msg-content .md-quote > p:last-child,
+    .msg-content .md-quote > .md-p:last-child { margin-bottom: 0; }
+    /* v0.7.72 OODA cycle 6: horizontal rule — soft section break.
+       Subtle gradient so it reads as a break, not a hard line. */
+    .msg-content .md-hr {
+      margin: 18px 0;
+      border: 0;
+      height: 1px;
+      background: linear-gradient(to right, transparent 0%, var(--border) 20%, var(--border) 80%, transparent 100%);
+    }
     .msg-content .md-code {
       background: var(--bg-sidebar);
       padding: 2px 6px;
@@ -15219,11 +15250,41 @@ Title:`
         return ''
       })
 
+      // v0.7.72 OODA cycle 6: blockquote + horizontal-rule support.
+      // The renderer used to drop `>` and `---` lines through to plain
+      // paragraphs, which made any model output that quoted text or
+      // separated sections read flat. These need block-level wrappers
+      // to be visually distinct.
+      let inQuote = false
+      const closeQuote = () => {
+        if (inQuote) { out.push('</blockquote>'); inQuote = false }
+      }
+      // Original closeLists left intact above; extend it here.
+      const closeBlocks = () => { closeLists(); closeQuote() }
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]
+        // Horizontal rule: --- or *** or ___ alone on a line (3+ chars).
+        if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+          closeBlocks()
+          out.push('<hr class="md-hr" />')
+          continue
+        }
+        // Blockquote: line starts with `> `. Consecutive `>` lines stay
+        // inside the same <blockquote>; a blank or non-quoted line ends
+        // it. Nested quotes (>>) are flattened — the visual indent
+        // already conveys the quoting; multi-level indent rarely lands
+        // in chat content and would mostly be visual clutter.
+        const qm = line.match(/^\s*>\s?(.*)$/)
+        if (qm) {
+          closeLists()
+          if (!inQuote) { out.push('<blockquote class="md-quote">'); inQuote = true }
+          out.push(qm[1])
+          continue
+        }
         // Markdown table: header row, then separator, then body
         if (isPipeRow(line) && i + 1 < lines.length && isSepRow(lines[i + 1])) {
-          closeLists()
+          closeBlocks()
           const aligns = alignsFromSep(lines[i + 1])
           const headers = splitPipes(line)
           let j = i + 2
@@ -15243,7 +15304,7 @@ Title:`
         // Headers
         const h = line.match(/^(#{1,3})\s+(.+)$/)
         if (h) {
-          closeLists()
+          closeBlocks()
           const level = h[1].length
           out.push(`<h${level} class="md-h${level}">${h[2]}</h${level}>`)
           continue
@@ -15251,6 +15312,7 @@ Title:`
         // Unordered list
         const ul = line.match(/^\s*[-*]\s+(.+)$/)
         if (ul) {
+          closeQuote()
           if (inOl) { out.push('</ol>'); inOl = false }
           if (!inUl) { out.push('<ul class="md-ul">'); inUl = true }
           out.push(`<li>${ul[1]}</li>`)
@@ -15259,17 +15321,18 @@ Title:`
         // Ordered list
         const ol = line.match(/^\s*\d+\.\s+(.+)$/)
         if (ol) {
+          closeQuote()
           if (inUl) { out.push('</ul>'); inUl = false }
           if (!inOl) { out.push('<ol class="md-ol">'); inOl = true }
           out.push(`<li>${ol[1]}</li>`)
           continue
         }
-        // Blank line closes lists
-        if (!line.trim()) { closeLists(); out.push(''); continue }
-        closeLists()
+        // Blank line closes blocks
+        if (!line.trim()) { closeBlocks(); out.push(''); continue }
+        closeBlocks()
         out.push(line)
       }
-      closeLists()
+      closeBlocks()
       s = out.join('\n')
 
       // 5. Inline transforms: bold, italic, inline code, links
