@@ -15350,6 +15350,33 @@ Title:`
         if (!safe) return alt || ''
         return `<img class="md-img" src="${url}" alt="${alt || 'image'}" loading="lazy" onclick="openImageLightbox(this.src)" title="${alt || ''}" />`
       })
+      // v0.7.72: defend against bogus auto-links the model sometimes emits.
+      // Two failure modes seen in practice:
+      //   1. Filenames wrapped as if they were URLs: [app.py](http://app.py),
+      //      [database.py](http://database.py), [requirements.txt](http://requirements.txt).
+      //      Some training data has filenames hyperlinked, the model copies
+      //      the pattern. The "URL" goes nowhere useful.
+      //   2. Sentence-end capitalisations turned into pseudo-domains:
+      //      "scaffold it now. Now let me…" → "[now.Now](http://now.Now)".
+      //      The model treats `word.Word` as a domain.
+      // Both are unwrapped to plain text BEFORE the real link transform
+      // fires. Recognised filename extensions and word.Word patterns get
+      // their text content back; genuine [text](http://example.com) links
+      // pass through unchanged.
+      s = s.replace(/\[([^\]]+)\]\(http:\/\/([^)\s]+)\)/g, (m, text, urlBody) => {
+        if (text !== urlBody) return m  // genuine link, leave alone
+        // Filename extension that's actually a content/code format, not a TLD
+        if (/\.(py|js|ts|tsx|jsx|mjs|cjs|css|s?css|less|html?|md|markdown|txt|json|ya?ml|toml|sql|csv|tsv|sh|bash|zsh|fish|c|cpp|cc|h|hpp|go|rs|rb|java|kt|swift|php|pl|lua|r|m|mm|f|f90|asm|tex|xml|svg|png|jpg|jpeg|gif|webp|pdf|docx?|xlsx?|pptx?|env|ini|cfg|conf|toml|lock)$/i.test(text)) return text
+        // Sentence-end-capitalisation pattern: "now.Now", "go.Run", etc.
+        // Lowercase first segment, capitalised second — almost certainly
+        // a missing space after a period, not a real domain.
+        if (/^[a-z][a-z0-9_-]*\.[A-Z][a-zA-Z0-9_-]*$/.test(text)) {
+          // Re-introduce the missing sentence break for readability
+          const [a, b] = text.split('.')
+          return `${a}. ${b}`
+        }
+        return m
+      })
       s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
 
       // 6. Re-insert fenced code blocks FIRST, before paragraph wrapping,

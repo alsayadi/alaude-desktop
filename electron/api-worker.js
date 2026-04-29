@@ -10,6 +10,7 @@ const path = require('path')
 const os = require('os')
 const dns = require('dns')
 const https = require('https')
+const paths = require('./paths')
 
 // v0.7.61 — provider routing moved into a shared registry so the worker
 // and the main process agree on which provider a given model belongs to.
@@ -136,9 +137,9 @@ function getCredential(provider) {
   // `claude-local-src/` fallback so existing users don't lose access —
   // main.js writes to the new location on any set-key, which takes over.
   const credPaths = [
-    path.join(os.homedir(), '.labaik', 'credentials.json'),
-    path.join(os.homedir(), '.claude', '.credentials.json'),
-    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
+    paths.CREDENTIALS_FILE,
+    path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json'),
+    ...(paths.USING_CUSTOM_HOME ? [] : [path.join(os.homedir(), 'claude-local-src', '.credentials.json')]),
   ]
   for (const credPath of credPaths) {
     try {
@@ -343,6 +344,30 @@ Do NOT browse to:
 
 When in doubt: don't browse. Tell the user what you'd browse for and
 let them say "yes look it up" first.`
+
+  // v0.7.72 — Output cleanliness rules. Two failure modes the user has
+  // flagged: chatty per-step narration during tool work, and raw shell
+  // stderr (pip notices, install spam) pasted into the assistant's reply.
+  sys += `
+
+## Output cleanliness
+
+The Labaik UI shows live activity chips while you call tools, so you
+DO NOT need to narrate "Let me X… Now Y… Server is live… Let me open
+it…" as plain text. The chips already say what's happening; doubling
+it as prose is noise.
+
+When tools return verbose output (pip notices, npm warnings, deprecated
+flags, install logs, lint warnings about the tool itself), do NOT
+paste them into your reply. Pull out only what's useful to the user
+("installed 4 packages", "tests passed") and skip the rest. Tool
+stderr that's irrelevant to the user's request belongs in the worker
+log, not in chat.
+
+When you mention a filename, write it as plain text — \`app.py\` or
+just app.py — never as a markdown link to a fake URL. Same for
+sentence-end words: write "scaffold it now. Now let me…" with a real
+sentence break, not a domain-looking pseudo-link.`
 
   // v0.7.67 — Ask-user-question capability. Any chat can use this; the
   // renderer turns the block into a single multi-question popup.
