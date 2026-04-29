@@ -2765,8 +2765,20 @@
       max-height: 380px;
       overflow-y: auto;
       background: var(--bg-input);
+      transition: max-height 0.2s ease;
     }
     .file-diff-body.collapsed { max-height: 0; }
+    /* v0.7.72 OODA cycle 5: header is clickable when diff is auto-collapsed.
+       Show a subtle hint chip + flip the chevron so the affordance is clear. */
+    .file-diff-collapsed-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      font-style: italic;
+      margin-left: 6px;
+    }
+    .file-diff.is-collapsed .file-diff-header { cursor: pointer; }
+    .file-diff.is-collapsed .file-diff-header:hover { background: var(--bg-hover); }
+    .file-diff.is-collapsed .file-diff-toggle { transform: rotate(180deg); }
     .file-diff-line {
       display: flex;
       line-height: 1.5;
@@ -6783,7 +6795,7 @@
     let customSpaces = []
     let currentSpaceId = 'general'
 
-    // Sessions persist to ~/.alaude/sessions.json via the fs bridge (v0.7.59).
+    // Sessions persist to ~/.labaik/sessions.json via the fs bridge.
     // Previously used localStorage, which batches writes to LevelDB and could
     // lose the most-recent session(s) on SIGTERM/crash — the "sometimes shows
     // history, sometimes not" bug. Memory + profile migrated to fs in v0.7.59;
@@ -11941,12 +11953,12 @@ footer a { color: var(--accent); text-decoration: none; }
       // first found — previously a stuck invisible overlay could survive an
       // Esc press if it wasn't the first match.
       if (e.key === 'Escape') {
-        const SEL = '.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show, .gsearch-overlay.show, .drop-overlay.show, .ptt-overlay.show'
+        const SEL = '.modal-overlay.show, .modal-overlay[style*="flex"], .cmd-palette-overlay.show, .shortcuts-overlay.show, .tgraph-overlay.show, .gsearch-overlay.show, .drop-overlay.show, .ptt-overlay.show, .ask-modal-overlay.show'
         const open = document.querySelectorAll(SEL)
         if (open.length) {
           open.forEach(el => {
             el.classList.remove('show')
-            if (el.style && el.style.display === 'flex') el.style.display = 'none'
+            if (el.style && (el.style.display === 'flex' || el.style.display === 'block')) el.style.display = 'none'
           })
           e.preventDefault()
         }
@@ -11958,10 +11970,10 @@ footer a { color: var(--accent); text-decoration: none; }
       // hatch: it force-clears EVERY overlay in the DOM, visible or not.
       if ((e.metaKey || e.ctrlKey) && e.key === 'Escape') {
         e.preventDefault()
-        const SEL = '.modal-overlay, .cmd-palette-overlay, .shortcuts-overlay, .tgraph-overlay, .gsearch-overlay, .drop-overlay, .ptt-overlay'
+        const SEL = '.modal-overlay, .cmd-palette-overlay, .shortcuts-overlay, .tgraph-overlay, .gsearch-overlay, .drop-overlay, .ptt-overlay, .ask-modal-overlay'
         let n = 0
         document.querySelectorAll(SEL).forEach(el => {
-          if (el.classList.contains('show') || (el.style && el.style.display === 'flex')) n++
+          if (el.classList.contains('show') || (el.style && (el.style.display === 'flex' || el.style.display === 'block'))) n++
           el.classList.remove('show')
           // v0.7.48 FIX: removeProperty (not set='none') so class-based
           // modals can re-open via classList.add('show') afterwards.
@@ -12895,18 +12907,31 @@ Title:`
       const badge = isNewFile
         ? `<span class="file-diff-badge new">New file</span>`
         : `<span class="file-diff-badge edit">Edit</span>`
-      return `<div class="file-diff" data-diff-id="${diffId}">
-        <div class="file-diff-header">
+      // v0.7.72 OODA cycle 5: auto-collapse large diffs (>50 changed lines)
+      // so a single sprawling refactor doesn't dominate the message bubble.
+      // Header + stats stay visible; body opens with one click. Threshold
+      // counts adds + dels (gap rows don't count — they're already
+      // collapsed by collapseDiffContext above).
+      const totalChanges = adds + dels
+      const autoCollapse = !isNewFile && totalChanges > 50
+      const bodyClass = autoCollapse ? 'file-diff-body collapsed' : 'file-diff-body'
+      // Show a peek hint when collapsed so the user knows they can expand.
+      const collapsedHint = autoCollapse
+        ? `<span class="file-diff-collapsed-hint" title="Click to expand">${totalChanges} changes — click to expand</span>`
+        : ''
+      return `<div class="file-diff${autoCollapse ? ' is-collapsed' : ''}" data-diff-id="${diffId}">
+        <div class="file-diff-header" onclick="this.closest('.file-diff').querySelector('.file-diff-body').classList.toggle('collapsed'); this.closest('.file-diff').classList.toggle('is-collapsed')">
           <span class="file-diff-icon">📝</span>
-          <span class="file-diff-path">${escapeHtml(p)}</span>
+          <span class="file-diff-path" title="${escapeHtml(p)}">${escapeHtml(p)}</span>
           ${badge}
           <span class="file-diff-stats">
             ${adds ? `<span class="add">+${adds}</span>` : ''}
             ${dels ? `<span class="del">−${dels}</span>` : ''}
           </span>
-          <button class="file-diff-toggle" onclick="this.closest('.file-diff').querySelector('.file-diff-body').classList.toggle('collapsed')" title="Toggle">⌃</button>
+          ${collapsedHint}
+          <button class="file-diff-toggle" onclick="event.stopPropagation(); this.closest('.file-diff').querySelector('.file-diff-body').classList.toggle('collapsed'); this.closest('.file-diff').classList.toggle('is-collapsed')" title="Toggle">⌃</button>
         </div>
-        <div class="file-diff-body">${lines}</div>
+        <div class="${bodyClass}">${lines}</div>
       </div>`
     }
 
@@ -12914,13 +12939,35 @@ Title:`
     let liveActivity = []  // { phase, name, args, ts }
     function renderActivityChips() {
       if (!liveActivity.length) return ''
-      // Show the last 4 activity lines, most recent at the bottom
-      const recent = liveActivity.slice(-4)
+      // v0.7.72 OODA cycle 5: merge tool_start + tool_end into a single
+      // chip per call instead of two stacked rows. Walk events FIFO and
+      // pair up by name — first matching running chip closes when its
+      // tool_end arrives. Args stay visible across the state transition
+      // so the user sees "what this tool did + how it ended" in one row.
+      // Halves the activity-log vertical footprint during multi-tool turns.
+      const merged = []
+      for (const a of liveActivity) {
+        if (a.phase === 'tool_start') {
+          merged.push({ kind: 'tool', name: a.name, args: a.args || '', status: 'running' })
+        } else if (a.phase === 'tool_end') {
+          // Match most recent still-running chip of the same name.
+          for (let i = merged.length - 1; i >= 0; i--) {
+            if (merged[i].kind === 'tool' && merged[i].name === a.name && merged[i].status === 'running') {
+              merged[i].status = a.ok ? 'done' : 'failed'
+              break
+            }
+          }
+        } else if (a.phase === 'thinking') {
+          merged.push({ kind: 'thinking' })
+        }
+      }
+      const recent = merged.slice(-4)
       return `<div class="activity-log">${recent.map(a => {
-        if (a.phase === 'tool_start') return `<div class="activity-row running">${iconForTool(a.name)} <span class="activity-name">${escapeHtml(a.name)}</span>${a.args ? ` <code class="activity-args">${escapeHtml(a.args)}</code>` : ''}</div>`
-        if (a.phase === 'tool_end') return `<div class="activity-row ${a.ok ? 'done' : 'failed'}">${a.ok ? '✓' : '✗'} <span class="activity-name">${escapeHtml(a.name)}</span></div>`
-        if (a.phase === 'thinking') return `<div class="activity-row running">🧠 <span class="activity-name">thinking…</span></div>`
-        return ''
+        if (a.kind === 'thinking') return `<div class="activity-row running">🧠 <span class="activity-name">thinking…</span></div>`
+        // tool: icon swaps to ✓/✗ at completion; args + name stay put.
+        const icon = a.status === 'running' ? iconForTool(a.name) : (a.status === 'done' ? '✓' : '✗')
+        const cls = a.status === 'running' ? 'running' : a.status === 'done' ? 'done' : 'failed'
+        return `<div class="activity-row ${cls}">${icon} <span class="activity-name">${escapeHtml(a.name)}</span>${a.args ? ` <code class="activity-args">${escapeHtml(a.args)}</code>` : ''}</div>`
       }).join('')}</div>`
     }
     function iconForTool(name) {
@@ -18530,7 +18577,7 @@ Title:`
       body.innerHTML = statsHtml + diagHtml + tableHtml + `
         <div class="ux-footer">
           <div class="ux-footer-info">
-            Log: <code style="font-size:11px">~/.claude/alaude-events.ndjson</code>
+            Log: <code style="font-size:11px">~/.labaik/events.ndjson</code>
             · Proposals: <a href="#" onclick="window.alaude.openExternal('file://${escapeHtml(summary.proposalsFile)}'); return false" style="color:var(--green)">view file</a>
           </div>
           <button class="key-save-btn" onclick="forceUxBatch()" ${!canRun ? 'disabled style="opacity:.5"' : ''}>Run batch now</button>
