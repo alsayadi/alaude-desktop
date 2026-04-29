@@ -1381,6 +1381,38 @@
     }
     .cost-badge:hover { color: var(--green); border-color: var(--green); }
     .cost-badge.free { color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+    /* v0.7.72 OODA cycle 2: sub-cent cost (< $0.001) — show but soften.
+       Mostly noise on cheap models, still useful for cost-aware users. */
+    .cost-badge.subcent {
+      opacity: 0.55;
+      border-color: transparent;
+      background: transparent;
+    }
+    .cost-badge.subcent:hover { opacity: 1; background: var(--bg-sidebar); border-color: var(--border); }
+
+    /* v0.7.72 OODA cycle 2: post-stream activity chips. */
+    .msg-edits-chip,
+    .msg-warn-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-family: 'SF Mono', Monaco, monospace;
+      letter-spacing: 0.02em;
+      margin-left: 4px;
+    }
+    .msg-edits-chip {
+      color: color-mix(in srgb, var(--green) 75%, var(--text-dim));
+      background: color-mix(in srgb, var(--green) 8%, var(--bg-sidebar));
+      border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    }
+    .msg-warn-chip {
+      color: #d4a747;
+      background: color-mix(in srgb, #f1b43d 12%, var(--bg-sidebar));
+      border: 1px solid color-mix(in srgb, #f1b43d 35%, var(--border));
+    }
     .cost-session-total {
       font-size: 10px;
       color: var(--text-faint);
@@ -13079,12 +13111,32 @@ Title:`
             const sf = msg.statsFinal
             statsBadge = `<span class="stats-badge" onclick="toggleStatsPanel(${i})" title="Click for full breakdown — ${sf.avgTps} tok/s · ${sf.ttft}ms TTFT"><span class="stats-badge-dot" style="background:var(--text-faint);animation:none"></span> ${sf.totalTokens} tok · ${sf.totalSec.toFixed(1)}s</span>`
           }
-          // Cost badge: only shown when we have both a final stats + known pricing
+          // Cost badge: only shown when we have both a final stats + known pricing.
+          // v0.7.72 OODA cycle 2: soften when the cost is sub-cent — those are
+          // mostly noise on cheap models, but still worth showing for cost-aware
+          // users (just less visually loud).
           const c = computeMessageCost(msg)
           if (c) {
             const label = c.local ? 'free' : formatUsd(c.usd)
-            const cls = c.local ? 'cost-badge free' : 'cost-badge'
+            const subCent = !c.local && c.usd < 0.001
+            const cls = c.local ? 'cost-badge free' : (subCent ? 'cost-badge subcent' : 'cost-badge')
             costBadge = `<span class="${cls}" title="Input ${c.input} tok · Output ${c.output} tok\n${c.local ? 'Local model — no API cost' : 'Rough estimate at current published pricing'}">${label}</span>`
+          }
+        }
+        // v0.7.72 OODA cycle 2: post-stream chips for tool/file activity and
+        // truncation. Both live in the header row alongside the existing
+        // metadata badges so they're at-a-glance without scrolling.
+        let editCountChip = ''
+        let warnChip = ''
+        if (msg.role === 'assistant' && !msg.streaming) {
+          const editCount = Array.isArray(msg.fileEdits) ? msg.fileEdits.length : 0
+          if (editCount > 0) {
+            editCountChip = `<span class="msg-edits-chip" title="Files this response touched">✏️ ${editCount} edit${editCount === 1 ? '' : 's'}</span>`
+          }
+          if (msg.warning === 'length_cap') {
+            warnChip = `<span class="msg-warn-chip" title="Response hit the model's token limit. Ask 'continue' to resume.">⚠ truncated</span>`
+          } else if (msg.warning === 'empty_stream') {
+            warnChip = `<span class="msg-warn-chip" title="Provider returned no content — likely a transient server-side issue.">⚠ empty</span>`
           }
         }
         const timestamp = (msg.ts && !msg.streaming)
@@ -13130,6 +13182,8 @@ Title:`
             <span class="msg-role ${roleClass}">${roleLabel}</span>
             ${modelBadge}
             ${statsBadge}
+            ${editCountChip}
+            ${warnChip}
             ${costBadge}
             ${timestamp}
           </div>
@@ -16578,6 +16632,17 @@ Title:`
             scheduleStreamUpdate(target.uxMessageId, target.content)
             updateStatsBadge(target)
           }
+        }
+        return
+      }
+      // v0.7.72: stream warnings (length cap, empty stream) get persisted
+      // on the message so the renderer can show a header chip after the
+      // bubble freezes. Worker emits this via onActivity({ phase: 'stream_warning' }).
+      if (activity.phase === 'stream_warning') {
+        const target = findStreamingTargetFor(activity)
+        if (target) {
+          target.warning = activity.reason || 'unknown'  // e.g. 'length_cap', 'empty_stream'
+          renderMessages()
         }
         return
       }
