@@ -1413,6 +1413,30 @@
       background: color-mix(in srgb, #f1b43d 12%, var(--bg-sidebar));
       border: 1px solid color-mix(in srgb, #f1b43d 35%, var(--border));
     }
+    /* v0.7.72 OODA cycle 3: memory chip in the header row.
+       Compact version of the old body-row .memory-chip — same green-tinted
+       palette, smaller for header-row density. Tooltip previews the texts;
+       click opens Memory Lens for full management. */
+    .msg-mem-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-family: 'SF Mono', Monaco, monospace;
+      letter-spacing: 0.02em;
+      margin-left: 4px;
+      cursor: pointer;
+      color: color-mix(in srgb, var(--green) 70%, var(--text-dim));
+      background: color-mix(in srgb, var(--green) 8%, var(--bg-sidebar));
+      border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+      transition: background 0.12s, color 0.12s;
+    }
+    .msg-mem-chip:hover {
+      background: color-mix(in srgb, var(--green) 18%, var(--bg-sidebar));
+      color: var(--text);
+    }
     .cost-session-total {
       font-size: 10px;
       color: var(--text-faint);
@@ -13105,8 +13129,13 @@ Title:`
         if (msg.role === 'assistant') {
           if (msg.streaming && msg.uxMessageId) {
             // Live badge — actual contents get filled in by updateStatsBadge on each token.
-            // v0.7.72: "waiting…" → "✨ generating…" — reads as alive instead of idle.
-            statsBadge = `<span class="stats-badge" data-stats-id="${escapeHtml(msg.uxMessageId)}"><span class="stats-badge-dot"></span> ✨ generating…</span>`
+            // v0.7.72 cycle 3: differentiate "thinking" (reasoning models streaming
+            // their <think> block but no visible text yet) from "generating" (visible
+            // tokens flowing). Both use the same data-stats-id slot so the live updater
+            // can take over once tokens start arriving.
+            const isReasoningSilence = (msg.reasoning_content && msg.reasoning_content.length > 0) && (!msg.content || msg.content.length === 0)
+            const placeholder = isReasoningSilence ? '🤔 thinking…' : '✨ generating…'
+            statsBadge = `<span class="stats-badge" data-stats-id="${escapeHtml(msg.uxMessageId)}"><span class="stats-badge-dot"></span> ${placeholder}</span>`
           } else if (msg.statsFinal) {
             const sf = msg.statsFinal
             statsBadge = `<span class="stats-badge" onclick="toggleStatsPanel(${i})" title="Click for full breakdown — ${sf.avgTps} tok/s · ${sf.ttft}ms TTFT"><span class="stats-badge-dot" style="background:var(--text-faint);animation:none"></span> ${sf.totalTokens} tok · ${sf.totalSec.toFixed(1)}s</span>`
@@ -13128,6 +13157,10 @@ Title:`
         // metadata badges so they're at-a-glance without scrolling.
         let editCountChip = ''
         let warnChip = ''
+        // v0.7.72 OODA cycle 3: memory chip moves from a separate body row
+        // up into the header. Tooltip previews the first few memory texts;
+        // click opens Memory Lens for the full list and management.
+        let memChipHeader = ''
         if (msg.role === 'assistant' && !msg.streaming) {
           const editCount = Array.isArray(msg.fileEdits) ? msg.fileEdits.length : 0
           if (editCount > 0) {
@@ -13138,6 +13171,14 @@ Title:`
           } else if (msg.warning === 'empty_stream') {
             warnChip = `<span class="msg-warn-chip" title="Provider returned no content — likely a transient server-side issue.">⚠ empty</span>`
           }
+          if (Array.isArray(msg.memoriesUsed) && msg.memoriesUsed.length) {
+            // Tooltip previews up to first 3 memories so the user can scan
+            // without opening the modal. Each line is "· <text>"; the title
+            // attribute uses real newlines so macOS tooltips render multi-line.
+            const preview = msg.memoriesUsed.slice(0, 3).map(m => '· ' + (m.text || '')).join('\n')
+            const more = msg.memoriesUsed.length > 3 ? `\n· +${msg.memoriesUsed.length - 3} more — click to manage` : ''
+            memChipHeader = `<span class="msg-mem-chip" onclick="toggleMemoryModal()" title="${escapeHtml(preview + more)}">🧠 ${msg.memoriesUsed.length}</span>`
+          }
         }
         const timestamp = (msg.ts && !msg.streaming)
           ? `<span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>`
@@ -13147,10 +13188,10 @@ Title:`
         // command palette / keyboard shortcut. We just don't render the
         // per-message button anymore.
         const actionsFull = actions
-        // Memory chip on assistant messages that had recalled memories injected.
-        const memChip = (msg.role === 'assistant' && !msg.streaming && msg.memoriesUsed && msg.memoriesUsed.length)
-          ? `<div><span class="memory-chip" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'" title="Click to expand">🧠 ${msg.memoriesUsed.length} ${msg.memoriesUsed.length === 1 ? 'memory' : 'memories'} used</span><div class="memory-chip-expanded" style="display:none">${msg.memoriesUsed.map(m => `<div class="mem-item">· ${escapeHtml(m.text)}</div>`).join('')}<div style="margin-top:6px"><a onclick="toggleMemoryModal()" style="color:var(--green);cursor:pointer;font-size:11px">Manage memories →</a></div></div></div>`
-          : ''
+        // v0.7.72 OODA cycle 3: memory chip is now in the header row above
+        // (memChipHeader). The body-row version (used to live here) is gone —
+        // tooltip preview + click-to-Memory-Lens handles the full surface.
+        const memChip = ''
         // Remember + Save-as-Snippet buttons on user messages.
         // Remember → long-term facts memory. Save-as-Snippet → reusable prompt template.
         // v0.7.71: user-message action buttons routed through t().
@@ -13183,6 +13224,7 @@ Title:`
             ${modelBadge}
             ${statsBadge}
             ${editCountChip}
+            ${memChipHeader}
             ${warnChip}
             ${costBadge}
             ${timestamp}
