@@ -3341,6 +3341,48 @@
       cursor: zoom-in;
       border: 1px solid var(--border);
     }
+    /* v0.7.72 — generated-image card. Image dominates the card; meta strip
+       below shows the prompt + size as a one-liner footer. Click anywhere
+       on the image opens the lightbox. */
+    .msg-genimg-card {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--bg-input);
+      max-width: 720px;
+    }
+    .msg-genimg {
+      display: block;
+      width: 100%;
+      max-height: 560px;
+      object-fit: contain;
+      cursor: zoom-in;
+      background: var(--bg-sidebar);
+    }
+    .msg-genimg-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+    .msg-genimg-icon { font-size: 13px; flex-shrink: 0; }
+    .msg-genimg-prompt {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .msg-genimg-size {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 10px;
+      color: var(--text-faint);
+      flex-shrink: 0;
+    }
     /* v0.7.65 — attached-file chips in user messages.
        Replaces the pre-v0.7.65 behaviour of dumping raw file bytes into
        the bubble text. Chip shows filename + size + (pages/rows if known). */
@@ -5973,11 +6015,14 @@
           <option value="claude-opus-4-5">Claude Opus 4.5 · legacy</option>
         </optgroup>
         <optgroup label="OpenAI">
-          <!-- v0.7.62 — GPT-5.4 is flagship (March 2026 release); 5.3 is
-               ChatGPT's logged-in default. GPT-4o retired per OpenAI's
-               own deprecation notice but kept as legacy so saved chats
-               don't error. -->
-          <option value="gpt-5.4">GPT-5.4 · flagship</option>
+          <!-- v0.7.72 — GPT-5.5 is the new flagship (May 2026). 5.4 stays
+               as a popular alternative; 5.3 is ChatGPT's logged-in
+               default. GPT-4o retired per OpenAI's own deprecation notice
+               but kept as legacy so saved chats don't error. -->
+          <option value="gpt-5.5">GPT-5.5 · flagship</option>
+          <option value="gpt-5.5-thinking">GPT-5.5 Thinking · reasoning</option>
+          <option value="gpt-5.5-mini">GPT-5.5 Mini · fast / cheap</option>
+          <option value="gpt-5.4">GPT-5.4 · alternative</option>
           <option value="gpt-5.4-thinking">GPT-5.4 Thinking · reasoning</option>
           <option value="gpt-5.4-pro">GPT-5.4 Pro · deep reasoning</option>
           <option value="gpt-5.3">GPT-5.3 · balanced</option>
@@ -13147,6 +13192,21 @@ Title:`
         const diffsHtml = (msg.fileEdits && msg.fileEdits.length)
           ? msg.fileEdits.map(fe => renderFileDiff(fe)).join('')
           : ''
+        // v0.7.72: render generated images inline. Each image card shows
+        // the image, a small footer with the prompt + size, and click-to-
+        // lightbox affordance. Stored as file paths (not base64) so reload
+        // doesn't pay a JSON-serialization tax on big images.
+        const generatedImagesHtml = (msg.imagesGenerated && msg.imagesGenerated.length)
+          ? msg.imagesGenerated.map(img => `
+            <div class="msg-genimg-card">
+              <img class="msg-genimg" src="file://${escapeHtml(img.path)}" alt="${escapeHtml(img.prompt || 'Generated image')}" onclick="openImageLightbox(this.src)" loading="lazy" />
+              <div class="msg-genimg-meta">
+                <span class="msg-genimg-icon">🎨</span>
+                <span class="msg-genimg-prompt" title="${escapeHtml(img.prompt || '')}">${escapeHtml(img.prompt || 'Generated image')}</span>
+                <span class="msg-genimg-size">${escapeHtml(img.size || '')}</span>
+              </div>
+            </div>`).join('')
+          : ''
 
         let body
         // Data attribute for surgical streaming updates.
@@ -13154,11 +13214,11 @@ Title:`
         if (msg.streaming) {
           const chips = renderActivityChips()
           if (msg.content && msg.content.length > 0) {
-            body = chips + diffsHtml + `<span${streamAttr}>${renderMarkdown(msg.content, { streaming: true })}<span class="stream-caret"></span></span>`
+            body = chips + diffsHtml + generatedImagesHtml + `<span${streamAttr}>${renderMarkdown(msg.content, { streaming: true })}<span class="stream-caret"></span></span>`
           } else {
             // Wrap the typing dots in the stream-id span so the first token surgical
             // update can replace the dots with the first chunk of text seamlessly.
-            body = chips + diffsHtml + `<span${streamAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`
+            body = chips + diffsHtml + generatedImagesHtml + `<span${streamAttr}><div class="typing-indicator"><span class="typing-dot">●</span> <span class="typing-dot">●</span> <span class="typing-dot">●</span></div></span>`
           }
         } else {
           // Multimodal user message: extract text from the content array
@@ -13189,7 +13249,7 @@ Title:`
               return `<span class="msg-file-chip" title="${escapeHtml(f.name)}">📎 ${escapeHtml(f.name)}<span class="msg-file-chip-meta">${escapeHtml(meta + kb)}</span></span>`
             }).join('') + '</div>'
           }
-          body = diffsHtml + imgHtml + fileChipsHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
+          body = diffsHtml + generatedImagesHtml + imgHtml + fileChipsHtml + (msg.role === 'assistant' ? renderMarkdown(displayText) : escapeHtml(displayText || ''))
         }
         // Model + timestamp metadata on assistant responses
         // v0.7.72: pretty-print the model id ("deepseek-v4-pro" → "DeepSeek V4 Pro"),
@@ -16267,7 +16327,7 @@ Title:`
         // new users land on the best model without a manual pick.
         const modelMap = {
           anthropic: 'claude-sonnet-4-6',           // balanced default (flagship = opus-4-7)
-          openai:    'gpt-5.4',                     // flagship (retired: gpt-4o)
+          openai:    'gpt-5.5',                     // flagship (was 5.4 in v0.7.62; retired: gpt-4o)
           google:    'gemini-3.1-pro-preview',      // flagship (retired: 2.0-flash)
           xai:       'grok-4.20-reasoning',         // flagship (legacy: grok-3)
           moonshot:  'kimi-k2.6',                   // kimi.com flagship
@@ -16590,7 +16650,17 @@ Title:`
     // with "gpt-4o-mini-2024-07-18" falls through to gpt-4o-mini pricing.
     // Unknown models return null and the UI degrades quietly (no $ shown).
     const MODEL_PRICING = {
-      // OpenAI
+      // OpenAI — GPT-5.5 family added v0.7.72 (May 2026). Pricing assumes
+      // OpenAI follows their usual flagship/thinking/mini tier ratios; will
+      // be corrected when official numbers ship.
+      'gpt-5.5-mini':           { in: 0.30,   out: 1.20 },
+      'gpt-5.5-thinking':       { in: 6.00,   out: 24.00 },
+      'gpt-5.5':                { in: 3.00,   out: 12.00 },
+      'gpt-5.4-pro':            { in: 12.00,  out: 48.00 },
+      'gpt-5.4-thinking':       { in: 5.00,   out: 20.00 },
+      'gpt-5.4':                { in: 2.50,   out: 10.00 },
+      'gpt-5.3':                { in: 1.25,   out: 5.00 },
+      'gpt-5':                  { in: 2.00,   out: 8.00 },
       'gpt-4o-mini':            { in: 0.15,   out: 0.60 },
       'gpt-4o':                 { in: 2.50,   out: 10.00 },
       'gpt-4-turbo':            { in: 10.00,  out: 30.00 },
@@ -16884,6 +16954,26 @@ Title:`
         const target = findStreamingTargetFor(activity)
         if (target) {
           target.warning = activity.reason || 'unknown'  // e.g. 'length_cap', 'empty_stream'
+          renderMessages()
+        }
+        return
+      }
+      // v0.7.72: image generation events. Worker writes the PNG to disk
+      // (~/.labaik/images/{id}.png) and emits this with the file path.
+      // We attach it to the streaming target so it persists post-stream
+      // and survives session reload (file:// reference, not base64 in
+      // sessions.json — that'd bloat the file fast on heavy use).
+      if (activity.phase === 'image_generated') {
+        const target = findStreamingTargetFor(activity)
+        if (target) {
+          target.imagesGenerated = target.imagesGenerated || []
+          target.imagesGenerated.push({
+            path: activity.path,
+            prompt: activity.prompt,
+            size: activity.size,
+            quality: activity.quality,
+            ts: Date.now(),
+          })
           renderMessages()
         }
         return

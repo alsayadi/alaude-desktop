@@ -558,6 +558,52 @@ function userWantsBrowserIntent(messages) {
   return false
 }
 
+// ── Image generation ──────────────────────────────────────────────────────
+// v0.7.72: tool-callable image generation. Same gating discipline as the
+// browser tools — only expose to the model when the user's latest message
+// signals image intent. Image gen routes through OpenAI's images.generate
+// (gpt-image-1 / variants). Output saved to ~/.labaik/images/{id}.png so
+// it persists across session reloads without bloating sessions.json.
+
+const IMAGE_TOOLS = [
+  { type: 'function', function: {
+    name: 'generate_image',
+    description: 'Generate an image from a text prompt. ONLY use when the user explicitly asks for an image, picture, drawing, illustration, photo, poster, logo, icon, or visual artwork. Do NOT generate images for tasks where text/code would suffice. The result is saved to disk and rendered inline in the chat.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Detailed visual description. Include subject, style, lighting, composition. Be specific.' },
+        size: { type: 'string', enum: ['1024x1024', '1536x1024', '1024x1536'], description: 'Image dimensions. Default 1024x1024 (square). Use 1536x1024 for landscape, 1024x1536 for portrait.' },
+        quality: { type: 'string', enum: ['standard', 'high'], description: 'standard = faster/cheaper, high = more detail. Default standard.' },
+      },
+      required: ['prompt'],
+    },
+  } },
+]
+
+function userWantsImageIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    // Strong, unambiguous image-request keywords. False negative is
+    // recoverable; false positive risks the model speculatively spending
+    // image-gen credits.
+    if (/\b(draw|generate|create|make|design|render|sketch|illustrate|paint)\s+(an?|the|me\s+an?)\s+(image|picture|drawing|illustration|photo|poster|logo|icon|sketch|portrait|painting|graphic|artwork|visual|cover|banner|wallpaper|avatar|mockup|scene|landscape)/i.test(text)) return true
+    if (/\b(image|picture|illustration|photo|poster|logo|icon|drawing|sketch|painting|portrait|graphic|artwork)\s+of\s+/i.test(text)) return true
+    if (/\b(visualize|visualise|show me|imagine)\s+(an?|the)?\s*(image|picture|scene|view)/i.test(text)) return true
+    return false
+  }
+  return false
+}
+
 
 // ── Health-Specific Tools ──────────────────────────────────────────────────
 
@@ -692,6 +738,14 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // v0.5.10: Screen control tools — click / type / key / move. Route to main.
   if (name.startsWith('screen_')) {
     return await requestScreenTool(name, args || {})
+  }
+  // v0.7.72: image generation. Routes through OpenAI's images API.
+  // Saves the result to ~/.labaik/images/{id}.png and emits an
+  // image_generated activity event so the renderer can attach the
+  // image to the streaming bubble. Returns a brief success/error
+  // string to the model so it can compose its text reply.
+  if (name === 'generate_image') {
+    return await runImageGen(args || {})
   }
 
   try {
@@ -1091,8 +1145,76 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   }
 }
 
+// v0.7.72 — Image generation tool runner. Routes through OpenAI's
+// images.generate (gpt-image-1). Saves PNG to ~/.labaik/images/{id}.png
+// so the renderer can attach a stable file:// reference to the message
+// without bloating sessions.json with base64. Emits image_generated
+// activity so the renderer adds the image to the streaming target's
+// fileEdits-style record (new field: msg.imagesGenerated).
+let _imgActivityCb = null
+function setImageActivity(cb) { _imgActivityCb = cb }
+
+async function runImageGen(args) {
+  const apiKey = getApiKey('openai')
+  if (!apiKey) {
+    return { error: 'No OpenAI API key configured. Image generation needs the openai key. Open Keys modal (⌘⇧K) → add the OpenAI key, then try again.' }
+  }
+  const prompt = String(args.prompt || '').trim()
+  if (!prompt) return { error: 'generate_image requires a prompt.' }
+  const size = ['1024x1024', '1536x1024', '1024x1536'].includes(args.size) ? args.size : '1024x1024'
+  const quality = args.quality === 'high' ? 'high' : 'standard'
+
+  const OpenAI = require('openai').default || require('openai')
+  const client = new OpenAI({ apiKey, timeout: 120000 })  // image gen takes 5-30s
+  let resp
+  try {
+    resp = await client.images.generate({
+      model: 'gpt-image-1',
+      prompt,
+      size,
+      quality,
+      n: 1,
+      response_format: 'b64_json',
+    })
+  } catch (err) {
+    return { error: `Image generation failed: ${err?.message || String(err)}` }
+  }
+  const b64 = resp?.data?.[0]?.b64_json
+  if (!b64) return { error: 'OpenAI returned no image data.' }
+
+  // Save to ~/.labaik/images/{id}.png
+  const fs = require('fs')
+  const path = require('path')
+  const os = require('os')
+  const imagesDir = path.join(os.homedir(), '.labaik', 'images')
+  try { fs.mkdirSync(imagesDir, { recursive: true }) } catch {}
+  const id = 'img_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  const filePath = path.join(imagesDir, `${id}.png`)
+  try {
+    fs.writeFileSync(filePath, Buffer.from(b64, 'base64'))
+  } catch (err) {
+    return { error: `Failed to save image to disk: ${err?.message || String(err)}` }
+  }
+
+  // Tell the renderer to attach this image to the active message.
+  if (_imgActivityCb) {
+    try { _imgActivityCb({ phase: 'image_generated', path: filePath, prompt, size, quality }) } catch {}
+  }
+
+  return {
+    success: true,
+    path: filePath,
+    size,
+    quality,
+    prompt,
+    note: 'Image saved and rendered inline. Acknowledge briefly in your reply (one short sentence).',
+  }
+}
+
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  // v0.7.72: route image-gen activity events to this turn's onActivity.
+  setImageActivity(onActivity)
   const OpenAI = require('openai').default || require('openai')
   // Ollama runs locally; keep a shorter timeout for external providers, longer for local generation.
   const timeout = provider === 'ollama' ? 300000 : 45000
@@ -1134,9 +1256,11 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // keywords. Stops the model from speculatively popping a browser window
   // for tasks that don't need it.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
+  const offerImage = !skipTools && userWantsImageIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
+    ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -1337,6 +1461,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
  */
 async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  setImageActivity(onActivity)
   const baseURL = 'http://localhost:11434'
   // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
   // V4 thinking-mode requires it be round-tripped in history. Other
@@ -1350,9 +1475,11 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
   // v0.7.72: same browser-intent gating as chatOpenAI above.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
+  const offerImage = !skipTools && userWantsImageIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
+    ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -1478,6 +1605,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const { onActivity = () => {}, mode = 'autopilot', planMode = false } = opts
+  setImageActivity(onActivity)
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
   // token. The SDK takes authToken for Bearer auth. When the credential
@@ -1498,7 +1626,8 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   // v0.7.72: gate browser tools by user intent (same heuristic as the
   // OpenAI/Ollama paths). Plan mode already strips everything anyway.
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const offerImage = !planMode && userWantsImageIntent(msgs)
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
