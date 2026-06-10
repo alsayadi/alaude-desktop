@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('alaude', {
   // v0.8 — Stop generation: aborts every in-flight chat; each resolves with
   // its partial text plus a "⏹ Stopped." marker.
   chatCancelAll: () => ipcRenderer.invoke('chat-cancel-all'),
+  // v0.8 — paste-any-key: detect which provider a key belongs to.
+  loginDetectKey: (key) => ipcRenderer.invoke('login-detect-key', key),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

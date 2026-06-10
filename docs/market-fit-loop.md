@@ -105,3 +105,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   already existed; heatmap/digest/model-perf were palette-only already).
   Topbar menu is now: search, crew, routines, keys, local models — all
   wedge-aligned.
+
+### Cycle 5 — paste-any-key login (2026-06-10)
+- Login defaults to "✨ Auto-detect": pattern fast-paths (sk-ant→Anthropic,
+  AIza→Google, xai-→xAI, JWT→MiniMax, id.secret→Zhipu) and parallel
+  /models probing for the ambiguous sk-… family (OpenAI/DeepSeek/Kimi/
+  Moonshot/Qwen/Hunyuan) — first authenticated 200 wins. Manual dropdown
+  stays as fallback. Directly attacks the <60s activation metric.

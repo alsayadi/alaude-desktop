@@ -6039,6 +6039,7 @@
             <div class="login-key-form" id="login-key-form" style="display:flex">
               <!-- Provider names stay literal — proper nouns / brand names. -->
               <select class="login-provider-select" id="login-provider-select">
+                <option value="auto" selected>✨ Auto-detect</option>
                 <option value="openai">OpenAI (GPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="google">Google (Gemini)</option>
@@ -11461,6 +11462,9 @@ footer a { color: var(--accent); text-decoration: none; }
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
+        'login.detecting': 'Detecting provider from your key…',
+        'login.detectFailed': "Couldn't identify this key — pick the provider from the list and try again.",
+        'login.saving': 'saving…',
         'model.rec.group': '✨ Recommended',
         'model.rec.best': 'best overall',
         'model.rec.fast': 'fastest',
@@ -11727,6 +11731,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'login.detecting': '正在根据密钥识别服务商…',
+        'login.detectFailed': '无法识别此密钥——请从列表中选择服务商后重试。',
+        'login.saving': '保存中…',
         'model.rec.group': '✨ 推荐',
         'model.rec.best': '综合最佳',
         'model.rec.fast': '最快',
@@ -11978,6 +11985,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'login.detecting': 'جارٍ التعرّف على المزوّد من المفتاح…',
+        'login.detectFailed': 'تعذّر التعرّف على هذا المفتاح — اختر المزوّد من القائمة وأعد المحاولة.',
+        'login.saving': 'جارٍ الحفظ…',
         'model.rec.group': '✨ مُوصى به',
         'model.rec.best': 'الأفضل عمومًا',
         'model.rec.fast': 'الأسرع',
@@ -17138,8 +17148,9 @@ Title:`
       }
     }
 
+    const PROVIDER_DISPLAY = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)', google: 'Google (Gemini)', xai: 'xAI (Grok)', kimi: 'Kimi (Global)', moonshot: 'Kimi (CN)', dashscope: 'Qwen (DashScope)', zhipu: 'GLM (Zhipu)', minimax: 'MiniMax', hunyuan: 'Tencent Hunyuan', deepseek: 'DeepSeek' }
     async function submitLoginKey() {
-      const provider = document.getElementById('login-provider-select').value
+      let provider = document.getElementById('login-provider-select').value
       const key = document.getElementById('login-key-input').value.trim()
       const status = document.getElementById('login-status')
 
@@ -17149,8 +17160,28 @@ Title:`
         return
       }
 
-      status.textContent = 'Saving…'
-      status.className = 'login-status'
+      // v0.8 market-fit: paste-any-key. On auto, patterns identify the
+      // unambiguous formats instantly; sk-… keys are verified against the
+      // candidate providers' /models endpoints in parallel (~1-2s).
+      if (provider === 'auto') {
+        status.textContent = t('login.detecting')
+        status.className = 'login-status'
+        let det = null
+        try { det = await window.alaude.loginDetectKey(key) } catch {}
+        if (!det?.provider) {
+          status.textContent = t('login.detectFailed')
+          status.className = 'login-status error'
+          return
+        }
+        provider = det.provider
+        const sel = document.getElementById('login-provider-select')
+        if (sel) sel.value = provider
+        status.textContent = `✓ ${PROVIDER_DISPLAY[provider] || provider} — ${t('login.saving')}`
+        status.className = 'login-status success'
+      } else {
+        status.textContent = 'Saving…'
+        status.className = 'login-status'
+      }
       let ok
       try {
         ok = await window.alaude.setKey(provider, key)

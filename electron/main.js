@@ -1172,6 +1172,44 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8 market-fit: paste-any-key provider detection. Pattern fast-paths
+// for unambiguous formats; the ambiguous sk-… family gets resolved by
+// probing each candidate's cheap GET /models endpoint in parallel with the
+// pasted key — first authenticated 200 wins.
+const KEY_PATTERNS = [
+  [/^sk-ant-/, 'anthropic'],
+  [/^AIza/, 'google'],
+  [/^xai-/, 'xai'],
+  [/^eyJ[A-Za-z0-9_-]+\./, 'minimax'],            // JWT
+  [/^[0-9a-f]{16,}\.[A-Za-z0-9]+$/, 'zhipu'],      // id.secret
+]
+const PROBE_ORDER = ['openai', 'deepseek', 'moonshot', 'kimi', 'dashscope', 'hunyuan', 'zhipu']
+function probeProviderKey(provider, key) {
+  const https = require('https')
+  const base = (getBaseURL(provider) || 'https://api.openai.com/v1').replace(/\/$/, '')
+  return new Promise((resolve) => {
+    let u
+    try { u = new URL(base + '/models') } catch { return resolve(null) }
+    const req = https.request(u, { method: 'GET', headers: { Authorization: `Bearer ${key}` }, timeout: 6000 }, (res) => {
+      res.resume()
+      resolve(res.statusCode === 200 ? provider : null)
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { try { req.destroy() } catch {}; resolve(null) })
+    req.end()
+  })
+}
+ipcMain.handle('login-detect-key', async (_e, rawKey) => {
+  const key = String(rawKey || '').trim()
+  if (!key) return { provider: null }
+  for (const [re, prov] of KEY_PATTERNS) {
+    if (re.test(key)) return { provider: prov, method: 'pattern' }
+  }
+  const hits = (await Promise.all(PROBE_ORDER.map((p) => probeProviderKey(p, key)))).filter(Boolean)
+  if (hits.length) return { provider: hits[0], method: 'probe', also: hits.slice(1) }
+  return { provider: null }
+})
+
 // v0.8: Stop generation. Cancels every in-flight worker chat — the worker
 // aborts its provider stream(s) and each chat resolves with partial text.
 ipcMain.handle('chat-cancel-all', () => {
