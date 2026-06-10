@@ -312,3 +312,15 @@
 - NotebookLM's one genuine normal-people hit, rebuilt local-first at
   near-zero cost: the script is just a chat turn; the audio never
   touches the network. EN/中文/العربية. 228 checks green.
+
+### Cycle 23 — share as image (2026-06-11)
+- RE-SCOPE: VAD/conversation-mode cycles deferred per the strategists'
+  cut ("voice is an input method, not a destination; don't chase AVM").
+  Pulled share-out forward instead — the reality-check critic's
+  "missing" item: normal people's output channel is the family group
+  chat, and its currency is pictures.
+- ⌘K → "📤 Share last reply as image": the answer renders as a clean
+  card (theme-aware, dir=auto for Arabic, tiny 'Labaik · labaik.ai'
+  footer) in an offscreen window, is captured, and lands on the
+  clipboard as a PNG — paste straight into WhatsApp/Messages/微信.
+  New share-image IPC with size caps. EN/中文/العربية. 228 checks.

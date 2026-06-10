@@ -7765,6 +7765,36 @@
       showRewindToast?.(t('audio.playing'), false)
     }
 
+    // ── v0.8 cycle 23 — share a reply as an image ───────────────────────
+    // The output channel of normal people is the family group chat, and
+    // its currency is pictures. One action: the last answer becomes a
+    // clean card on the clipboard, ready to paste into WhatsApp/Messages.
+    async function shareLastReplyAsImage() {
+      const last = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content && !m.content.startsWith('Error:'))
+      if (!last) { showRewindToast?.(t('share.nothing'), false); return }
+      const body = renderMarkdown(last.content)
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        body { font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.55;
+               margin: 0; padding: 22px 24px 14px; color: ${dark ? '#eee' : '#1c1c1c'};
+               background: ${dark ? '#1d1f1e' : '#fbfaf6'}; }
+        * { unicode-bidi: plaintext; }
+        pre, code { font-family: Menlo, monospace; font-size: 12.5px; background: ${dark ? '#2a2c2b' : '#f0efe9'}; border-radius: 6px; padding: 2px 5px; }
+        pre { padding: 10px; overflow: hidden; }
+        .foot { margin-top: 14px; padding-top: 8px; border-top: 1px solid ${dark ? '#333' : '#e5e3da'};
+                font-size: 11px; color: ${dark ? '#888' : '#9a988e'}; }
+      </style></head><body dir="auto">${body}<div class="foot">Labaik · labaik.ai</div></body></html>`
+      showRewindToast?.(t('share.making'), false)
+      try {
+        const r = await window.alaude.shareImage(html)
+        if (r?.error) { showRewindToast?.('📤 ' + r.error, true); return }
+        showRewindToast?.(t('share.done'), false)
+        logUx({ kind: 'share_image' })
+      } catch (e) {
+        showRewindToast?.('📤 ' + (e?.message || 'Share failed'), true)
+      }
+    }
+
     async function undoLastAgentTurn() {
       try {
         const turns = await window.alaude.undoListTurns()
@@ -10873,6 +10903,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '↩︎', label: 'Undo last file changes', search: 'undo revert restore rollback files agent', action: () => { closeCmdPalette(); undoLastAgentTurn() } },
         { kind: 'action', icon: '⚙️', label: 'Settings', search: 'settings preferences options config hub gear', action: () => { closeCmdPalette(); toggleSettingsHub() } },
         { kind: 'action', icon: '🎧', label: 'Listen to this — two-host audio overview', search: 'listen audio overview podcast hear read aloud two host', action: () => { closeCmdPalette(); audioOverviewStart() } },
+        { kind: 'action', icon: '📤', label: 'Share last reply as image (paste into WhatsApp)', search: 'share image picture whatsapp messages send copy card screenshot', action: () => { closeCmdPalette(); shareLastReplyAsImage() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
@@ -11873,6 +11904,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'audio.playing': '🎧 Playing — Esc stops it',
         'audio.nothing': '🎧 Nothing to overview yet — chat a little or attach a document first',
         'audio.busy': '⏳ Wait for the current reply to finish first',
+        'share.nothing': '📤 Nothing to share yet',
+        'share.making': '📤 Making your picture…',
+        'share.done': '🖼️ Picture copied — paste it into WhatsApp or Messages',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12256,6 +12290,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'audio.playing': '🎧 播放中——按 Esc 停止',
         'audio.nothing': '🎧 还没有可概览的内容——先聊几句或附上文件',
         'audio.busy': '⏳ 请先等当前回复完成',
+        'share.nothing': '📤 还没有可分享的内容',
+        'share.making': '📤 正在生成图片……',
+        'share.done': '🖼️ 图片已复制——粘贴到微信或 WhatsApp 即可',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12615,6 +12652,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'audio.playing': '🎧 يعمل الآن — اضغط Esc للإيقاف',
         'audio.nothing': '🎧 لا يوجد ما يُلخَّص بعد — تحدَّث قليلًا أو أرفق مستندًا أولًا',
         'audio.busy': '⏳ انتظر اكتمال الرد الحالي أولًا',
+        'share.nothing': '📤 لا يوجد ما يُشارَك بعد',
+        'share.making': '📤 يجهّز الصورة…',
+        'share.done': '🖼️ نُسخت الصورة — ألصقها في واتساب أو الرسائل',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',

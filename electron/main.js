@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences, Notification } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences, Notification, clipboard } = require('electron')
 const path = require('path')
 const os = require('os')
 const http = require('http')
@@ -1528,6 +1528,35 @@ ipcMain.handle('print-html', async (_e, html) => {
     return { ok: true }
   } catch (err) {
     return { error: err?.message || 'Print failed' }
+  }
+})
+
+// v0.8 cycle 23 — share-as-image: render a clean card offscreen, capture
+// it, and put the PNG on the clipboard. Family group chats run on
+// pictures, not markdown exports.
+ipcMain.handle('share-image', async (_e, html) => {
+  let win
+  try {
+    if (typeof html !== 'string' || !html.trim()) return { error: 'Nothing to share' }
+    if (html.length > 2 * 1024 * 1024) return { error: 'Too large to share as an image' }
+    win = new BrowserWindow({
+      show: false, width: 520, height: 400,
+      webPreferences: { sandbox: true, contextIsolation: true, offscreen: true },
+    })
+    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    // Size the window to the rendered content (capped) so the capture
+    // has no dead space.
+    const h = await win.webContents.executeJavaScript('document.body.scrollHeight')
+    win.setContentSize(520, Math.max(120, Math.min(2400, Math.ceil(h) + 2)))
+    await new Promise(r => setTimeout(r, 150)) // let offscreen repaint settle
+    const img = await win.webContents.capturePage()
+    if (img.isEmpty()) return { error: 'Capture came back empty' }
+    clipboard.writeImage(img)
+    return { ok: true }
+  } catch (err) {
+    return { error: err?.message || 'Share failed' }
+  } finally {
+    try { win?.destroy() } catch {}
   }
 })
 
