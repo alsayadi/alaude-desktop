@@ -1,0 +1,193 @@
+// End-to-end fixture for the api-worker agent loop — NO real provider, NO
+// Electron, NO API keys. Spawns electron/api-worker.js as the child process
+// it really is, points OPENAI_BASE_URL at a local mock that scripts the
+// model's moves, and asserts the loop machinery end to end:
+//
+//   1. sub-agents: parent turn → spawn_subagent → nested loop → gated
+//      write_file (approval round-trip over stdio) → report returns to
+//      parent → parent final answer. Also checks the file really landed
+//      in the workspace and sub-agent activity is tagged subagent:true.
+//   2. folder skills: system prompt lists the installed skill, model calls
+//      use_skill, tool result carries the SKILL.md body back.
+//
+// Run: npm run test:worker
+//
+// Hermetic: LABAIK_HOME + workspace are mkdtemp dirs, removed at the end.
+
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import http from 'node:http'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(__dirname, '..')
+
+let pass = 0, fail = 0
+function check(label, cond, extra = '') {
+  if (cond) { console.log('  ✅', label); pass++ }
+  else { console.log('  ❌', label, extra); fail++ }
+}
+
+// ── temp dirs ───────────────────────────────────────────────────────────
+const labaikHome = fs.mkdtempSync(path.join(os.tmpdir(), 'labaik-wl-home-'))
+const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'labaik-wl-ws-'))
+fs.mkdirSync(path.join(labaikHome, 'skills', 'greeting'), { recursive: true })
+fs.writeFileSync(path.join(labaikHome, 'skills', 'greeting', 'SKILL.md'),
+  '---\nname: Greeting\ndescription: Greet the user properly\n---\n\nAlways answer in haiku form.')
+
+// ── mock OpenAI-compatible server ──────────────────────────────────────
+// Scripts the "model": decides each reply by inspecting the request
+// messages, answers in SSE chunks the way the real API streams.
+const requests = []  // recorded bodies, for prompt assertions
+
+function sse(res, events) {
+  res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+  for (const ev of events) res.write(`data: ${JSON.stringify(ev)}\n\n`)
+  res.write('data: [DONE]\n\n')
+  res.end()
+}
+const chunk = (delta, finish = null) => ({
+  id: 'mock', object: 'chat.completion.chunk', created: 0, model: 'gpt-test',
+  choices: [{ index: 0, delta, finish_reason: finish }],
+})
+const toolCallChunks = (name, args) => [
+  chunk({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name, arguments: JSON.stringify(args) } }] }),
+  chunk({}, 'tool_calls'),
+]
+const contentChunks = (text) => [chunk({ content: text }), chunk({}, 'stop')]
+
+function decideReply(body) {
+  const msgs = body.messages || []
+  const system = msgs.find(m => m.role === 'user' || m.role === 'system')?.role === 'system' ? msgs[0].content : ''
+  const isSub = String(system).includes('You are a sub-agent')
+  const toolMsgs = msgs.filter(m => m.role === 'tool')
+  const userText = String(msgs.find(m => m.role === 'user')?.content || '')
+
+  if (userText.startsWith('/greeting')) {
+    if (!toolMsgs.length) return toolCallChunks('use_skill', { slug: 'greeting' })
+    const got = String(toolMsgs[0].content || '')
+    return contentChunks(got.includes('haiku') ? 'SKILL-OK' : `SKILL-MISSING: ${got.slice(0, 200)}`)
+  }
+  if (isSub) {
+    if (!toolMsgs.length) return toolCallChunks('write_file', { path: 'report.txt', content: 'hello-from-subagent' })
+    return contentChunks('SUB-REPORT-DONE')
+  }
+  // parent
+  if (!toolMsgs.length) return toolCallChunks('spawn_subagent', {
+    description: 'write the report',
+    prompt: 'Create report.txt containing hello-from-subagent in the workspace root.',
+  })
+  const got = String(toolMsgs[0].content || '')
+  return contentChunks(got.includes('SUB-REPORT-DONE') ? 'PARENT-OK' : `PARENT-MISSING-REPORT: ${got.slice(0, 200)}`)
+}
+
+const server = http.createServer((req, res) => {
+  let raw = ''
+  req.on('data', d => { raw += d })
+  req.on('end', () => {
+    let body = {}
+    try { body = JSON.parse(raw) } catch {}
+    requests.push({ url: req.url, body })
+    if (!req.url.includes('/chat/completions')) { res.writeHead(404); res.end('{}'); return }
+    sse(res, decideReply(body))
+  })
+})
+await new Promise(r => server.listen(0, '127.0.0.1', r))
+const port = server.address().port
+
+// ── spawn the worker ────────────────────────────────────────────────────
+const worker = spawn('node', [path.join(ROOT, 'electron', 'api-worker.js')], {
+  env: {
+    ...process.env,
+    LABAIK_HOME: labaikHome,
+    OPENAI_API_KEY: 'test-key',
+    OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+  },
+  stdio: ['pipe', 'pipe', 'pipe'],
+})
+worker.stderr.on('data', d => { if (process.env.VERBOSE) process.stderr.write(d) })
+
+const activities = []
+const approvals = []
+const finals = new Map()  // chatId -> {result|error}
+let outBuf = ''
+worker.stdout.on('data', (d) => {
+  outBuf += d
+  let idx
+  while ((idx = outBuf.indexOf('\n')) !== -1) {
+    const line = outBuf.slice(0, idx); outBuf = outBuf.slice(idx + 1)
+    if (!line.trim()) continue
+    let msg
+    try { msg = JSON.parse(line) } catch { continue }
+    if (msg.type === 'approval') {
+      approvals.push(msg)
+      // auto-allow, like main.js would after resolveGate/dialog
+      worker.stdin.write(JSON.stringify({ type: 'approval-response', id: msg.id, verdict: 'allow' }) + '\n')
+    } else if (msg.type === 'mcp-list') {
+      // main.js normally answers this bridge request; we have no MCP servers
+      worker.stdin.write(JSON.stringify({ type: 'mcp-list-response', id: msg.id, tools: [] }) + '\n')
+    } else if (msg.activity) {
+      activities.push(msg.activity)
+    } else if ('result' in msg || 'error' in msg) {
+      finals.set(msg.id, msg)
+    }
+  }
+})
+
+function chat(id, content) {
+  worker.stdin.write(JSON.stringify({
+    id, messageId: `m${id}`, messages: [{ role: 'user', content }],
+    model: 'gpt-test-1', workspacePath: workspace, spacePrompt: '', mode: 'autopilot',
+  }) + '\n')
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now()
+    const poll = setInterval(() => {
+      if (finals.has(id)) { clearInterval(poll); resolve(finals.get(id)) }
+      else if (Date.now() - t0 > 30000) { clearInterval(poll); reject(new Error(`chat ${id} timed out`)) }
+    }, 25)
+  })
+}
+
+try {
+  // ═══ Scenario 1: sub-agent end to end ═══
+  console.log('\n[1/2] sub-agent loop — spawn → gated write → report → parent final')
+  const r1 = await chat(1, 'Delegate writing a report to a sub-agent.')
+  // The worker appends a tool log ("🤖 Sub-agent: …") after the model text.
+  check('parent received sub-agent report and finished',
+    typeof r1.result === 'string' && r1.result.startsWith('PARENT-OK'), JSON.stringify(r1).slice(0, 300))
+  check('sub-agent really wrote the file',
+    fs.existsSync(path.join(workspace, 'report.txt')) &&
+    fs.readFileSync(path.join(workspace, 'report.txt'), 'utf8') === 'hello-from-subagent')
+  check('gated write_file round-tripped an approval',
+    approvals.some(a => a.tool === 'write_file'), JSON.stringify(approvals).slice(0, 200))
+  check('sub-agent tool activity tagged subagent:true',
+    activities.some(a => a.subagent === true && a.subagentLabel === 'write the report'))
+  const subSys = requests.map(r => r.body?.messages?.[0]).filter(m => m?.role === 'system')
+    .some(m => String(m.content).includes('You are a sub-agent'))
+  check('sub-agent got its own system prompt', subSys)
+
+  // ═══ Scenario 2: folder skill via use_skill ═══
+  console.log('\n[2/2] folder skills — prompt index + use_skill body load')
+  const r2 = await chat(2, '/greeting say hello')
+  check('use_skill returned the SKILL.md body to the model', r2.result === 'SKILL-OK', JSON.stringify(r2).slice(0, 300))
+  const skillReq = requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('/greeting'))
+  const sysText = String(skillReq?.body?.messages?.[0]?.content || '')
+  check('system prompt lists the skill under ## Skills',
+    sysText.includes('## Skills') && sysText.includes('greeting') && sysText.includes('Greet the user properly'))
+  check('system prompt does NOT include the skill body (selective loading)',
+    !sysText.includes('Always answer in haiku form'))
+} catch (err) {
+  check('fixture ran to completion', false, err.message)
+} finally {
+  worker.kill()
+  server.close()
+  fs.rmSync(labaikHome, { recursive: true, force: true })
+  fs.rmSync(workspace, { recursive: true, force: true })
+}
+
+console.log('\n' + '━'.repeat(60))
+console.log(`  WORKER-LOOP RESULTS: ${pass} passed, ${fail} failed`)
+console.log('━'.repeat(60))
+process.exit(fail > 0 ? 1 : 0)
