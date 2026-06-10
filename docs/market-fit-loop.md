@@ -375,3 +375,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   for centuries) plus a Set guard. Converter module + its 5 tests unchanged
   (the bug was renderer-side id assignment, not the parse). Logged: import
   doesn't dedup re-imports — minor, future cycle.
+
+### Cycle 38 — lock IPC wiring integrity (2026-06-10)
+- ~15 IPC channels were added across the loop; a preload channel with no
+  ipcMain.handle (or a window.alaude.X with no preload entry) is a silent
+  runtime failure no unit test sees. Audited: all clean. Then LOCKED it as
+  test-app Layer 2c — (a) every preload invoke/send channel has a main
+  handler (65/65), (b) every window.alaude.* call-site exists in the
+  preload bridge (60/60). Catches the whole class going forward. 100 checks.

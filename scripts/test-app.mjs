@@ -115,6 +115,33 @@ section('Layer 2b · Boot-time overlay guard covers all overlay classes')
   }
 }
 
+// ═══ Layer 2c: v0.8 cycle 38 — IPC wiring integrity ═══
+// Every preload ipcRenderer.invoke/send(sendSync) channel must have a
+// matching ipcMain.handle/on in main.js, and every window.alaude.X used in
+// the renderer must be defined in preload. A mismatch is a silent runtime
+// failure no unit test would otherwise catch.
+section('Layer 2c · IPC wiring (preload ↔ main, renderer ↔ preload)')
+{
+  const html = fs.readFileSync(path.join(ROOT, 'renderer/index.html'), 'utf8')
+  const preload = fs.readFileSync(path.join(ROOT, 'electron/preload.js'), 'utf8')
+  const main = fs.readFileSync(path.join(ROOT, 'electron/main.js'), 'utf8')
+
+  // (a) preload channels → main handlers
+  const channels = new Set([...preload.matchAll(/ipcRenderer\.(?:invoke|send|sendSync)\('([^']+)'/g)].map(m => m[1]))
+  const handlers = new Set([...main.matchAll(/ipcMain\.(?:handle|on)\('([^']+)'/g)].map(m => m[1]))
+  const unhandled = [...channels].filter(c => !handlers.has(c))
+  if (unhandled.length) { console.log(`  ❌ preload channels with no main handler: ${unhandled.join(', ')}`); totalFail++ }
+  else { console.log(`  ✅ all ${channels.size} preload IPC channels have a main handler`); totalPass++ }
+
+  // (b) window.alaude.X used in renderer → defined in the preload bridge
+  const bridge = new Set([...preload.matchAll(/^\s*([a-zA-Z][a-zA-Z0-9_]*)\s*:/gm)].map(m => m[1]))
+  const usedRaw = new Set([...html.matchAll(/\b(?:window\.)?alaude\??\.([a-zA-Z][a-zA-Z0-9_]*)/g)].map(m => m[1]))
+  // 'alaude' const fields that aren't methods (version/homepage/releasesUrl) are still bridge keys.
+  const undef = [...usedRaw].filter(k => !bridge.has(k))
+  if (undef.length) { console.log(`  ❌ window.alaude.X used but not in preload: ${undef.join(', ')}`); totalFail++ }
+  else { console.log(`  ✅ all ${usedRaw.size} window.alaude.* call-sites exist in preload`); totalPass++ }
+}
+
 if (RUN_MANUAL) {
 // ═══ Manual Layer 3: data integrity ═══
 section('Manual · On-disk state integrity')
