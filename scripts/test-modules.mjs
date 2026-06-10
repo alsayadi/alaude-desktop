@@ -631,6 +631,23 @@ console.log('\n[16/16] paperwork-dates — deadline extraction + reminder timing
   check('past 3-day mark clamps to tomorrow', near.getDate() === 12 && near.getMonth() === 5)
   const none = reminderDateFor(null, now)
   check('no deadline → tomorrow 9am', none.getDate() === 12 && none.getHours() === 9)
+
+  // Cycle 14 — Arabic depth: digit normalization + Hijri conversion.
+  const { normalizeDigits, hijriToGregorian } = await import('../renderer/js/paperwork-dates.js')
+  check('Arabic-Indic digits normalize', normalizeDigits('١٤٤٧/١٢/١٥') === '1447/12/15')
+  check('Eastern Arabic-Indic digits normalize', normalizeDigits('۲۰۲۶') === '2026')
+  const dayMs = 86400000
+  const closeTo = (a, b, days = 2) => Math.abs(a - b) <= days * dayMs
+  // 1 Muharram 1447 ≈ 2025-06-26 (Umm al-Qura); tabular is ±1 day.
+  check('hijri 1447-01-01 ≈ 2025-06-26', closeTo(hijriToGregorian(1447, 1, 1), new Date(2025, 5, 26, 12)))
+  // 9 Dhul-Hijjah 1445 (Arafah) = 2024-06-15.
+  check('hijri 1445-12-09 ≈ 2024-06-15', closeTo(hijriToGregorian(1445, 12, 9), new Date(2024, 5, 15, 12)))
+  const h1 = extractDeadlineDate('**الموعد النهائي** — ١٤٤٧/١٢/١٥ هـ')
+  check('Arabic-digit Hijri date in card parses', !!h1 && h1.date.getFullYear() >= 2026)
+  const h2 = extractDeadlineDate('**Deadline**: 15/12/1447 AH')
+  check('ASCII Hijri with AH parses to same day', !!h2 && h2.iso === h1.iso)
+  const g1 = extractDeadlineDate('**الموعد النهائي** — ٢٠٢٦/٠٧/٠١')
+  check('Arabic-digit GREGORIAN date parses', g1?.iso === '2026-07-01')
 }
 
 // ═══════════════════════════════════════════════════════════════

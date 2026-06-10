@@ -22,6 +22,32 @@ const MONTHS = {
   jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
 }
 
+// Arabic-Indic (٠-٩) and Eastern Arabic-Indic (۰-۹) digits → ASCII, so
+// dates written the way Arabic documents actually write them still parse.
+export function normalizeDigits(text) {
+  return String(text || '')
+    .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06F0))
+}
+
+// Tabular Islamic-calendar → Gregorian conversion (±1 day of the official
+// Umm al-Qura calendar — fine for a reminder set 3 days early). Standard
+// Julian-day arithmetic.
+export function hijriToGregorian(hy, hm, hd) {
+  const jd = Math.floor((11 * hy + 3) / 30) + 354 * hy + 30 * hm - Math.floor((hm - 1) / 2) + hd + 1948440 - 385
+  let l = jd + 68569
+  const n = Math.floor((4 * l) / 146097)
+  l = l - Math.floor((146097 * n + 3) / 4)
+  const i = Math.floor((4000 * (l + 1)) / 1461001)
+  l = l - Math.floor((1461 * i) / 4) + 31
+  const j = Math.floor((80 * l) / 2447)
+  const d = l - Math.floor((2447 * j) / 80)
+  l = Math.floor(j / 11)
+  const m = j + 2 - 12 * l
+  const y = 100 * (n - 49) + i + l
+  return clampDate(y, m, d)
+}
+
 function clampDate(y, m, d) {
   if (m < 1 || m > 12 || d < 1 || d > 31) return null
   const dt = new Date(y, m - 1, d, 12, 0, 0)
@@ -30,10 +56,18 @@ function clampDate(y, m, d) {
   return dt
 }
 
-function findDateIn(text) {
-  if (!text) return null
+function findDateIn(raw) {
+  if (!raw) return null
+  const text = normalizeDigits(raw)
+  // Hijri, numeric forms. Years 1300-1499 are unambiguous (we only treat
+  // 20xx as Gregorian), with or without the هـ/AH marker:
+  //   15/12/1447 هـ  ·  ١٤٤٧/١٢/١٥  ·  1447-12-15
+  let m = text.match(/(\d{1,2})[-/.](\d{1,2})[-/.](1[34]\d{2})\s*(?:هـ|ه\b|AH)?/)
+  if (m) { const dt = hijriToGregorian(+m[3], +m[2], +m[1]); if (dt) return dt }
+  m = text.match(/(1[34]\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\s*(?:هـ|ه\b|AH)?/)
+  if (m) { const dt = hijriToGregorian(+m[1], +m[2], +m[3]); if (dt) return dt }
   // ISO / dotted: 2026-07-01, 2026/7/1, 2026.07.01
-  let m = text.match(/(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  m = text.match(/(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})/)
   if (m) { const dt = clampDate(+m[1], +m[2], +m[3]); if (dt) return dt }
   // Chinese: 2026年7月1日
   m = text.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日/)

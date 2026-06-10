@@ -186,3 +186,17 @@
   is created behind their back.
 - The Paperwork loop is complete: drop → understand → reply → print →
   never miss the deadline. 14 unit tests; 194 checks green.
+
+### Cycle 14 — Arabic depth + 🌐 Translate first-class (2026-06-11)
+- Deadline extractor now reads dates the way Arabic documents write
+  them: Arabic-Indic ٠-٩ / Eastern ۰-۹ digit normalization, and HIJRI
+  dates (numeric forms, with/without هـ/AH, both slot orders) converted
+  via tabular Islamic→Gregorian arithmetic (±1 day — fine for a 3-days-
+  early reminder). ١٤٤٧/١٢/١٥ هـ in a government letter now sets a
+  correct Gregorian reminder. 7 more unit tests (201 checks).
+- AR paperwork starter deepened: dialect/officialese → clear simple
+  fusha; Hijri deadlines stated in both calendars.
+- 🌐 "Translate this" is a welcome-screen quick-start (the #1 everyday
+  need the reality-check critic said must not be buried): paste/type/
+  drop anything → translated into the UI language, with reply-back
+  translation when the user pastes their answer. EN/中文/العربية.
