@@ -13351,7 +13351,34 @@ footer a { color: var(--accent); text-decoration: none; }
           out.push({ role, content })
         }
       }
-      return out
+      return _capHistory(out)
+    }
+
+    // v0.8 cycle 33: history budget. The whole conversation was re-sent on
+    // every turn with no ceiling — the dominant token cost on long sessions
+    // (and a cause of provider context-limit errors). Keep the most recent
+    // turns within a generous char budget (~60k tokens); if older turns are
+    // dropped, lead with a one-line note so the model knows context was
+    // trimmed. Normal sessions are untouched.
+    const HISTORY_CHAR_BUDGET = 240000  // ~60k tokens — only huge sessions trim
+    function _capHistory(msgs) {
+      let total = 0
+      for (const m of msgs) total += (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length)
+      if (total <= HISTORY_CHAR_BUDGET || msgs.length <= 4) return msgs
+      // Walk from the newest, keeping turns until the budget is spent; always
+      // keep at least the last 4 turns even if individually large.
+      const kept = []
+      let used = 0
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const sz = (typeof msgs[i].content === 'string' ? msgs[i].content.length : JSON.stringify(msgs[i].content).length)
+        if (used + sz > HISTORY_CHAR_BUDGET && kept.length >= 4) break
+        kept.unshift(msgs[i]); used += sz
+      }
+      const dropped = msgs.length - kept.length
+      if (dropped > 0) {
+        kept.unshift({ role: 'user', content: `[Note: ${dropped} earlier message(s) in this long conversation were trimmed to stay within context limits and save tokens. Ask me to re-share anything older if you need it.]` })
+      }
+      return kept
     }
 
 

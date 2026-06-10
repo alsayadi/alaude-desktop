@@ -322,3 +322,15 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   ~80 tokens when it does appear). Fixture asserts it's absent without
   intent. Cumulative with cycle 31: always-on prompt ~1,380 → ~540 tokens
   per message (~60% off), no behavior change.
+
+### Cycle 33 — conversation history budget (2026-06-10)
+- Found the bigger cost lever: sanitizeHistoryForApi re-sent the ENTIRE
+  conversation every turn with no ceiling — on long sessions that dwarfs
+  the (now-trimmed) system prompt and triggers provider context-limit
+  errors. Added _capHistory: a ~60k-token (240k-char) budget that keeps the
+  most recent turns, always ≥4, and leads with a one-line trim note when
+  older turns are dropped. Normal sessions untouched; huge ones stop
+  bleeding tokens. Pairs with cycle 9's context-limit error humanizer.
+- Prompt-trim live dogfood deferred (static review only — the compressed
+  ask block retains capability + schema + every hard rule; behavior risk
+  low) in favor of this larger lever.
