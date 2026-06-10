@@ -6863,6 +6863,8 @@
 
       <div data-i18n="routines.your" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
       <div id="routines-list"></div>
+      <div data-i18n="routines.recentRuns" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px">Recent runs</div>
+      <div id="routines-history" style="font-size:12px;color:var(--text-dim)"></div>
     </div>
   </div>
 
@@ -8940,12 +8942,31 @@ SUMMARY:`
       document.getElementById('routine-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
 
+    async function refreshRoutinesHistory() {
+      const el = document.getElementById('routines-history')
+      if (!el) return
+      let runs = []
+      try { runs = await window.alaude.routinesHistory(20) || [] } catch {}
+      if (!runs.length) { el.innerHTML = `<div style="color:var(--text-faint)">${escapeHtml(t('routines.noRuns'))}</div>`; return }
+      el.innerHTML = runs.map(r => {
+        const icon = r.status === 'ok' ? '✅' : (r.status === 'timeout' ? '⏱️' : '❌')
+        const when = r.ts ? new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+        const preview = (r.resultPreview || '').replace(/\s+/g, ' ').slice(0, 110)
+        return `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span>${icon}</span>
+          <span style="color:var(--text);font-weight:600;white-space:nowrap">${escapeHtml(r.name || '')}</span>
+          <span style="color:var(--text-faint);font-size:10.5px;white-space:nowrap">${escapeHtml(when)}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(preview)}</span>
+        </div>`
+      }).join('')
+    }
     function toggleRoutinesModal() {
       const m = document.getElementById('routines-modal')
       const opening = !m.classList.contains('show')
       if (opening) {
         renderRoutineTemplates()
         refreshRoutinesList()
+        refreshRoutinesHistory()
         populateRoutineModelSelect()
         // Initialise the friendly schedule picker (shows/hides the time
         // input + custom-cron field based on the default selection) and
@@ -11518,6 +11539,8 @@ footer a { color: var(--accent); text-decoration: none; }
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
+        'routines.recentRuns': 'Recent runs',
+        'routines.noRuns': 'No runs yet — routines report here after they fire.',
         'login.detecting': 'Detecting provider from your key…',
         'login.detectFailed': "Couldn't identify this key — pick the provider from the list and try again.",
         'login.saving': 'saving…',
@@ -11787,6 +11810,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'routines.recentRuns': '近期运行',
+        'routines.noRuns': '还没有运行记录——例行任务触发后会在这里汇报。',
         'login.detecting': '正在根据密钥识别服务商…',
         'login.detectFailed': '无法识别此密钥——请从列表中选择服务商后重试。',
         'login.saving': '保存中…',
@@ -12041,6 +12066,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'routines.recentRuns': 'عمليات التشغيل الأخيرة',
+        'routines.noRuns': 'لا سجلّ بعد — تظهر نتائج المهام هنا بعد تشغيلها.',
         'login.detecting': 'جارٍ التعرّف على المزوّد من المفتاح…',
         'login.detectFailed': 'تعذّر التعرّف على هذا المفتاح — اختر المزوّد من القائمة وأعد المحاولة.',
         'login.saving': 'جارٍ الحفظ…',

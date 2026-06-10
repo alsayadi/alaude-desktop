@@ -153,3 +153,9 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   parent walk), and merges them as 📥-prefixed sessions. Converter is a
   pure module (electron/import-chatgpt.js) with 5 unit tests. Switching
   cost is THE adoption barrier for the target user — this lowers it.
+
+### Cycle 12 — routine run history (2026-06-10)
+- Routines modal gains a "Recent runs" section (last 20, status icon, time,
+  preview) backed by routines.history() reading the ndjson tail + a
+  routines-history IPC. Builds trust that scheduled work actually ran.
+- Honest skip: session export (markdown + HTML) already existed in ⌘K.

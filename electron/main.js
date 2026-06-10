@@ -1272,6 +1272,7 @@ ipcMain.handle('routines-list', () => routines.list())
 ipcMain.handle('routines-upsert', (_e, routine) => routines.upsert(routine))
 ipcMain.handle('routines-remove', (_e, id) => { routines.remove(id); return true })
 ipcMain.handle('routines-set-enabled', (_e, id, enabled) => routines.setEnabled(id, enabled))
+ipcMain.handle('routines-history', (_e, limit) => routines.history(limit))
 
 // ── IPC: folder-skills (v0.7.67) ─────────────────────────────────────────
 // Filesystem-discovered skill templates from ~/.labaik/skills/<slug>/SKILL.md.

@@ -128,6 +128,21 @@ function recordRun(id, { status, resultPreview }) {
   } catch {}
 }
 
+/**
+ * Recent run history — newest first. Reads the tail of the ndjson log so a
+ * year of runs doesn't get parsed for a 30-row view.
+ */
+function history(limit = 30) {
+  try {
+    if (!fs.existsSync(HISTORY_FILE)) return []
+    const raw = fs.readFileSync(HISTORY_FILE, 'utf8')
+    const lines = raw.split('\n').filter(Boolean).slice(-limit)
+    const out = []
+    for (const l of lines) { try { out.push(JSON.parse(l)) } catch {} }
+    return out.reverse()
+  } catch { return [] }
+}
+
 // ── Tiny cron parser ───────────────────────────────────────────────────────
 // Supports standard 5-field format (min hour dom mon dow) with:
 //   • literal numbers
@@ -234,7 +249,7 @@ function stopScheduler() {
 }
 
 module.exports = {
-  list, upsert, remove, setEnabled, recordRun,
+  list, upsert, remove, setEnabled, recordRun, history,
   startScheduler, stopScheduler,
   _parseCron, _nextFire,  // exposed for tests
 }
