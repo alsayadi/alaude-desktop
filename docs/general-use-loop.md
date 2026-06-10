@@ -18,8 +18,8 @@ Coding bias found (backlog, highest leverage first):
 2. ~~Folder skills onboarding is dev-flavored — one-click starter skills~~ → fixed cycle 2
 3. ~~`/explain` snippet assumes a dev~~ → fixed cycle 2 (new installs only; body
    edits don't propagate through the seen-merge, by design)
-4. **Routines modal templates** could add: medication reminder, language practice,
-   meal plan, bill/renewal reminders.
+4. ~~Routines modal templates: everyday-life additions~~ → fixed cycle 3
+   (meal plan still a candidate)
 5. **Spaces**: only Health is a rich non-coding space — candidates: Writing,
    Learning/Tutor, Travel, Finance-literacy (no advice).
 6. **Attachment ergonomics**: @ mentions need an open workspace; general users
@@ -40,5 +40,13 @@ Coding bias found (backlog, highest leverage first):
   folder-skills.js; installable via command palette → "Install starter
   skills". Idempotent — user-edited starters never overwritten.
 - /explain rewritten for any topic, not "experienced developer" framing.
-- Next candidates: routine templates (medication reminder, language practice,
-  bills); non-coding Spaces; attachment ergonomics; dev-jargon string sweep.
+
+### Cycle 3 — onboarding de-jargoned + life routines (2026-06-10)
+- Memory onboarding no longer assumes a developer: "Main stack / languages /
+  frameworks?" → "What do you work on or care about?", coding-preference
+  placeholders → answer-style preferences. Updated in EN/中文/العربية (dicts +
+  inline HTML fallbacks).
+- 3 everyday-life routine templates: 💊 medication reminder, 🗣️ language
+  practice, 💳 weekly bills & renewals check.
+- Next candidates: non-coding Spaces (Writing, Learning/Tutor, Travel);
+  attachment ergonomics (PDF/doc without a workspace); meal-plan routine.

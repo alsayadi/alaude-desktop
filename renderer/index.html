@@ -6433,7 +6433,7 @@
   <div class="modal-overlay" id="profile-onboard-modal">
     <div class="modal" style="max-width:540px;width:92vw">
       <h2 style="margin-bottom:4px" data-i18n="onboard.title">👋 Teach Labaik about you</h2>
-      <div data-i18n="onboard.intro" style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.</div>
+      <div data-i18n="onboard.intro" style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">A few facts go a long way. These ship with every conversation, so Labaik stops re-asking who you are, what you work on, and how you like answers. Skippable — you can add or edit anything later in Memory Lens.</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <!-- v0.7.71: each label wraps the input, but data-i18n on the
              <label> would clobber the <input> child. So we use a
@@ -6441,14 +6441,14 @@
         <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q1">👤 What should Labaik call you?</span>
           <input id="onb-name" type="text" placeholder="Ahmed" maxlength="100" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q2">🛠️ Main stack / languages / frameworks?</span>
-          <input id="onb-tools" type="text" placeholder="Electron, JavaScript, Python" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q2">🛠️ What do you work on or care about?</span>
+          <input id="onb-tools" type="text" placeholder="Marketing at a startup — or: Electron, JavaScript" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q3">💡 A coding preference or two?</span>
-          <input id="onb-prefs" type="text" data-i18n-attr="placeholder:onboard.q3.placeholder" placeholder="Prefer async/await, avoid classes when possible" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q3">💡 How do you like your answers?</span>
+          <input id="onb-prefs" type="text" data-i18n-attr="placeholder:onboard.q3.placeholder" placeholder="Short and direct. Examples over theory." maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
         <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q4">📌 Anything else I should always know?</span>
-          <textarea id="onb-context" data-i18n-attr="placeholder:onboard.q4.placeholder" placeholder="I'm building a desktop AI app. Timezone UTC+3." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+          <textarea id="onb-context" data-i18n-attr="placeholder:onboard.q4.placeholder" placeholder="Teacher, two kids, timezone UTC+3. Learning Spanish." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
         </label>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
@@ -8700,6 +8700,13 @@ SUMMARY:`
         prompt: 'Check the status page at https://status.mysite.com. If anything is not "operational", tell me with a short reason.' },
       { icon: '✍️', name: 'Writing prompt', cron: '0 7 * * *',
         prompt: 'Give me one interesting writing prompt for today. Vary the genre (essay, short story, journal, reflection).' },
+      // v0.8 general-use additions — everyday-life routines, not just work.
+      { icon: '💊', name: 'Medication reminder', cron: '0 9 * * *',
+        prompt: 'Remind me to take my morning medication. One line, friendly. If I told you the names earlier in my profile or memory, list them; otherwise just the reminder.' },
+      { icon: '🗣️', name: 'Language practice', cron: '0 19 * * *',
+        prompt: "Give me today's 5-minute language practice: 5 useful phrases with pronunciation hints, 1 mini dialogue using them, and quiz me on yesterday's phrases if you remember them. Use the language from my profile; if none is set, ask once." },
+      { icon: '💳', name: 'Bills & renewals check', cron: '0 10 * * 1',
+        prompt: 'Weekly money check-in: remind me to glance at upcoming bills, subscriptions, and renewals this week. List the recurring ones I have mentioned before (from memory), and ask if anything new should be tracked.' },
     ]
     function renderRoutineTemplates() {
       const container = document.getElementById('routines-templates')
@@ -11338,13 +11345,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.off.title': 'Turn off plan mode',
         // Onboarding modal
         'onboard.title': '👋 Teach Labaik about you',
-        'onboard.intro': "A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.",
+        'onboard.intro': "A few facts go a long way. These ship with every conversation, so Labaik stops re-asking who you are, what you work on, and how you like answers. Skippable — you can add or edit anything later in Memory Lens.",
         'onboard.q1': '👤 What should Labaik call you?',
-        'onboard.q2': '🛠️ Main stack / languages / frameworks?',
-        'onboard.q3': '💡 A coding preference or two?',
-        'onboard.q3.placeholder': 'Prefer async/await, avoid classes when possible',
+        'onboard.q2': '🛠️ What do you work on or care about?',
+        'onboard.q3': '💡 How do you like your answers?',
+        'onboard.q3.placeholder': 'Short and direct. Examples over theory.',
         'onboard.q4': '📌 Anything else I should always know?',
-        'onboard.q4.placeholder': "I'm building a desktop AI app. Timezone UTC+3.",
+        'onboard.q4.placeholder': 'Teacher, two kids, timezone UTC+3. Learning Spanish.',
         'onboard.skip': 'Skip',
         'onboard.save': 'Save & continue',
         // Memory Lens
@@ -11596,13 +11603,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.body': 'Labaik 将先写出方案 —— 不调用工具、不改文件。发送请求开始。',
         'plan.banner.off.title': '关闭方案模式',
         'onboard.title': '👋 让 Labaik 认识你',
-        'onboard.intro': '几条事实就够了。这些信息会随每次对话发送，让 Labaik 不再反复询问你的技术栈、偏好或正在做的事。可跳过 —— 之后随时在「记忆」里添加或修改。',
+        'onboard.intro': '几条事实就够了。这些信息会随每次对话发送，让 Labaik 不再反复询问你是谁、在做什么、喜欢怎样的回答。可跳过 —— 之后随时在「记忆」里添加或修改。',
         'onboard.q1': '👤 Labaik 该怎么称呼你？',
-        'onboard.q2': '🛠️ 主要技术栈 / 语言 / 框架？',
-        'onboard.q3': '💡 一两条编码偏好？',
-        'onboard.q3.placeholder': '偏好 async/await，尽量避免使用 class',
+        'onboard.q2': '🛠️ 你的工作或关注的领域？',
+        'onboard.q3': '💡 你喜欢什么样的回答？',
+        'onboard.q3.placeholder': '简短直接，多举例子少讲理论',
         'onboard.q4': '📌 还有什么希望我始终记住的？',
-        'onboard.q4.placeholder': '我在做一个桌面 AI 应用。时区 UTC+3。',
+        'onboard.q4.placeholder': '教师，两个孩子，时区 UTC+3，正在学西班牙语。',
         'onboard.skip': '跳过',
         'onboard.save': '保存并继续',
         'memory.title': '🧠 记忆视图',
@@ -11835,13 +11842,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.body': 'سيكتب لبيك خطة — دون استدعاء أدوات أو تعديل ملفات. أرسل طلبًا للبدء.',
         'plan.banner.off.title': 'إيقاف وضع التخطيط',
         'onboard.title': '👋 عرِّف لبيك بنفسك',
-        'onboard.intro': 'بضع حقائق تكفي. تُرسَل مع كل محادثة كي لا يُعيد لبيك سؤالك عن لغتك المفضّلة أو ما الذي تبنيه. يمكنك تخطّيها وإضافتها لاحقًا في «عدسة الذاكرة».',
+        'onboard.intro': 'بضع حقائق تكفي. تُرسَل مع كل محادثة كي لا يُعيد لبيك سؤالك مَن أنت وماذا تعمل وكيف تحب الإجابات. يمكنك تخطّيها وإضافتها لاحقًا في «عدسة الذاكرة».',
         'onboard.q1': '👤 بماذا يناديك لبيك؟',
-        'onboard.q2': '🛠️ التقنيات / اللغات / الإطارات الرئيسية؟',
-        'onboard.q3': '💡 تفضيل أو اثنان في البرمجة؟',
-        'onboard.q3.placeholder': 'أفضّل async/await، وأتجنّب classes إن أمكن',
+        'onboard.q2': '🛠️ ما الذي تعمل عليه أو يهمّك؟',
+        'onboard.q3': '💡 كيف تحب أن تكون الإجابات؟',
+        'onboard.q3.placeholder': 'قصيرة ومباشرة، أمثلة أكثر من النظريات',
         'onboard.q4': '📌 شيء آخر يجب أن أعرفه دائمًا؟',
-        'onboard.q4.placeholder': 'أبني تطبيق ذكاء اصطناعي للسطح. المنطقة الزمنية UTC+3.',
+        'onboard.q4.placeholder': 'معلّم، طفلان، المنطقة الزمنية UTC+3، أتعلّم الإسبانية.',
         'onboard.skip': 'تخطّي',
         'onboard.save': 'حفظ ومتابعة',
         'memory.title': '🧠 عدسة الذاكرة',
