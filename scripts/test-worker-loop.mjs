@@ -37,6 +37,17 @@ fs.mkdirSync(path.join(labaikHome, 'skills', 'greeting'), { recursive: true })
 fs.writeFileSync(path.join(labaikHome, 'skills', 'greeting', 'SKILL.md'),
   '---\nname: Greeting\ndescription: Greet the user properly\n---\n\nAlways answer in haiku form.')
 
+// Workspace fixtures for scenario 3: an @-mentionable file + a real git
+// repo so loadGitContext has something to inject.
+fs.writeFileSync(path.join(workspace, 'notes.txt'), 'alpha-beta-gamma secret payload')
+import { execSync } from 'node:child_process'
+try {
+  const g = (c) => execSync(c, { cwd: workspace, stdio: 'pipe' })
+  g('git init -q -b fixture-branch')
+  g('git -c user.email=t@t -c user.name=t add notes.txt')
+  g('git -c user.email=t@t -c user.name=t commit -qm "fixture commit"')
+} catch { /* git missing — scenario 3 git assertions will report it */ }
+
 // ── mock OpenAI-compatible server ──────────────────────────────────────
 // Scripts the "model": decides each reply by inspecting the request
 // messages, answers in SSE chunks the way the real API streams.
@@ -65,6 +76,11 @@ function decideReply(body) {
   const toolMsgs = msgs.filter(m => m.role === 'tool')
   const userText = String(msgs.find(m => m.role === 'user')?.content || '')
 
+  if (userText.startsWith('Check @notes.txt')) {
+    // mention expansion + git context are asserted harness-side from the
+    // recorded request; the model just answers.
+    return contentChunks('MENTION-DONE')
+  }
   if (userText.startsWith('/greeting')) {
     if (!toolMsgs.length) return toolCallChunks('use_skill', { slug: 'greeting' })
     const got = String(toolMsgs[0].content || '')
@@ -178,6 +194,18 @@ try {
     sysText.includes('## Skills') && sysText.includes('greeting') && sysText.includes('Greet the user properly'))
   check('system prompt does NOT include the skill body (selective loading)',
     !sysText.includes('Always answer in haiku form'))
+
+  // ═══ Scenario 3: @-mention expansion + git context injection ═══
+  console.log('\n[3/3] @-mentions + git context')
+  const r3 = await chat(3, 'Check @notes.txt and @missing.txt and @../escape.txt please')
+  check('chat with mentions completed', typeof r3.result === 'string' && r3.result.startsWith('MENTION-DONE'), JSON.stringify(r3).slice(0, 200))
+  const mReq = requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').includes('Check @notes.txt'))
+  const userMsg = String(mReq?.body?.messages?.find(m => m.role === 'user')?.content || '')
+  check('mentioned file contents auto-attached', userMsg.includes('alpha-beta-gamma secret payload') && userMsg.includes('Referenced files'))
+  check('missing file left as plain text (no block)', !userMsg.includes('### @missing.txt'))
+  check('path-escape mention NOT expanded', !userMsg.includes('### @../escape.txt'))
+  const mSys = String(mReq?.body?.messages?.[0]?.content || '')
+  check('git context injected (branch + commit)', mSys.includes('## Git status') && mSys.includes('fixture-branch') && mSys.includes('fixture commit'))
 } catch (err) {
   check('fixture ran to completion', false, err.message)
 } finally {
