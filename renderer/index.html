@@ -16429,10 +16429,18 @@ Title:`
   body{padding:12px}
 </style></head><body>${code}</body></html>`
           }
+          // v0.8 fix: encode newlines as &#10;. The artifact HTML lands in
+          // the message string BEFORE the paragraph-wrapper (step 7), which
+          // splits on \n\n — the infographic's blank lines let it slice
+          // through this srcdoc attribute and inject <p class="md-p"> tags,
+          // whose literal quotes truncated the attribute → blank preview.
+          // &#10; keeps real newlines in the rendered doc while leaving no
+          // \n\n in the source for the splitter to break on.
           const srcdoc = wrapped
             .replace(/&/g, '&amp;')
             .replace(/"/g, '&quot;')
-          const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\n/g, '&#10;')
+          const escCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;')
           // v0.7.72 OODA cycle 4: trimmed artifact chrome.
           //   "✨ HTML Artifact · sandboxed" → "✨ Live preview"
           //     ("sandboxed" is an implementation detail; the lock icon
