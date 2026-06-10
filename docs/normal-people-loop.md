@@ -117,3 +117,13 @@
 - Tooltip discloses "uses your OpenAI key" (privacy honesty). Full
   error taxonomy + all strings in EN/中文/العربية. 175 checks green.
   Voice arc remaining: Gemini route, dictation QA, tests, local engine.
+
+### Cycle 9 — Gemini STT route (2026-06-11)
+- `transcribeGemini()`: inline-audio generateContent on the app's
+  default flash model (temperature 0, transcribe-verbatim instruction,
+  locale hint). Google-key-only users can now dictate. Same friendly
+  error taxonomy; key goes in the x-goog-api-key header.
+- Renderer capability mirrors voice.js routing (openai preferred,
+  google fallback) and the mic tooltip now names the actual provider
+  ("uses your {OpenAI|Google} key"). no-backend message updated ×3
+  locales. 5 hermetic route tests — 180 checks green.

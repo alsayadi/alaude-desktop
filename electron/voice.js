@@ -42,7 +42,7 @@ async function transcribe({ buffer, mime, lang, getApiKey, _fetch }) {
   const backend = pickBackend(getApiKey)
   if (!backend) return { error: 'no-backend' }
   if (backend === 'openai') return transcribeOpenAI({ buffer, mime, lang, key: getApiKey('openai'), _fetch })
-  if (backend === 'google') return { error: 'backend-pending' } // Gemini route lands in cycle 9
+  if (backend === 'google') return transcribeGemini({ buffer, mime, lang, key: getApiKey('google'), _fetch })
   return { error: 'no-backend' }
 }
 
@@ -80,4 +80,49 @@ async function transcribeOpenAI({ buffer, mime, lang, key, _fetch }) {
   }
 }
 
-module.exports = { transcribe, pickBackend, MAX_AUDIO_BYTES }
+// Gemini inline-audio transcription (cycle 9) — the fallback for users
+// whose only key is Google. Uses the app's default flash model with
+// temperature 0 and a transcribe-verbatim instruction; the response's
+// text parts ARE the transcript. webm/opus is accepted by the Gemini
+// API in practice; a rejected payload surfaces as stt-http-400 rather
+// than failing silently.
+const GEMINI_STT_MODEL = 'gemini-3-flash-preview'
+async function transcribeGemini({ buffer, mime, lang, key, _fetch }) {
+  const doFetch = _fetch || fetch
+  try {
+    const instruction = 'Transcribe this audio recording verbatim.' +
+      (lang && /^[a-z]{2}$/i.test(lang) ? ` The speaker is most likely speaking "${lang.toLowerCase()}".` : '') +
+      ' Output ONLY the spoken words as plain text — no labels, no quotes, no commentary. If there is no speech, output nothing.'
+    const res = await doFetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_STT_MODEL}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { text: instruction },
+            { inline_data: { mime_type: mime || 'audio/webm', data: Buffer.from(buffer).toString('base64') } },
+          ] }],
+          generationConfig: { temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(45000),
+      },
+    )
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) return { error: 'key-rejected' }
+      if (res.status === 429) return { error: 'rate-limited' }
+      const detail = await res.text().then(s => s.slice(0, 200)).catch(() => '')
+      return { error: 'stt-http-' + res.status, detail }
+    }
+    const data = await res.json()
+    const parts = data?.candidates?.[0]?.content?.parts || []
+    const text = parts.map(p => p?.text || '').join('').trim()
+    if (!text) return { error: 'no-speech' }
+    return { text, backend: 'google' }
+  } catch (err) {
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return { error: 'stt-timeout' }
+    return { error: 'stt-network', detail: String(err?.message || err).slice(0, 200) }
+  }
+}
+
+module.exports = { transcribe, pickBackend, MAX_AUDIO_BYTES, GEMINI_STT_MODEL }

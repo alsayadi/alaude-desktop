@@ -9303,13 +9303,18 @@ SUMMARY:`
     let VOICE_ENABLED = false
     const CONVERSATION_MODE = false
     function refreshVoiceCapability(statuses) {
-      // openai only until the Gemini route ships (voice.js cycle 9).
-      const can = !!statuses && statuses.openai === 'set'
-      VOICE_ENABLED = can
+      // Mirror of voice.js pickBackend: openai preferred, google fallback.
+      const backend = !statuses ? null
+        : statuses.openai === 'set' ? 'OpenAI'
+        : statuses.google === 'set' ? 'Google'
+        : null
+      VOICE_ENABLED = !!backend
       const mic = document.getElementById('mic-btn')
       if (mic) {
-        mic.style.display = can ? '' : 'none'
-        mic.title = t('voice.micTitle')
+        mic.style.display = backend ? '' : 'none'
+        // Honest disclosure: the tooltip names exactly whose servers hear
+        // the recording (the user's own key, never ours).
+        if (backend) mic.title = t('voice.micTitle').replace('{provider}', backend)
       }
     }
 
@@ -11874,13 +11879,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': 'Nothing to undo',
         'undo.done': 'Put back {n} file(s)',
         'undo.skipped': '{n} too large to undo',
-        'voice.micTitle': 'Voice input — uses your OpenAI key (hold Space to talk)',
+        'voice.micTitle': 'Voice input — uses your {provider} key (hold Space to talk)',
         'voice.listening': 'Listening… release Space to send',
         'voice.listeningClick': 'Listening… click 🎤 or press Esc to stop',
         'voice.transcribing': 'Transcribing…',
         'voice.micDenied': '🎤 Microphone blocked — System Settings → Privacy & Security → Microphone, then try again',
         'voice.convSoon': '🗣️ Voice conversation mode is coming soon',
-        'voice.err.no-backend': '🎤 Voice needs an OpenAI key — add one in API Keys',
+        'voice.err.no-backend': '🎤 Voice needs an OpenAI or Google key — add one in API Keys',
         'voice.err.key-rejected': '🔑 Your OpenAI key was rejected — check it in API Keys',
         'voice.err.rate-limited': '⏳ OpenAI is rate-limiting — try again in a moment',
         'voice.err.no-speech': '🎤 Didn’t catch anything',
@@ -12171,13 +12176,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': '没有可撤销的更改',
         'undo.done': '已恢复 {n} 个文件',
         'undo.skipped': '{n} 个文件过大，无法撤销',
-        'voice.micTitle': '语音输入——使用你的 OpenAI 密钥（按住空格说话）',
+        'voice.micTitle': '语音输入——使用你的 {provider} 密钥（按住空格说话）',
         'voice.listening': '正在聆听……松开空格键发送',
         'voice.listeningClick': '正在聆听……点击 🎤 或按 Esc 停止',
         'voice.transcribing': '正在转写……',
         'voice.micDenied': '🎤 麦克风被禁用——请在「系统设置 → 隐私与安全性 → 麦克风」中允许后重试',
         'voice.convSoon': '🗣️ 语音对话模式即将推出',
-        'voice.err.no-backend': '🎤 语音需要 OpenAI 密钥——请在 API 密钥中添加',
+        'voice.err.no-backend': '🎤 语音需要 OpenAI 或 Google 密钥——请在 API 密钥中添加',
         'voice.err.key-rejected': '🔑 你的 OpenAI 密钥被拒绝——请检查 API 密钥',
         'voice.err.rate-limited': '⏳ OpenAI 正在限流——请稍后再试',
         'voice.err.no-speech': '🎤 没有听到任何内容',
@@ -12468,13 +12473,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': 'لا شيء للتراجع عنه',
         'undo.done': 'أُعيد {n} ملف(ات)',
         'undo.skipped': '{n} أكبر من أن يُتراجع عنه',
-        'voice.micTitle': 'إدخال صوتي — يستخدم مفتاح OpenAI الخاص بك (اضغط مطوّلًا على المسافة للتحدث)',
+        'voice.micTitle': 'إدخال صوتي — يستخدم مفتاح {provider} الخاص بك (اضغط مطوّلًا على المسافة للتحدث)',
         'voice.listening': 'يستمع… حرِّر مسطرة المسافة للإرسال',
         'voice.listeningClick': 'يستمع… انقر 🎤 أو اضغط Esc للتوقف',
         'voice.transcribing': 'يحوِّل الكلام إلى نص…',
         'voice.micDenied': '🎤 الميكروفون محظور — إعدادات النظام ← الخصوصية والأمان ← الميكروفون، ثم أعد المحاولة',
         'voice.convSoon': '🗣️ وضع المحادثة الصوتية قادم قريبًا',
-        'voice.err.no-backend': '🎤 الصوت يحتاج مفتاح OpenAI — أضِفه في مفاتيح API',
+        'voice.err.no-backend': '🎤 الصوت يحتاج مفتاح OpenAI أو Google — أضِفه في مفاتيح API',
         'voice.err.key-rejected': '🔑 رُفض مفتاح OpenAI — تحقَّق منه في مفاتيح API',
         'voice.err.rate-limited': '⏳ OpenAI يحدُّ من الطلبات — حاول بعد قليل',
         'voice.err.no-speech': '🎤 لم أسمع شيئًا',

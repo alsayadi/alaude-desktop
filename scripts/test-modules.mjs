@@ -587,6 +587,21 @@ console.log('\n[15/15] voice — STT backend routing + input guards')
   check('blank transcript → no-speech', r6.error === 'no-speech')
   const r7 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }), _fetch: async () => { throw new Error('ENOTFOUND api.openai.com') } })
   check('network failure → stt-network', r7.error === 'stt-network')
+
+  // Gemini route (cycle 9) — google-key-only users can speak too.
+  let gcap = null
+  const gFetch = async (url, opts) => {
+    gcap = { url, body: JSON.parse(opts.body), headers: opts.headers }
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: ' 你好' }, { text: '世界 ' }] } }] }) }
+  }
+  const g1 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', lang: 'zh', getApiKey: keys({ google: 'g-key' }), _fetch: gFetch })
+  check('gemini success → joined trimmed text + backend', g1.text === '你好世界' && g1.backend === 'google')
+  check('gemini hits generateContent with key header', gcap.url.includes(voice.GEMINI_STT_MODEL + ':generateContent') && gcap.headers['x-goog-api-key'] === 'g-key')
+  check('gemini payload carries inline audio + temp 0', !!gcap.body.contents[0].parts[1].inline_data.data && gcap.body.generationConfig.temperature === 0)
+  const g2 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ google: 'g' }), _fetch: async () => ({ ok: false, status: 403, text: async () => '' }) })
+  check('gemini 403 → key-rejected', g2.error === 'key-rejected')
+  const g3 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ google: 'g' }), _fetch: async () => ({ ok: true, json: async () => ({ candidates: [] }) }) })
+  check('gemini empty candidates → no-speech', g3.error === 'no-speech')
 }
 
 // ═══════════════════════════════════════════════════════════════
