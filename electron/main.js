@@ -1500,6 +1500,13 @@ ipcMain.handle('system-info', async () => ({
   platform: process.platform,
 }))
 
+// v0.8 cycle 5 — one-click undo of agent file changes. The worker records
+// pre-images per chat turn (undo-snapshots.js); these expose them to the
+// renderer's "Undo" chip and the ⌘K action.
+const undoSnaps = require('./undo-snapshots')
+ipcMain.handle('undo-list-turns', async () => undoSnaps.listTurns())
+ipcMain.handle('undo-restore-turn', async (_e, turnId) => undoSnaps.restoreTurn(turnId))
+
 ipcMain.handle('ollama-pull', async (event, model) => {
   if (!model || typeof model !== 'string') throw new Error('Model name required')
   if (activePulls.has(model)) throw new Error(`Already pulling ${model}`)

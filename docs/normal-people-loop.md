@@ -65,3 +65,16 @@
 - Wired into the worker's write_file (never blocks the write). 7 unit
   tests — 161 checks total. The Cowork-11GB lesson: reversibility, not
   approval dialogs, is the trust unlock. UI lands next cycle.
+
+### Cycle 5 — Undo v2: one-click rewind UI (2026-06-11)
+- After any turn where the agent wrote files, a dismissible chip
+  appears: "The AI changed N file(s) — Undo". One click restores every
+  file from that turn's pre-images (created files deleted), reports
+  "Put back N file(s)" (+ too-large skips), refreshes the file panel,
+  and logs `undo_turn`.
+- Same action in ⌘K: "Undo last file changes" — works any time within
+  the 20-turn / 7-day snapshot retention window.
+- New IPC pair `undo-list-turns` / `undo-restore-turn` (auto-covered by
+  the bridge audit). Chip reuses the routine-nudge styling. All copy in
+  EN/中文/العربية. 161 checks green. Bet 2's undo half is now LIVE
+  end-to-end: snapshot → chip → byte-identical restore.

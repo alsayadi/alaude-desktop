@@ -4037,19 +4037,19 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
-    #routine-nudge {
+    #routine-nudge, #undo-chip {
       position: fixed; bottom: 86px; left: 50%; transform: translateX(-50%) translateY(6px);
       display: flex; align-items: center; gap: 10px; z-index: 800;
       background: var(--bg-input); border: 1px solid var(--green); border-radius: 12px;
       padding: 10px 14px; font-size: 12.5px; color: var(--text); opacity: 0;
       box-shadow: 0 6px 24px rgba(0,0,0,0.22); transition: opacity 0.3s, transform 0.3s; max-width: 90vw;
     }
-    #routine-nudge.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    #routine-nudge .nudge-yes {
+    #routine-nudge.show, #undo-chip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #routine-nudge .nudge-yes, #undo-chip .nudge-yes {
       background: var(--green); color: #fff; border: none; border-radius: 7px;
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
-    #routine-nudge .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    #routine-nudge .nudge-close, #undo-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
     #cmdk-hint {
       position: fixed; bottom: 86px; right: 18px; z-index: 800;
       display: flex; align-items: center; gap: 8px;
@@ -7536,6 +7536,44 @@
       } catch {}
     }
 
+    // v0.8 cycle 5 — reversibility surfaced. When a turn wrote files, a
+    // dismissible chip offers one-click undo; the same action lives in ⌘K
+    // ("Undo last file changes"). Restores come from the pre-image
+    // snapshots the worker records per turn (electron/undo-snapshots.js).
+    function maybeOfferUndo(fileCount) {
+      try {
+        document.getElementById('undo-chip')?.remove()
+        const el = document.createElement('div')
+        el.id = 'undo-chip'
+        el.innerHTML = `<span>${escapeHtml(t('undo.chip').replace('{n}', String(fileCount)))}</span>
+          <button class="nudge-yes">${escapeHtml(t('undo.btn'))}</button>
+          <span class="nudge-close">×</span>`
+        el.querySelector('.nudge-yes').onclick = () => { el.remove(); undoLastAgentTurn() }
+        el.querySelector('.nudge-close').onclick = () => el.remove()
+        document.body.appendChild(el)
+        requestAnimationFrame(() => el.classList.add('show'))
+        setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400) }, 15000)
+      } catch {}
+    }
+
+    async function undoLastAgentTurn() {
+      try {
+        const turns = await window.alaude.undoListTurns()
+        if (!Array.isArray(turns) || !turns.length) { showRewindToast?.('↩︎ ' + t('undo.none'), false); return }
+        const r = await window.alaude.undoRestoreTurn(turns[0].turnId)
+        if (r?.error) { showRewindToast?.('↩︎ ' + r.error, true); return }
+        const n = (r.restored?.length || 0) + (r.deleted?.length || 0)
+        let msg = t('undo.done').replace('{n}', String(n))
+        if (r.skipped?.length) msg += ' · ' + t('undo.skipped').replace('{n}', String(r.skipped.length))
+        if (r.errors?.length) msg += ' · ⚠️ ' + r.errors.length
+        showRewindToast?.('↩︎ ' + msg, false)
+        logUx({ kind: 'undo_turn', files: n })
+        refreshWorkspaceFiles?.()
+      } catch (e) {
+        showRewindToast?.('↩︎ ' + (e?.message || 'Undo failed'), true)
+      }
+    }
+
     function funnelMark(kind) {
       try {
         const KEY = 'alaude:funnel:' + kind
@@ -10609,6 +10647,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📁', label: 'Pick workspace folder', search: 'workspace folder', action: () => { closeCmdPalette(); pickWorkspace() } },
         { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
         { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
+        { kind: 'action', icon: '↩︎', label: 'Undo last file changes', search: 'undo revert restore rollback files agent', action: () => { closeCmdPalette(); undoLastAgentTurn() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
@@ -11821,6 +11860,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.rec.title': 'Recommended for your Mac',
         'lm.rec.why': 'Good everyday answers, speaks your language, runs free on this Mac.',
         'demo.first': 'Hi! I just installed you. In two or three short sentences: what can you help me with day to day? End with one fun example.',
+        'undo.chip': 'The AI changed {n} file(s)',
+        'undo.btn': 'Undo',
+        'undo.none': 'Nothing to undo',
+        'undo.done': 'Put back {n} file(s)',
+        'undo.skipped': '{n} too large to undo',
         'session.defaultTitle': 'New session',
         'tag.suggest.label': '🏷️ Tag this session?',
         'model.optgroup.local': 'Local (Ollama)',
@@ -12099,6 +12143,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.rec.title': '为你的 Mac 推荐',
         'lm.rec.why': '日常问答好帮手，支持中文，在这台 Mac 上免费运行。',
         'demo.first': '你好！我刚安装好你。用两三句话告诉我：你每天能帮我做什么？最后举一个有趣的例子。',
+        'undo.chip': 'AI 修改了 {n} 个文件',
+        'undo.btn': '撤销',
+        'undo.none': '没有可撤销的更改',
+        'undo.done': '已恢复 {n} 个文件',
+        'undo.skipped': '{n} 个文件过大，无法撤销',
         'session.defaultTitle': '新会话',
         'tag.suggest.label': '🏷️ 给会话加标签？',
         'model.optgroup.local': '本地 (Ollama)',
@@ -12377,6 +12426,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.rec.title': 'موصى به لجهازك',
         'lm.rec.why': 'إجابات يومية جيدة، يتحدث لغتك، ويعمل مجانًا على هذا الجهاز.',
         'demo.first': 'مرحبًا! ثبَّتُّك للتو. في جملتين أو ثلاث: بمَ يمكنك مساعدتي في حياتي اليومية؟ واختم بمثال واحد ممتع.',
+        'undo.chip': 'غيَّر الذكاء الاصطناعي {n} ملف(ات)',
+        'undo.btn': 'تراجع',
+        'undo.none': 'لا شيء للتراجع عنه',
+        'undo.done': 'أُعيد {n} ملف(ات)',
+        'undo.skipped': '{n} أكبر من أن يُتراجع عنه',
         'session.defaultTitle': 'جلسة جديدة',
         'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
         'model.optgroup.local': 'محلي (Ollama)',
@@ -13660,6 +13714,9 @@ footer a { color: var(--accent); text-decoration: none; }
           statsFinal: prev?.statsFinal,
           inputTokens: prev?.inputTokens,
         }
+        // v0.8 cycle 5 — if the agent changed files this turn, surface
+        // one-click undo right where the user is looking.
+        if (prev?.fileEdits?.length) maybeOfferUndo(prev.fileEdits.length)
       } catch (err) {
         console.error('[callAI] error:', err)
         const prev = target[target.length - 1]

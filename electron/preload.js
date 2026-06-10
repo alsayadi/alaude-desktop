@@ -181,6 +181,9 @@ contextBridge.exposeInMainWorld('alaude', {
   ollamaCatalog: () => ipcRenderer.invoke('ollama-catalog'),
   // v0.8 zero-key first-run: RAM/arch for hardware-honest model fit pills.
   systemInfo: () => ipcRenderer.invoke('system-info'),
+  // v0.8 cycle 5 — undo agent file changes (pre-image snapshots per turn).
+  undoListTurns: () => ipcRenderer.invoke('undo-list-turns'),
+  undoRestoreTurn: (turnId) => ipcRenderer.invoke('undo-restore-turn', turnId),
   ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
   ollamaCancel: (model) => ipcRenderer.invoke('ollama-cancel', model),
   ollamaRemove: (model) => ipcRenderer.invoke('ollama-remove', model),
