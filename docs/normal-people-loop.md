@@ -385,3 +385,13 @@
   (won't just give answers)" and ✅ "Check My Work" — both accept a
   photo of the exercise. Space description/placeholder now lead with
   homework. 234 checks green.
+
+### Cycle 29 — the panic path (2026-06-11)
+- A small always-there 🛟 button (bottom corner, RTL-aware via
+  inset-inline-end, larger + more visible in Easy mode) opens a
+  plain-words rescue menu for the moment of confusion: ⏹ stop what
+  it's doing · ↩︎ undo the AI's file changes · 🧹 fresh conversation
+  (nothing deleted) · ⚙️ Settings · ❓ what can Labaik do. Click-away
+  and Esc close it. Every action reuses an existing safe path — the
+  critic's "what does a confused person do?" gap closed.
+  EN/中文/العربية. 234 checks green.

@@ -4050,6 +4050,27 @@
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    /* v0.8 cycle 29 — panic path (🛟) */
+    #rescue-btn {
+      position: fixed; bottom: 16px; inset-inline-end: 16px; z-index: 850;
+      width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border);
+      background: var(--bg-input); font-size: 17px; cursor: pointer; padding: 0;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.14); opacity: 0.65; transition: opacity 0.2s, transform 0.2s;
+    }
+    #rescue-btn:hover { opacity: 1; transform: scale(1.08); }
+    html[data-easy="1"] #rescue-btn { width: 44px; height: 44px; font-size: 22px; opacity: 0.95; }
+    #rescue-menu {
+      position: fixed; bottom: 58px; inset-inline-end: 16px; z-index: 851;
+      display: none; flex-direction: column; gap: 2px; min-width: 280px;
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px;
+      padding: 6px; box-shadow: 0 10px 32px rgba(0,0,0,0.22);
+    }
+    #rescue-menu.show { display: flex; }
+    .rescue-item {
+      text-align: start; padding: 9px 12px; border: none; background: none;
+      border-radius: 8px; font: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+    }
+    .rescue-item:hover { background: var(--green-dim); }
     /* v0.8 cycle 27 — archived sessions section */
     .archived-head {
       padding: 8px 16px 6px; font-size: 11.5px; color: var(--text-faint);
@@ -6874,6 +6895,17 @@
       </h2>
       <div id="ux-body" class="ux-scroll"></div>
     </div>
+  </div>
+
+  <!-- v0.8 cycle 29 — the panic path: one visible 🛟 for the moment of
+       confusion. Plain words, safe actions, nothing destructive. -->
+  <button id="rescue-btn" onclick="toggleRescueMenu()" data-i18n-attr="title:rescue.title" title="Stuck? Click here" aria-label="Help — I'm stuck">🛟</button>
+  <div id="rescue-menu" role="menu">
+    <button class="rescue-item" onclick="closeRescueMenu(); stopGeneration()"><span data-i18n="rescue.stop">⏹ Stop what it's doing right now</span></button>
+    <button class="rescue-item" onclick="closeRescueMenu(); undoLastAgentTurn()"><span data-i18n="rescue.undo">↩︎ Undo the AI's last file changes</span></button>
+    <button class="rescue-item" onclick="closeRescueMenu(); newSession()"><span data-i18n="rescue.fresh">🧹 Start a fresh conversation (nothing is deleted)</span></button>
+    <button class="rescue-item" onclick="closeRescueMenu(); toggleSettingsHub()"><span data-i18n="rescue.settings">⚙️ Open Settings</span></button>
+    <button class="rescue-item" onclick="closeRescueMenu(); toggleWhatsInLabaik()"><span data-i18n="rescue.what">❓ What can Labaik do?</span></button>
   </div>
 
   <!-- v0.8 cycle 19 — Settings hub: the one front door (⌘,) -->
@@ -11948,6 +11980,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'archive.section': 'Archived',
         'archive.done': '🗂 Archived — find it at the bottom of the sidebar, or via search',
         'archive.restored': '↩ Back in your list',
+        'rescue.title': 'Stuck? Click here',
+        'rescue.stop': '⏹ Stop what it\'s doing right now',
+        'rescue.undo': '↩︎ Undo the AI\'s last file changes',
+        'rescue.fresh': '🧹 Start a fresh conversation (nothing is deleted)',
+        'rescue.settings': '⚙️ Open Settings',
+        'rescue.what': '❓ What can Labaik do?',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12347,6 +12385,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'archive.section': '已归档',
         'archive.done': '🗂 已归档——在侧栏底部或通过搜索找到它',
         'archive.restored': '↩ 已恢复到列表',
+        'rescue.title': '卡住了？点这里',
+        'rescue.stop': '⏹ 立即停止它正在做的事',
+        'rescue.undo': '↩︎ 撤销 AI 最近的文件改动',
+        'rescue.fresh': '🧹 开始新对话（什么都不会被删除）',
+        'rescue.settings': '⚙️ 打开设置',
+        'rescue.what': '❓ Labaik 能做什么？',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12722,6 +12766,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'archive.section': 'المؤرشفة',
         'archive.done': '🗂 أُرشف — تجده أسفل الشريط الجانبي أو عبر البحث',
         'archive.restored': '↩ عاد إلى قائمتك',
+        'rescue.title': 'عالق؟ انقر هنا',
+        'rescue.stop': '⏹ أوقف ما يفعله الآن',
+        'rescue.undo': '↩︎ تراجع عن آخر تغييرات الملفات',
+        'rescue.fresh': '🧹 ابدأ محادثة جديدة (لا يُحذف شيء)',
+        'rescue.settings': '⚙️ افتح الإعدادات',
+        'rescue.what': '❓ ماذا يستطيع لبيك أن يفعل؟',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -20354,6 +20404,23 @@ Title:`
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); toggleSettingsHub() }
     })
+
+    // ── v0.8 cycle 29 — panic path ──────────────────────────────────────
+    // The 🛟 menu: what a confused person needs at the moment of
+    // confusion, in plain words. Click-away and Esc both close it.
+    function toggleRescueMenu() {
+      document.getElementById('rescue-menu')?.classList.toggle('show')
+    }
+    function closeRescueMenu() {
+      document.getElementById('rescue-menu')?.classList.remove('show')
+    }
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('rescue-menu')
+      if (!menu?.classList.contains('show')) return
+      if (e.target.closest('#rescue-menu') || e.target.closest('#rescue-btn')) return
+      closeRescueMenu()
+    })
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRescueMenu() })
 
     // ── v0.8 cycle 26 — Easy mode ───────────────────────────────────────
     // One switch: ~18% bigger everything (CSS zoom — scales the px-based
