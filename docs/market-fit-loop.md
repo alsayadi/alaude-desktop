@@ -267,3 +267,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   hard-deleted), confirms first, then reloads so the UI matches disk.
   Credentials are deliberately NOT clearable here (logging out belongs in
   Keys). Completes "see AND control your data" — the private wedge.
+
+### Cycle 27 — first-routine nudge (activation→retention) (2026-06-10)
+- The defined retention metric is "≥1 routine in week one", but nothing
+  pointed an engaged new user at their first one. After the 3rd reply in a
+  run, if they have ZERO routines, a single dismissible nudge ("Liked
+  that? Labaik can do it on a schedule") offers to open the Routines
+  modal — then never shows again (localStorage gated, and skipped entirely
+  for anyone who already has a routine). Closes the weakest funnel link.

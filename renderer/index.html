@@ -4022,6 +4022,19 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
+    #routine-nudge {
+      position: fixed; bottom: 86px; left: 50%; transform: translateX(-50%) translateY(6px);
+      display: flex; align-items: center; gap: 10px; z-index: 800;
+      background: var(--bg-input); border: 1px solid var(--green); border-radius: 12px;
+      padding: 10px 14px; font-size: 12.5px; color: var(--text); opacity: 0;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.22); transition: opacity 0.3s, transform 0.3s; max-width: 90vw;
+    }
+    #routine-nudge.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #routine-nudge .nudge-yes {
+      background: var(--green); color: #fff; border: none; border-radius: 7px;
+      padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    }
+    #routine-nudge .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
     #cmdk-hint {
       position: fixed; bottom: 86px; right: 18px; z-index: 800;
       display: flex; align-items: center; gap: 8px;
@@ -7450,6 +7463,35 @@
     // funnel_install (first boot) → funnel_key_saved → funnel_first_reply.
     // Events land in the existing OODA log (~/.labaik/events.ndjson) —
     // nothing leaves the machine.
+    // v0.8 cycle 27: activation→retention bridge. Routines are the reason
+    // Labaik opens tomorrow, but an engaged new user is never pointed at
+    // their first one. After a few replies, if they have ZERO routines,
+    // show ONE dismissible nudge — then never again.
+    let _replyCountThisRun = 0
+    async function maybeNudgeFirstRoutine() {
+      try {
+        _replyCountThisRun++
+        if (_replyCountThisRun < 3) return
+        if (localStorage.getItem('alaude:routine-nudge:v1')) return
+        const routines = await window.alaude.routinesList().catch(() => [])
+        if (Array.isArray(routines) && routines.length > 0) {
+          localStorage.setItem('alaude:routine-nudge:v1', 'has-routine'); return
+        }
+        localStorage.setItem('alaude:routine-nudge:v1', 'shown')
+        if (document.getElementById('routine-nudge')) return
+        const el = document.createElement('div')
+        el.id = 'routine-nudge'
+        el.innerHTML = `<span>${escapeHtml(t('nudge.routine'))}</span>
+          <button class="nudge-yes">${escapeHtml(t('nudge.routine.yes'))}</button>
+          <span class="nudge-close">×</span>`
+        el.querySelector('.nudge-yes').onclick = () => { el.remove(); toggleRoutinesModal() }
+        el.querySelector('.nudge-close').onclick = () => el.remove()
+        document.body.appendChild(el)
+        requestAnimationFrame(() => el.classList.add('show'))
+        setTimeout(() => el.classList.contains('show') && el.classList.remove('show'), 18000)
+      } catch {}
+    }
+
     function funnelMark(kind) {
       try {
         const KEY = 'alaude:funnel:' + kind
@@ -11640,6 +11682,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.backup': '💾 Back up…',
         'data.total': 'Total on disk',
         'data.clear': 'Clear this',
+        'nudge.routine': '💡 Liked that? Labaik can do it on a schedule.',
+        'nudge.routine.yes': 'Set up a Routine',
         'data.clearConfirm': 'Clear {label}? It will be moved aside (recoverable from the data folder) and the app will reload.',
         'data.loading': 'Reading local files…',
         'data.failed': "Couldn't read the data folder.",
@@ -11924,6 +11968,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.backup': '💾 备份…',
         'data.total': '磁盘占用合计',
         'data.clear': '清除此项',
+        'nudge.routine': '💡 喜欢这个？Labaik 可以定时自动完成。',
+        'nudge.routine.yes': '设置例行任务',
         'data.clearConfirm': '清除{label}？它将被移到一旁（可从数据文件夹恢复），应用会重新加载。',
         'data.loading': '正在读取本地文件…',
         'data.failed': '无法读取数据文件夹。',
@@ -12193,6 +12239,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.backup': '💾 نسخة احتياطية…',
         'data.total': 'الإجمالي على القرص',
         'data.clear': 'مسح هذا',
+        'nudge.routine': '💡 أعجبك ذلك؟ يمكن للبيك تنفيذه وفق جدول.',
+        'nudge.routine.yes': 'إعداد مهمة',
         'data.clearConfirm': 'مسح {label}؟ سيُنقل جانبًا (قابل للاسترجاع من مجلد البيانات) وسيُعاد تحميل التطبيق.',
         'data.loading': 'جارٍ قراءة الملفات المحلية…',
         'data.failed': 'تعذّر قراءة مجلد البيانات.',
@@ -13556,6 +13604,7 @@ footer a { color: var(--accent); text-decoration: none; }
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
         funnelMark('first_reply')  // activation metric: install → first reply
+        maybeNudgeFirstRoutine()    // activation → retention bridge (cycle 27)
         const prev = target[target.length - 1]
         if (prev) finalizeStats(prev)
         target[target.length - 1] = {
