@@ -127,6 +127,7 @@ contextBridge.exposeInMainWorld('alaude', {
   routinesRemove: (id) => ipcRenderer.invoke('routines-remove', id),
   routinesSetEnabled: (id, enabled) => ipcRenderer.invoke('routines-set-enabled', id, enabled),
   routinesHistory: (limit) => ipcRenderer.invoke('routines-history', limit),
+  routinesRunNow: (id) => ipcRenderer.invoke('routines-run-now', id),
   onRoutineRan: (callback) => {
     const h = (_e, payload) => callback(payload)
     ipcRenderer.on('routine-ran', h)

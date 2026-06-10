@@ -9010,6 +9010,7 @@ SUMMARY:`
                 <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleRoutineEnabled('${s.id}', this.checked)" />
                 ${s.enabled ? 'On' : 'Off'}
               </label>
+              <button class="msg-action-btn" onclick="runRoutineNow('${s.id}')" data-i18n-attr="title:routines.runNow" title="Run now">▶</button>
               <button class="msg-action-btn" onclick="deleteRoutine('${s.id}')" style="color:#e07070">×</button>
             </div>
             <div style="font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.4;white-space:pre-wrap;max-height:60px;overflow:hidden">${escapeHtml(s.prompt.slice(0, 200))}${s.prompt.length > 200 ? '…' : ''}</div>
@@ -9047,6 +9048,14 @@ SUMMARY:`
     async function toggleRoutineEnabled(id, enabled) {
       await window.alaude.routinesSetEnabled(id, enabled)
       refreshRoutinesList()
+    }
+    async function runRoutineNow(id) {
+      try {
+        const ok = await window.alaude.routinesRunNow(id)
+        showRewindToast?.(ok ? t('routines.running') : 'Routine not found', !ok)
+        // The routine-ran event refreshes the list; history follows shortly.
+        setTimeout(() => refreshRoutinesHistory(), 4000)
+      } catch (e) { showRewindToast?.('Run failed: ' + (e?.message || e), true) }
     }
     async function deleteRoutine(id) {
       if (!confirm('Delete this routine?')) return
@@ -11540,6 +11549,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
         'routines.recentRuns': 'Recent runs',
+        'routines.runNow': 'Run now',
+        'routines.running': '▶ Running — result lands in Recent runs below.',
         'routines.noRuns': 'No runs yet — routines report here after they fire.',
         'login.detecting': 'Detecting provider from your key…',
         'login.detectFailed': "Couldn't identify this key — pick the provider from the list and try again.",
@@ -11811,6 +11822,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
         'routines.recentRuns': '近期运行',
+        'routines.runNow': '立即运行',
+        'routines.running': '▶ 正在运行——结果稍后显示在下方「近期运行」。',
         'routines.noRuns': '还没有运行记录——例行任务触发后会在这里汇报。',
         'login.detecting': '正在根据密钥识别服务商…',
         'login.detectFailed': '无法识别此密钥——请从列表中选择服务商后重试。',
@@ -12067,6 +12080,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
         'routines.recentRuns': 'عمليات التشغيل الأخيرة',
+        'routines.runNow': 'تشغيل الآن',
+        'routines.running': '▶ قيد التشغيل — ستظهر النتيجة أدناه في «عمليات التشغيل الأخيرة».',
         'routines.noRuns': 'لا سجلّ بعد — تظهر نتائج المهام هنا بعد تشغيلها.',
         'login.detecting': 'جارٍ التعرّف على المزوّد من المفتاح…',
         'login.detectFailed': 'تعذّر التعرّف على هذا المفتاح — اختر المزوّد من القائمة وأعد المحاولة.',

@@ -159,3 +159,9 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   preview) backed by routines.history() reading the ndjson tail + a
   routines-history IPC. Builds trust that scheduled work actually ran.
 - Honest skip: session export (markdown + HTML) already existed in ⌘K.
+
+### Cycle 13 — Run now on routines (2026-06-10)
+- ▶ button per routine fires it immediately through the exact same path as
+  the cron scheduler (fireRoutine extracted in main; routines-run-now IPC).
+  Kills the "save it, then wait until 8am to find out it's broken" loop —
+  result lands in Recent runs within seconds.

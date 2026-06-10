@@ -2116,7 +2116,9 @@ app.whenReady().then(() => {
   }).catch(err => console.warn('[mcp] startAll failed:', err.message))
 
   try {
-    routines.startScheduler(async (routine) => {
+    // Extracted so both the cron scheduler and the "Run now" IPC share the
+    // exact same fire path (v0.8 cycle 13).
+    async function fireRoutine(routine) {
       const worker = getWorker()
       const id = ++requestId
       const messageId = `routine_${routine.id}_${Date.now()}`
@@ -2167,6 +2169,14 @@ app.whenReady().then(() => {
           }
         }, 5 * 60 * 1000)
       })
+    }
+    routines.startScheduler(fireRoutine)
+    // v0.8 cycle 13: run a routine immediately (the ▶ button in the modal).
+    ipcMain.handle('routines-run-now', (_e, id) => {
+      const r = routines.list().find((x) => x.id === id)
+      if (!r) return false
+      fireRoutine(r).catch((err) => console.warn('[routines] run-now failed:', err.message))
+      return true
     })
   } catch (err) { console.warn('[routines] start failed:', err.message) }
 })
