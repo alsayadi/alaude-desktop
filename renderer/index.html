@@ -11463,6 +11463,10 @@ footer a { color: var(--accent); text-decoration: none; }
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
+        'model.rec.group': '✨ Recommended',
+        'model.rec.best': 'best overall',
+        'model.rec.fast': 'fastest',
+        'model.rec.local': 'private (runs on this Mac)',
         'err.key': "🔑 Your API key was rejected by the provider. Open the Keys modal (⌘⇧K) and check it — it may have expired or been pasted with a typo.",
         'err.credits': '💳 The provider says your account is out of credits or quota. Top up your account, or switch to another model from the picker.',
         'err.rate': '⏳ The provider is rate-limiting you. Wait a moment and try again, or switch models.',
@@ -11725,6 +11729,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'model.rec.group': '✨ 推荐',
+        'model.rec.best': '综合最佳',
+        'model.rec.fast': '最快',
+        'model.rec.local': '本地私密运行',
         'err.key': '🔑 服务商拒绝了你的 API 密钥。打开密钥窗口（⌘⇧K）检查一下——可能已过期或粘贴有误。',
         'err.credits': '💳 服务商提示账户余额或配额不足。请充值，或在模型选择器中换一个模型。',
         'err.rate': '⏳ 服务商正在限流。稍等片刻再试，或换一个模型。',
@@ -11972,6 +11980,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'model.rec.group': '✨ مُوصى به',
+        'model.rec.best': 'الأفضل عمومًا',
+        'model.rec.fast': 'الأسرع',
+        'model.rec.local': 'خاص (يعمل على جهازك)',
         'err.key': '🔑 رفض المزوّد مفتاح الـ API. افتح نافذة المفاتيح (⌘⇧K) وتحقّق منه — ربما انتهت صلاحيته أو نُسخ بخطأ.',
         'err.credits': '💳 يقول المزوّد إن رصيدك أو حصّتك نفدت. اشحن حسابك أو بدّل إلى نموذج آخر.',
         'err.rate': '⏳ المزوّد يحدّ من معدل الطلبات. انتظر لحظة وأعد المحاولة، أو بدّل النموذج.',
@@ -16738,6 +16750,41 @@ Title:`
           opt.text = (connected ? '⚡ ' : '🔒 ') + rawLabel
           opt.dataset.connected = connected ? '1' : '0'
         }
+        // v0.8 ease-of-use: maintain a "✨ Recommended" optgroup at the top
+        // with up to three CONNECTED picks: best overall, fastest, private
+        // (local). Duplicate values are fine — select.value matches the
+        // first occurrence, so picking a recommendation just works.
+        try {
+          select.querySelector('#model-select-recommended')?.remove()
+          const connectedOpts = Array.from(select.options).filter(o => o.dataset.connected === '1' && o.value)
+          const byPrefix = (prefixes) => {
+            for (const p of prefixes) {
+              const hit = connectedOpts.find(o => o.value.toLowerCase().startsWith(p))
+              if (hit) return hit
+            }
+            return null
+          }
+          const best = byPrefix(['claude-opus', 'gpt-5', 'claude-sonnet', 'deepseek-v4', 'gemini-3', 'grok-', 'kimi-', 'glm-', 'qwen'])
+          const fast = byPrefix(['claude-haiku', 'gemini-3-flash', 'gemini-3.1-flash', 'deepseek-chat', 'gpt-5-mini', 'glm-5-air'])
+          const local = connectedOpts.find(o => o.parentElement?.id === 'model-select-local')
+          const recs = []
+          if (best) recs.push([best, t('model.rec.best')])
+          if (fast && fast !== best) recs.push([fast, t('model.rec.fast')])
+          if (local && local !== best && local !== fast) recs.push([local, t('model.rec.local')])
+          if (recs.length >= 2) {
+            const grp = document.createElement('optgroup')
+            grp.id = 'model-select-recommended'
+            grp.label = t('model.rec.group')
+            for (const [opt, tag] of recs) {
+              const o = document.createElement('option')
+              o.value = opt.value
+              o.text = `${opt.text.replace(/^[⚡🔒]\s+/, '')} — ${tag}`
+              o.dataset.connected = '1'
+              grp.appendChild(o)
+            }
+            select.insertBefore(grp, select.firstElementChild)
+          }
+        } catch (e) { console.warn('[model-rec] failed:', e?.message) }
         // Auto-switch only when the CURRENT selection looks like a dead-on-boot
         // default the user never intentionally picked — i.e. the HTML-marked
         // `selected` default OR the very first option, and its provider is

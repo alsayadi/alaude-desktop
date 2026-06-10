@@ -100,7 +100,15 @@ Coding bias found (backlog, highest leverage first):
   Localized EN/中文/العربية. Also deduped cycle-7's double
   updateSendBtnMode() insertions.
 
-Ease-of-use backlog (working list):
+### Cycle 10 — ✨ Recommended models (2026-06-10) · SHIP CHECKPOINT
+- The model picker has 40+ options across 11 providers — paralyzing for a
+  non-expert. A "✨ Recommended" optgroup now pins up to three CONNECTED
+  picks at the top: best overall / fastest / private-local, rebuilt on
+  every key-status refresh. EN/中文/العربية.
+
+Ease-of-use backlog (next 90 cycles' raw material):
 - Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
-- Model picker: surface "which model should I pick?" guidance
 - Session organization: auto-title quality, archive old sessions
+- First-run flow: time-to-first-reply audit (login → key → first message)
+- Stop button for crew/council lanes individually
+- Subagent abort should propagate into nested loops mid-task
