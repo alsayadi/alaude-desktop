@@ -81,6 +81,11 @@ function decideReply(body) {
     // recorded request; the model just answers.
     return contentChunks('MENTION-DONE')
   }
+  if (userText.startsWith('Search the web')) {
+    if (!toolMsgs.length) return toolCallChunks('web_search', { query: 'labaik news' })
+    const got = String(toolMsgs[0].content || '')
+    return contentChunks(got.includes('example.com/labaik-news') ? 'SEARCH-OK' : `SEARCH-MISSING: ${got.slice(0, 200)}`)
+  }
   if (userText.startsWith('/greeting')) {
     if (!toolMsgs.length) return toolCallChunks('use_skill', { slug: 'greeting' })
     const got = String(toolMsgs[0].content || '')
@@ -106,6 +111,13 @@ const server = http.createServer((req, res) => {
     let body = {}
     try { body = JSON.parse(raw) } catch {}
     requests.push({ url: req.url, body })
+    if (req.url.startsWith('/html/')) {
+      // DDG-style search results page for the web_search tool
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end('<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Flabaik-news">Labaik ships v0.8</a>' +
+              '<a class="result__snippet" href="#">Labaik adds web search for every model</a>')
+      return
+    }
     if (!req.url.includes('/chat/completions')) { res.writeHead(404); res.end('{}'); return }
     // Scenario 4 (stop generation): stream one token, then HANG — the
     // connection only closes when the worker aborts it client-side.
@@ -128,6 +140,7 @@ const worker = spawn('node', [path.join(ROOT, 'electron', 'api-worker.js')], {
     LABAIK_HOME: labaikHome,
     OPENAI_API_KEY: 'test-key',
     OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    LABAIK_SEARCH_BASE: `http://127.0.0.1:${port}`,
   },
   stdio: ['pipe', 'pipe', 'pipe'],
 })
@@ -221,8 +234,13 @@ try {
     (r.body?.tools || []).some(t => (t?.function?.name || '').startsWith('screen_')))
   check('screen tools withheld without screen intent', !anyScreenTools)
 
+  // ═══ Scenario 5: web search tool ═══
+  console.log('\n[5/5] web search — DDG parse + result round-trip')
+  const r5 = await chat(5, 'Search the web for labaik news please')
+  check('model received parsed search results', typeof r5.result === 'string' && r5.result.startsWith('SEARCH-OK'), JSON.stringify(r5).slice(0, 300))
+
   // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
-  console.log('\n[4/4] stop generation — chat-cancel mid-stream')
+  console.log('\n[4/5] stop generation — chat-cancel mid-stream')
   const cancelPromise = chat(4, 'HANG forever please')
   setTimeout(() => {
     worker.stdin.write(JSON.stringify({ type: 'chat-cancel', id: 4 }) + '\n')

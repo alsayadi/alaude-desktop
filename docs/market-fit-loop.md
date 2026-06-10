@@ -206,3 +206,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   on key-status refresh removed the selected option if the user had picked
   from that group, silently falling back to option 0. Selection is now
   captured before the rebuild and restored after.
+
+### Cycle 20 — WEB SEARCH for every model (2026-06-10) · CHECKPOINT 2
+- The biggest everyday capability gap vs ChatGPT closed: web_search (DDG
+  HTML endpoint, no API key) + fetch_page (readable text, SSRF-guarded:
+  no localhost/private ranges/non-http) offered to ALL models across all
+  three provider loops. System prompt constrains use to current/external
+  info with source citation. Fixture scenario 5 proves the DDG parse +
+  round-trip against a mock. Cycles 11-20 pushed to PR #2.

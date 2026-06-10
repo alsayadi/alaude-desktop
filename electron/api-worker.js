@@ -470,6 +470,13 @@ Rules:
   // browser tools as opt-in: only fire when the user explicitly asks.
   sys += `
 
+## Web search
+
+web_search / fetch_page are available for CURRENT or external info (news,
+prices, releases, post-cutoff facts). Use them when freshness matters;
+don't search for things you already know. Cite the source URL when you
+use a result.
+
 ## Browser tools are opt-in
 
 The browser_* tools (browser_navigate, browser_get_text, browser_click,
@@ -790,6 +797,90 @@ function userWantsScreenIntent(messages) {
   return false
 }
 
+// ── Web search (v0.8 cycle 20) ─────────────────────────────────────────────
+// Lightweight, headless web access for EVERY model — the everyday "what's
+// the latest…" capability without popping the Chromium browser window.
+// DuckDuckGo's HTML endpoint needs no API key; LABAIK_SEARCH_BASE lets the
+// test fixture point at a mock. fetch_page returns readable text with an
+// SSRF guard (no localhost / private ranges / non-http schemes).
+const SEARCH_TOOLS = [
+  { type: 'function', function: {
+    name: 'web_search',
+    description: 'Search the web. Use ONLY when the answer genuinely needs current or external information (news, prices, weather, recent releases, facts after your training cutoff). Do not search for things you already know. Returns titles, URLs, and snippets — follow up with fetch_page on the most promising result when the snippet is not enough.',
+    parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — keep it short and specific.' } }, required: ['query'] },
+  } },
+  { type: 'function', function: {
+    name: 'fetch_page',
+    description: 'Fetch a web page and return its readable text (scripts/markup stripped, capped at 20KB). Use after web_search to read a result, or when the user gives a URL.',
+    parameters: { type: 'object', properties: { url: { type: 'string', description: 'http(s) URL to fetch.' } }, required: ['url'] },
+  } },
+]
+
+function _blockedUrl(raw) {
+  let u
+  try { u = new URL(raw) } catch { return 'invalid URL' }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'only http(s) allowed'
+  const h = u.hostname.toLowerCase()
+  if (h === 'localhost' || h === '0.0.0.0' || h.endsWith('.local') || h.endsWith('.internal')) return 'local addresses blocked'
+  if (/^127\.|^10\.|^192\.168\.|^169\.254\./.test(h)) return 'private addresses blocked'
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return 'private addresses blocked'
+  return null
+}
+
+async function runWebSearch(query) {
+  const q = String(query || '').trim()
+  if (!q) return { error: 'web_search requires a query.' }
+  const base = process.env.LABAIK_SEARCH_BASE || 'https://html.duckduckgo.com'
+  let html
+  try {
+    const res = await fetch(`${base}/html/?q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' }, redirect: 'follow',
+    })
+    if (!res.ok) return { error: `Search failed: HTTP ${res.status}` }
+    html = await res.text()
+  } catch (err) {
+    return { error: `Search failed: ${err.message}` }
+  }
+  const results = []
+  const linkRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
+  const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g
+  const strip = (x) => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+  const snippets = []
+  let m
+  while ((m = snipRe.exec(html)) !== null) snippets.push(strip(m[1]))
+  let i = 0
+  while ((m = linkRe.exec(html)) !== null && results.length < 5) {
+    let url = m[1]
+    // DDG wraps result hrefs: //duckduckgo.com/l/?uddg=<encoded>&rut=…
+    const uddg = /[?&]uddg=([^&]+)/.exec(url)
+    if (uddg) { try { url = decodeURIComponent(uddg[1]) } catch {} }
+    results.push({ title: strip(m[2]), url, snippet: snippets[i] || '' })
+    i++
+  }
+  if (!results.length) return { results: [], note: 'No results parsed — try a different query.' }
+  return { results }
+}
+
+async function runFetchPage(rawUrl) {
+  const blocked = _blockedUrl(rawUrl)
+  if (blocked) return { error: `Blocked: ${blocked}` }
+  let res, html
+  try {
+    res = await fetch(rawUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' }, redirect: 'follow' })
+    if (!res.ok) return { error: `Fetch failed: HTTP ${res.status}` }
+    html = await res.text()
+  } catch (err) {
+    return { error: `Fetch failed: ${err.message}` }
+  }
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ').trim()
+  return { url: rawUrl, text: text.slice(0, 20000), truncated: text.length > 20000 }
+}
+
 // ── Image generation ──────────────────────────────────────────────────────
 // v0.7.72: tool-callable image generation. Same gating discipline as the
 // browser tools — only expose to the model when the user's latest message
@@ -994,6 +1085,8 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   }
   // v0.8: folder skills — load a SKILL.md body on demand. Read-only, global
   // (no workspace required), so it stays outside the approval gate.
+  if (name === 'web_search') return await runWebSearch(args?.query)
+  if (name === 'fetch_page') return await runFetchPage(args?.url)
   if (name === 'use_skill') {
     const skill = folderSkills.get(String(args?.slug || '').trim())
     if (!skill) {
@@ -1278,6 +1371,8 @@ function summarizeArgs(name, args) {
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
   if (name === 'score_phq9' || name === 'score_gad7') return name.toUpperCase()
   if (name === 'spawn_subagent') return String(args.description || 'task').slice(0, 80)
+  if (name === 'web_search') return String(args.query || '').slice(0, 80)
+  if (name === 'fetch_page') return String(args.url || '').slice(0, 80)
   return ''
 }
 
@@ -1585,6 +1680,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     ...(offerImage ? IMAGE_TOOLS : []),
     ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
+    ...SEARCH_TOOLS,      // v0.8: web search for every model
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1872,6 +1968,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     ...(offerImage ? IMAGE_TOOLS : []),
     ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
+    ...SEARCH_TOOLS,      // v0.8: web search for every model
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -2031,7 +2128,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
   const offerScreen = !planMode && userWantsScreenIntent(msgs)
   const offerImage = !planMode && userWantsImageIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...(offerScreen ? SCREEN_TOOLS : []), ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...(offerScreen ? SCREEN_TOOLS : []), ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...SEARCH_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
