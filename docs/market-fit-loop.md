@@ -398,3 +398,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   🟢/🟡/🔴 cost tier (+tooltip), so users see their spend tier at every
   glance, not only inside the ✨ Recommended group. Cycles 31-40 pushed; PR
   #2 body refreshed.
+
+### Cycle 41 — README tells the new story (2026-06-10) · Phase C
+- The "Why Labaik" table predated the loop's biggest features. Added rows
+  for Web search + Deep Research, ChatGPT import, Backup & restore, and the
+  "Your data" privacy panel; folded cost-tier + paste-any-key + switch-
+  mid-conversation into existing rows; corrected 10→11 providers (DeepSeek).
+  The repo's first impression now matches what shipped.
