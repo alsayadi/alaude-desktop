@@ -179,6 +179,8 @@ contextBridge.exposeInMainWorld('alaude', {
   },
   ollamaList: () => ipcRenderer.invoke('ollama-list'),
   ollamaCatalog: () => ipcRenderer.invoke('ollama-catalog'),
+  // v0.8 zero-key first-run: RAM/arch for hardware-honest model fit pills.
+  systemInfo: () => ipcRenderer.invoke('system-info'),
   ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
   ollamaCancel: (model) => ipcRenderer.invoke('ollama-cancel', model),
   ollamaRemove: (model) => ipcRenderer.invoke('ollama-remove', model),

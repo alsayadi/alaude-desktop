@@ -4460,6 +4460,32 @@
       text-transform: lowercase;
     }
     .lm-tag-hero { color: var(--green); background: var(--green-dim); font-weight: 600; }
+    /* v0.8 cycle 2 — hardware-honest fit pills + recommended banner */
+    .lm-fit {
+      display: inline-block;
+      padding: 1px 7px;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+    .lm-fit-ok { color: var(--green); background: var(--green-dim); }
+    .lm-fit-slow { color: #9a6b00; background: color-mix(in oklch, #e0a800 14%, var(--bg)); }
+    .lm-fit-no { color: var(--text-faint); background: var(--bg-sidebar); }
+    .lm-rec {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      border: 1.5px solid var(--green);
+      border-radius: 10px;
+      background: var(--green-dim);
+    }
+    .lm-rec-text { flex: 1; min-width: 0; }
+    .lm-rec-title { font-size: 12px; font-weight: 700; color: var(--green); }
+    .lm-rec-pick { font-size: 13px; font-weight: 600; margin-top: 2px; }
+    .lm-rec-why { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
     .lm-card-action {
       flex-shrink: 0;
       display: flex;
@@ -6058,13 +6084,26 @@
       <p class="login-sub" data-i18n="login.sub">Every frontier AI on your Mac — your keys, private, no subscription.</p>
 
       <div class="login-paths">
-        <!-- Path 1 (primary) — BYO API key, form expanded by default -->
-        <div class="login-path primary" data-i18n-attr="aria-label:login.byok.title" aria-label="Connect with your API key">
-          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🔑</div>
+        <!-- v0.8 zero-key first-run (cycle 2): the free local path leads.
+             A normal person should reach a first reply without knowing
+             what an API key is. Cloud keys are the "smarter answers"
+             upgrade below, collapsed until asked for. -->
+        <button class="login-path primary" onclick="loginLocalPath()" data-i18n-attr="aria-label:login.local.title" aria-label="Start free &amp; private">
+          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 18%, var(--bg))">🦙</div>
+          <div class="login-path-body">
+            <div class="login-path-title"><span data-i18n="login.local.title">Start free &amp; private</span> <span class="login-path-badge" data-i18n="login.local.badge">FREE · PRIVATE</span></div>
+            <div class="login-path-desc" data-i18n="login.local.desc">Free AI that runs on this Mac. No account, no key — nothing you type leaves your computer.</div>
+          </div>
+          <div class="login-path-chevron">›</div>
+        </button>
+
+        <!-- Path 2 — BYO API key, form collapsed until the header is clicked -->
+        <div class="login-path" data-i18n-attr="aria-label:login.byok.title" aria-label="Connect with your API key">
+          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 12%, var(--bg))">🔑</div>
           <div class="login-path-body" style="flex:1">
-            <div class="login-path-title"><span data-i18n="login.byok.title">Connect with your API key</span> <span class="login-path-badge" data-i18n="login.byok.badge">Recommended</span></div>
-            <div class="login-path-desc" data-i18n="login.byok.desc" style="margin-bottom:10px">Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.</div>
-            <div class="login-key-form" id="login-key-form" style="display:flex">
+            <div class="login-path-title" style="cursor:pointer" onclick="toggleKeyForm()"><span data-i18n="login.byok.title">Connect with your API key</span> <span class="login-path-badge" data-i18n="login.byok.badge" style="color: var(--text); background: var(--bg)">Smarter answers</span></div>
+            <div class="login-path-desc" data-i18n="login.byok.desc" style="margin-bottom:10px; cursor:pointer" onclick="toggleKeyForm()">Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.</div>
+            <div class="login-key-form" id="login-key-form" style="display:none">
               <!-- Provider names stay literal — proper nouns / brand names. -->
               <select class="login-provider-select" id="login-provider-select">
                 <option value="auto" selected>✨ Auto-detect</option>
@@ -6085,16 +6124,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Path 2 — local runtime -->
-        <button class="login-path" onclick="loginLocalPath()" data-i18n-attr="aria-label:login.local.title" aria-label="Run models locally">
-          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 12%, var(--bg))">🦙</div>
-          <div class="login-path-body">
-            <div class="login-path-title"><span data-i18n="login.local.title">Run models locally</span> <span class="login-path-badge" data-i18n="login.local.badge" style="color: var(--text); background: var(--bg)">FREE · PRIVATE</span></div>
-            <div class="login-path-desc" data-i18n="login.local.desc">Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.</div>
-          </div>
-          <div class="login-path-chevron">›</div>
-        </button>
       </div>
 
       <div class="login-status" id="login-status"></div>
@@ -11677,15 +11706,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'ux.title': 'UX Insights',
         // Login screen
         'login.title': 'Welcome to Labaik',
-        'login.sub': 'Every frontier AI on your Mac — your keys, private, no subscription.',
+        'login.sub': 'Every frontier AI on your Mac — private, no subscription, no account.',
         'login.byok.title': 'Connect with your API key',
-        'login.byok.badge': 'Recommended',
+        'login.byok.badge': 'Smarter answers',
         'login.byok.desc': 'Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.',
         'login.key.placeholder': 'Paste your API key here…',
         'login.connect': 'Connect',
-        'login.local.title': 'Run models locally',
+        'login.local.title': 'Start free & private',
         'login.local.badge': 'FREE · PRIVATE',
-        'login.local.desc': 'Qwen 3, Gemma 3, and more via Ollama. Works offline, nothing sent to the cloud.',
+        'login.local.desc': 'Free AI that runs on this Mac. No account, no key — nothing you type leaves your computer.',
         'login.footer.lead': 'Keys stay on this device in',
         'login.footer.tail': 'Labaik sends messages directly to the provider you chose — no middleman.',
         'login.close.title': 'Close',
@@ -11786,6 +11815,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': 'Show all lines',
         'whatsin.tryit.btn': 'Try it →',
         'lm.download': 'Download',
+        'lm.fit.ok': 'Fits this Mac',
+        'lm.fit.slow': 'May be slow',
+        'lm.fit.no': 'Too big for this Mac',
+        'lm.rec.title': 'Recommended for your Mac',
+        'lm.rec.why': 'Good everyday answers, speaks your language, runs free on this Mac.',
         'session.defaultTitle': 'New session',
         'tag.suggest.label': '🏷️ Tag this session?',
         'model.optgroup.local': 'Local (Ollama)',
@@ -11961,15 +11995,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.close': '关闭',
         'ux.title': '体验洞察',
         'login.title': '欢迎使用 Labaik',
-        'login.sub': '所有前沿 AI 尽在你的 Mac —— 你的密钥，私密，无订阅。',
+        'login.sub': '所有前沿 AI 尽在你的 Mac —— 私密、无订阅、无需账号。',
         'login.byok.title': '使用你的 API 密钥连接',
-        'login.byok.badge': '推荐',
+        'login.byok.badge': '更聪明的回答',
         'login.byok.desc': 'Claude、GPT、Gemini、Grok、Kimi、Qwen、GLM、MiniMax、混元 —— 你的密钥，你的选择。',
         'login.key.placeholder': '在此粘贴你的 API 密钥…',
         'login.connect': '连接',
-        'login.local.title': '在本地运行模型',
+        'login.local.title': '免费私密，立即开始',
         'login.local.badge': '免费 · 私密',
-        'login.local.desc': 'Qwen 3、Gemma 3 等模型通过 Ollama 运行。可离线使用，不向云端发送任何内容。',
+        'login.local.desc': '免费 AI，在这台 Mac 上运行。无需账号、无需密钥——你输入的内容不会离开这台电脑。',
         'login.footer.lead': '密钥保存在本机：',
         'login.footer.tail': 'Labaik 直接将消息发送到你选择的服务商 —— 没有中间环节。',
         'login.close.title': '关闭',
@@ -12058,6 +12092,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': '显示全部行',
         'whatsin.tryit.btn': '试一试 →',
         'lm.download': '下载',
+        'lm.fit.ok': '适合这台 Mac',
+        'lm.fit.slow': '可能较慢',
+        'lm.fit.no': '超出这台 Mac 的能力',
+        'lm.rec.title': '为你的 Mac 推荐',
+        'lm.rec.why': '日常问答好帮手，支持中文，在这台 Mac 上免费运行。',
         'session.defaultTitle': '新会话',
         'tag.suggest.label': '🏷️ 给会话加标签？',
         'model.optgroup.local': '本地 (Ollama)',
@@ -12233,15 +12272,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.close': 'إغلاق',
         'ux.title': 'تحليلات الاستخدام',
         'login.title': 'مرحبًا بك في لبيك',
-        'login.sub': 'كل نماذج الذكاء الاصطناعي على جهازك — بمفاتيحك، بخصوصية، دون اشتراك.',
+        'login.sub': 'كل نماذج الذكاء الاصطناعي على جهازك — بخصوصية، دون اشتراك، دون حساب.',
         'login.byok.title': 'الاتصال بمفتاح API الخاص بك',
-        'login.byok.badge': 'موصى به',
+        'login.byok.badge': 'إجابات أذكى',
         'login.byok.desc': 'Claude، GPT، Gemini، Grok، Kimi، Qwen، GLM، MiniMax، Hunyuan — مفاتيحك، اختيارك.',
         'login.key.placeholder': 'الصق مفتاح API هنا…',
         'login.connect': 'اتصل',
-        'login.local.title': 'تشغيل النماذج محليًّا',
+        'login.local.title': 'ابدأ مجانًا وبخصوصية',
         'login.local.badge': 'مجاني · خاص',
-        'login.local.desc': 'Qwen 3 وGemma 3 وغيرها عبر Ollama. تعمل دون اتصال، ولا يُرسَل شيء إلى السحابة.',
+        'login.local.desc': 'ذكاء اصطناعي مجاني يعمل على هذا الجهاز. بلا حساب وبلا مفتاح — لا يغادر ما تكتبه جهازك.',
         'login.footer.lead': 'تُحفَظ المفاتيح على هذا الجهاز في',
         'login.footer.tail': 'يرسل لبيك الرسائل مباشرة إلى المزوّد الذي اخترته — دون وسيط.',
         'login.close.title': 'إغلاق',
@@ -12330,6 +12369,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'compare.showAll': 'إظهار كل الأسطر',
         'whatsin.tryit.btn': 'جرّبها →',
         'lm.download': 'تنزيل',
+        'lm.fit.ok': 'مناسب لهذا الجهاز',
+        'lm.fit.slow': 'قد يكون بطيئًا',
+        'lm.fit.no': 'أكبر من قدرة هذا الجهاز',
+        'lm.rec.title': 'موصى به لجهازك',
+        'lm.rec.why': 'إجابات يومية جيدة، يتحدث لغتك، ويعمل مجانًا على هذا الجهاز.',
         'session.defaultTitle': 'جلسة جديدة',
         'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
         'model.optgroup.local': 'محلي (Ollama)',
@@ -19010,6 +19054,11 @@ Title:`
       // so the .map() in renderInstalled / renderCatalog doesn't blow up.
       const cat = await window.alaude.ollamaCatalog()
       const inst = await window.alaude.ollamaList()
+      // v0.8 cycle 2: RAM/arch for honest "fits this Mac" pills. Cached —
+      // hardware doesn't change mid-session.
+      if (!window._lmSysInfo) {
+        try { window._lmSysInfo = await window.alaude.systemInfo() } catch {}
+      }
       lmCatalog = Array.isArray(cat) ? cat : []
       lmInstalled = Array.isArray(inst) ? inst : []
       renderInstalled()
@@ -19036,6 +19085,30 @@ Title:`
 
     // Flagship IDs get a highlighted "new" tag
     const LM_HERO_IDS = new Set(['qwen3.6:latest', 'gemma4:31b', 'gemma4:e4b'])
+
+    // v0.8 cycle 2 — hardware-honest fit tiers. A Q4 GGUF needs roughly
+    // its file size in free unified memory plus headroom for context and
+    // the OS, hence the 0.45/0.7 RAM fractions. Intel Macs run CPU-only
+    // under Ollama, so anything beyond a small model drops one tier.
+    function lmFitTier(sizeGb) {
+      const info = window._lmSysInfo
+      const ram = info?.totalMemGb || 8
+      let tier = sizeGb <= ram * 0.45 ? 'ok' : sizeGb <= ram * 0.7 ? 'slow' : 'no'
+      if (info && info.arch !== 'arm64' && sizeGb > 2) tier = (tier === 'ok') ? 'slow' : 'no'
+      return tier
+    }
+
+    // Default pick for a first-time user: best multilingual everyday model
+    // that comfortably fits this machine (Qwen3 is the strongest Arabic +
+    // Chinese small model in the catalog; fallbacks shrink from there).
+    const LM_REC_PREFS = ['qwen3:8b', 'gemma4:e4b', 'gemma3:4b', 'llama3.2:3b', 'gemma3:1b']
+    function lmRecommendedId() {
+      for (const id of LM_REC_PREFS) {
+        const c = lmCatalog.find(x => x.id === id)
+        if (c && lmFitTier(c.sizeGb) === 'ok') return id
+      }
+      return 'gemma3:1b'
+    }
 
     function renderInstalled() {
       const el = document.getElementById('lm-installed-list')
@@ -19084,7 +19157,27 @@ Title:`
         ...[...byFamily.keys()].filter(f => !familyOrder.includes(f)),
       ]
 
-      el.innerHTML = families.map(fam => {
+      // v0.8 cycle 2: one plain-words pick pinned on top, chosen for THIS
+      // machine — first-time users shouldn't have to compare 18 models.
+      // Hidden once any model is installed (the choice has been made).
+      let recHtml = ''
+      if (!lmInstalled.length) {
+        const rec = available.find(c => c.id === lmRecommendedId())
+        if (rec) {
+          recHtml = `
+            <div class="lm-rec">
+              <div class="lm-rec-text">
+                <div class="lm-rec-title">✨ ${escapeHtml(t('lm.rec.title'))}</div>
+                <div class="lm-rec-pick">${escapeHtml(rec.name)} · ${rec.sizeGb} GB</div>
+                <div class="lm-rec-why">${escapeHtml(t('lm.rec.why'))}</div>
+              </div>
+              <button class="key-save-btn lm-download-btn" onclick="downloadLocalModel('${escapeHtml(rec.id).replace(/'/g, "\\'")}')">${escapeHtml(t('lm.download'))}</button>
+            </div>
+          `
+        }
+      }
+
+      el.innerHTML = recHtml + families.map(fam => {
         const meta = LM_FAMILY_META[fam] || LM_FAMILY_META.other
         const cards = byFamily.get(fam).map(c => {
           const hero = LM_HERO_IDS.has(c.id)
@@ -19093,6 +19186,7 @@ Title:`
             return `<span class="${cls}">${escapeHtml(t)}</span>`
           }).join('')
           const ctxK = c.context ? (c.context >= 1024 ? Math.round(c.context / 1024) + 'K' : c.context) + ' ctx' : ''
+          const fit = lmFitTier(c.sizeGb)
           return `
             <div class="lm-card">
               <div class="lm-card-top">
@@ -19100,6 +19194,7 @@ Title:`
                   <div class="lm-card-title">
                     <span class="lm-card-name">${escapeHtml(c.name)}</span>
                     <span class="lm-card-size">${c.sizeGb} GB</span>
+                    <span class="lm-fit lm-fit-${fit}">${escapeHtml(t('lm.fit.' + fit))}</span>
                   </div>
                   <div class="lm-card-id">${escapeHtml(c.id)}</div>
                   <div class="lm-card-desc">${escapeHtml(c.description)}</div>

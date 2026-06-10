@@ -1491,6 +1491,15 @@ ipcMain.handle('ollama-install', async (event) => {
 
 ipcMain.handle('ollama-catalog', async () => modelCatalog)
 
+// v0.8 zero-key first-run: hardware facts for the "fits your Mac" pills.
+// Apple Silicon (arm64) runs Q4 GGUF in unified memory; Intel falls back
+// to CPU-only inference, which the renderer treats as one tier slower.
+ipcMain.handle('system-info', async () => ({
+  totalMemGb: Math.round(os.totalmem() / (1024 ** 3)),
+  arch: process.arch,
+  platform: process.platform,
+}))
+
 ipcMain.handle('ollama-pull', async (event, model) => {
   if (!model || typeof model !== 'string') throw new Error('Model name required')
   if (activePulls.has(model)) throw new Error(`Already pulling ${model}`)

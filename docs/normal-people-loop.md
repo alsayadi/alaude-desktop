@@ -23,3 +23,20 @@
   (unlike `requestApproval`'s), so a pending 60s timer could hold the worker
   process open after the loop finished. Mirrored the approval pattern.
 - Deleted the stale TODOS.md entry.
+
+### Cycle 2 — zero-key first-run v1 (2026-06-11)
+- Login reordered: "Start free & private" (🦙 local) is now the PRIMARY
+  card; the API-key path drops to second with a "Smarter answers" badge
+  and its form collapsed until clicked (toggleKeyForm already existed).
+  A normal person can now reach a first reply without learning what an
+  API key is.
+- Hardware-honest fit pills (Jan-style) on every catalog model: new
+  `system-info` IPC (RAM GB + arch) → `lmFitTier()` — "Fits this Mac" /
+  "May be slow" / "Too big for this Mac" at 0.45/0.7 RAM fractions;
+  Intel (CPU-only inference) demotes anything >2GB one tier.
+- "✨ Recommended for your Mac" banner pinned atop the catalog for
+  first-time users (hidden once any model is installed): best
+  multilingual pick that comfortably fits — qwen3:8b → gemma4:e4b →
+  gemma3:4b → llama3.2:3b → gemma3:1b.
+- All copy in EN/中文/العربية; login.sub no longer leads with "your
+  keys". 154 checks green (bridge-audit covers the new IPC pair).
