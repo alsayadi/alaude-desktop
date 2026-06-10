@@ -224,3 +224,9 @@
   key, never through us." One-click Clear.
 - The anti-Recall: privacy you can inspect, not just believe. 8 unit
   tests; 209 checks green. EN/中文/العربية.
+
+### Checkpoint — v0.7.75 RELEASED (2026-06-11)
+- "The Paperwork Desk" shipped: notarized + stapled arm64/x64 DMGs, all
+  7 assets on GitHub (individual uploads — the resilient pattern),
+  labaik.ai auto-updates within 60s. Session totals: cycles 1-16, three
+  releases (0.7.73 / 0.7.74 / 0.7.75), 154 → 209 automated checks.
