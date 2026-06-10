@@ -8707,6 +8707,8 @@ SUMMARY:`
         prompt: "Give me today's 5-minute language practice: 5 useful phrases with pronunciation hints, 1 mini dialogue using them, and quiz me on yesterday's phrases if you remember them. Use the language from my profile; if none is set, ask once." },
       { icon: '💳', name: 'Bills & renewals check', cron: '0 10 * * 1',
         prompt: 'Weekly money check-in: remind me to glance at upcoming bills, subscriptions, and renewals this week. List the recurring ones I have mentioned before (from memory), and ask if anything new should be tracked.' },
+      { icon: '🥗', name: 'Weekly meal plan', cron: '0 17 * * 0',
+        prompt: 'Plan 5 dinners for the coming week: variety of cuisines, under 45 minutes each, with a single combined grocery list grouped by store section. Respect any dietary preferences or allergies from my profile/memory.' },
     ]
     function renderRoutineTemplates() {
       const container = document.getElementById('routines-templates')
