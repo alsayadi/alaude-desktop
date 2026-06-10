@@ -13,6 +13,11 @@
   },
   "scripts": {
     "start": "electron .",
+    "test": "npm run test:app",
+    "test:unit": "node scripts/test-modules.mjs",
+    "test:fixtures": "node electron/test-ooda-fixture.js",
+    "test:app": "node scripts/test-app.mjs",
+    "test:manual": "node scripts/test-app.mjs --manual",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",

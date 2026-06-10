@@ -3,7 +3,8 @@
 //
 //   node scripts/test-app.mjs
 //
-// Runs four layers of automatic checks. Anything it can't cover from the
+// Runs automatic checks that are safe for CI and local refactors. Anything it
+// can't cover from the
 // command line gets printed as a manual checklist at the end for you to
 // verify in the running app window.
 //
@@ -12,10 +13,13 @@
 //      against a fake localStorage + mock Ollama. ~50 assertions.
 //   2. Bridge audit         — every inline onclick in index.html has a
 //      matching window.* alias in bootstrap.js.
-//   3. Data integrity       — ~/.alaude/skills.json + ~/.claude/alaude-
-//      events.ndjson parse clean; LevelDB localStorage writable.
-//   4. OODA diff            — compare pre-refactor vs post-refactor event
-//      signals (success rate, latency, errors) to spot regressions.
+//   3. Overlay coverage     — every overlay class is included in the boot
+//      reset guard.
+//
+// Optional manual mode:
+//   node scripts/test-app.mjs --manual
+//   Adds real on-disk data checks and OODA signal diffs against your local
+//   history. That is useful for dogfood, but too noisy for a release gate.
 //
 // What this DOESN'T test (you still need eyes on the window):
 //   - Visual rendering of modals, badges, chips
@@ -35,6 +39,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
+const RUN_MANUAL = process.argv.includes('--manual') || process.env.LABAIK_TEST_REAL_DATA === '1'
 
 let totalPass = 0, totalFail = 0
 
@@ -110,12 +115,13 @@ section('Layer 2b · Boot-time overlay guard covers all overlay classes')
   }
 }
 
-// ═══ Layer 3: data integrity ═══
-section('Layer 3 · On-disk state integrity')
+if (RUN_MANUAL) {
+// ═══ Manual Layer 3: data integrity ═══
+section('Manual · On-disk state integrity')
 {
   // skills.json
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.alaude/skills.json'), 'utf8'))
+    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.labaik/skills.json'), 'utf8'))
     check('skills.json parses + has skills array',
       typeof data.version === 'number' && Array.isArray(data.skills))
     const bad = (data.skills || []).filter(s => !s.id || !s.name || !s.cron || !s.prompt).length
@@ -126,7 +132,7 @@ section('Layer 3 · On-disk state integrity')
   }
   // event log
   try {
-    const lines = fs.readFileSync(path.join(os.homedir(), '.claude/alaude-events.ndjson'), 'utf8').split('\n').filter(Boolean)
+    const lines = fs.readFileSync(path.join(os.homedir(), '.labaik/events.ndjson'), 'utf8').split('\n').filter(Boolean)
     let bad = 0
     for (const l of lines) { try { JSON.parse(l) } catch { bad++ } }
     check(`event log parses (${lines.length} events, ${bad} malformed)`, bad === 0)
@@ -144,10 +150,10 @@ section('Layer 3 · On-disk state integrity')
   }
 }
 
-// ═══ Layer 4: OODA signal diff (optional — needs event log) ═══
-section('Layer 4 · Event signal diff (last 100 pre- vs all post-refactor)')
+// ═══ Manual Layer 4: OODA signal diff (optional — needs event log) ═══
+section('Manual · Event signal diff (last 100 pre- vs all post-refactor)')
 try {
-  const events = fs.readFileSync(path.join(os.homedir(), '.claude/alaude-events.ndjson'), 'utf8')
+  const events = fs.readFileSync(path.join(os.homedir(), '.labaik/events.ndjson'), 'utf8')
     .split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
   // Cutoff: 1 hour before last mtime of bootstrap.js (proxy for refactor time)
   const bootMtime = fs.statSync(path.join(ROOT, 'renderer/js/bootstrap.js')).mtimeMs
@@ -176,6 +182,10 @@ try {
   }
 } catch (err) {
   console.log('  ⚠️  Signal diff skipped:', err.message)
+}
+} else {
+  section('Manual dogfood checks')
+  console.log('  ⏭️  Skipped real on-disk state and OODA history checks. Run `npm run test:manual` when you want local dogfood signals.')
 }
 
 // ═══ Final summary ═══
