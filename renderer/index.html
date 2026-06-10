@@ -10602,12 +10602,20 @@ footer a { color: var(--accent); text-decoration: none; }
           showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills${r.mergedSessions ? ` · +${r.mergedSessions} merged sessions` : ''} — reloading…`, false)
           setTimeout(() => location.reload(), 1200)
         } },
-        { kind: 'action', icon: '🔍', label: 'Deep research (send composer question with sources)', search: 'deep research investigate cited sources web search report verify', action: () => {
+        { kind: 'action', icon: '🔍', label: 'Deep research (cited, multi-source answer)', search: 'deep research investigate cited sources web search report verify', action: () => {
           closeCmdPalette()
-          if (!input.value.trim()) { showRewindToast?.('🔍 Type your research question in the composer first', true); return }
+          // v0.8: works from any state. With a question already typed, send it
+          // as research now; otherwise ARM research mode and let the user type
+          // the question — sending it then runs the research protocol.
           window._researchModeNext = true
-          showRewindToast?.('🔍 Deep research — searching, reading, citing…', false)
-          sendMessage()
+          if (input.value.trim()) {
+            showRewindToast?.('🔍 Deep research — searching, reading, citing…', false)
+            sendMessage()
+          } else {
+            input.focus()
+            input.placeholder = t('research.armed')
+            showRewindToast?.('🔍 Deep research armed — type your question and press Enter', false)
+          }
         } },
         { kind: 'action', icon: '📥', label: 'Import ChatGPT history (conversations.json)', search: 'import chatgpt openai history migrate switch export conversations json', action: () => { closeCmdPalette(); importChatGPTFlow() } },
         { kind: 'action', icon: '⏰', label: 'Turn last prompt into a routine', search: 'routine from prompt schedule repeat daily automate this recurring', action: () => { closeCmdPalette(); routineFromLastPrompt() } },
@@ -11602,6 +11610,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
+        'research.armed': '🔍 Deep research — type your question and press Enter',
         'routines.recentRuns': 'Recent runs',
         'routines.notify': '🔔 Notify',
         'data.title': '🔒 Your data',
@@ -11888,6 +11897,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'research.armed': '🔍 深度研究 —— 输入你的问题并按回车',
         'routines.recentRuns': '近期运行',
         'routines.notify': '🔔 通知',
         'data.title': '🔒 你的数据',
@@ -12159,6 +12169,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'research.armed': '🔍 بحث معمّق — اكتب سؤالك واضغط Enter',
         'routines.recentRuns': 'عمليات التشغيل الأخيرة',
         'routines.notify': '🔔 إشعار',
         'data.title': '🔒 بياناتك',
@@ -12928,13 +12939,19 @@ footer a { color: var(--accent); text-decoration: none; }
       try { console.log('[abort] in-flight turn aborted, reason:', reason) } catch {}
     }
 
+    // v0.8: clear the armed deep-research state (flag + composer placeholder).
+    function disarmResearch() {
+      window._researchModeNext = false
+      try { input.placeholder = t('input.placeholder') } catch {}
+    }
+
     function sendMessage() {
       let text = input.value.trim()
       // v0.8 cycle 23: clear one-shot mode flags on any early return so a
       // research/plan trigger that hits a guard can't leak into the NEXT
       // ordinary message.
-      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { window._researchModeNext = false; return }
-      if (isStreaming) { window._researchModeNext = false; return }
+      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { disarmResearch(); return }
+      if (isStreaming) { disarmResearch(); return }
       // v0.7.67 — if the user is sending a message while an ask-popup is
       // open AND the message wasn't built by the popup itself, treat it as
       // the user bypassing the popup. Append a "use defaults for the rest"
@@ -13056,7 +13073,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 cycle 21 — one-shot deep-research protocol for this send.
         researchMode: !!window._researchModeNext,
       }
-      window._researchModeNext = false
+      disarmResearch()
       // Reset for next send
       ux.pendingEntry = 'freeform'
       ux.pendingAction = null
