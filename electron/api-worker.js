@@ -1233,12 +1233,15 @@ function _bridge(map, type, extra = {}) {
   try { process.stdout.write(JSON.stringify({ type, id, ...extra }) + '\n') } catch {}
   return new Promise((resolve) => {
     map.set(id, resolve)
-    setTimeout(() => {
+    const t = setTimeout(() => {
       if (map.has(id)) {
         map.delete(id)
         resolve({ error: `${type} timed out after 60s` })
       }
     }, 60000)
+    // Like requestApproval's timer: a pending timeout must not hold the
+    // worker process open after the loop is otherwise done.
+    if (typeof t.unref === 'function') t.unref()
   })
 }
 

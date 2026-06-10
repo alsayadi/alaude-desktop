@@ -16,18 +16,6 @@
 
 ## Agents
 
-### Timeout for worker→main bridge requests
-
-**What:** Add a timeout to `_bridge()` in `electron/api-worker.js` (mcp-list, mcp-call, browser-tool, screen-tool) so the worker can't wait forever if main never answers.
-
-**Why:** Found while building the worker-loop fixture: a chat hangs indefinitely if the `mcp-list` response never arrives. `requestApproval` already has a 10-minute cap; the other bridges have none.
-
-**Context:** `_bridge(map, type, extra)` registers a resolver and waits. Mirror the approval pattern: `setTimeout` + `unref()`, resolve with an error object after ~30s so the turn degrades (no MCP tools) instead of hanging.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None
-
 ### Worktree isolation for subagents
 
 **What:** Run subagents (and optionally sessions) in isolated git worktrees.
