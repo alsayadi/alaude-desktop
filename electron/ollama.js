@@ -156,6 +156,20 @@ function _ghAssetUrl() {
   return null
 }
 
+// v0.8 cycle 47 — the downloaded archive is extracted and EXECUTED (chmod
+// +x then spawn on Linux; copied to /Applications + launched on macOS), so
+// the download must stay on trusted infrastructure. GitHub release assets
+// 30x-redirect to objects.githubusercontent.com; we require every hop to be
+// HTTPS on a github.com / githubusercontent.com host, so a hijacked redirect
+// can't steer the download to an attacker-controlled origin.
+function isTrustedOllamaUrl(raw) {
+  let u
+  try { u = new URL(raw) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  const h = u.hostname.toLowerCase()
+  return h === 'github.com' || h.endsWith('.github.com') || h.endsWith('.githubusercontent.com')
+}
+
 async function installOllama({ onProgress } = {}) {
   const report = (phase, pct, message) => { try { onProgress?.({ phase, pct, message }) } catch {} }
   const plat = process.platform
@@ -248,7 +262,13 @@ function _downloadWithProgress(url, destPath, onPct) {
   return new Promise((resolve, reject) => {
     const https = require('https')
     const doReq = (u, redirectsLeft) => {
-      const req = https.get(u, (res) => {
+      // v0.8 cycle 47: every hop (including the initial URL) must be a
+      // trusted GitHub HTTPS host — the payload is executed after download.
+      const abs = (() => { try { return new URL(u, 'https://github.com').href } catch { return u } })()
+      if (!isTrustedOllamaUrl(abs)) {
+        return reject(new Error(`Refusing to download Ollama from untrusted URL: ${abs}`))
+      }
+      const req = https.get(abs, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
           res.resume()
@@ -352,4 +372,4 @@ async function findEmbedModel() {
 // modal's one-click install button.
 const RECOMMENDED_EMBED_MODEL = 'all-minilm'
 
-module.exports = { isAvailable, listInstalled, pull, remove, installOllama, embed, findEmbedModel, RECOMMENDED_EMBED_MODEL, BASE }
+module.exports = { isAvailable, listInstalled, pull, remove, installOllama, embed, findEmbedModel, RECOMMENDED_EMBED_MODEL, BASE, isTrustedOllamaUrl }

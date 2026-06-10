@@ -453,3 +453,20 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   path mentions like absolute ones (expand → containment check), while still
   allowing in-scope ~/proj/… paths and system dirs. Extracted to
   electron/command-scope.js with 11 unit tests. 149 checks.
+
+### Cycle 47 — pin Ollama installer downloads to GitHub (2026-06-10)
+- The in-app Ollama installer downloads an archive and EXECUTES it (chmod
+  +x + spawn on Linux; copy to /Applications + launch on macOS) with no
+  integrity check and unrestricted HTTPS redirect targets. "latest"-release
+  semantics rule out a pinned checksum, so the cheap real hardening:
+  isTrustedOllamaUrl() requires every hop (initial + redirects) to be HTTPS
+  on a github.com / *.githubusercontent.com host — a hijacked redirect can
+  no longer steer the executed download to an attacker origin. 5 tests
+  (incl. github.com.evil.com lookalike rejected). 154 checks.
+
+## Honest status @ cycle 47
+The security-audit vein (cycles 36, 42-47) is now largely mined: web-fetch
+SSRF/DoS, MCP, the permission gate (rm/push/chmod/chained), the worker
+scope guard, and the installer are all hardened + tested. Remaining
+candidates are smaller polish. Recommend considering a merge of PR #2
+(54+ commits, 154 checks) before the branch grows further.

@@ -478,6 +478,14 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('system dir /tmp allowed', checkCommandScope('cat /tmp/x', ws).ok === true)
   check('relative cd allowed', checkCommandScope('cd subdir && ls', ws).ok === true)
   check('plain command allowed', checkCommandScope('npm run build', ws).ok === true)
+
+  // ═══ ollama installer URL trust (cycle 47) ═══
+  const { isTrustedOllamaUrl } = require('../electron/ollama.js')
+  check('github.com release URL trusted', isTrustedOllamaUrl('https://github.com/ollama/ollama/releases/latest/download/Ollama-darwin.zip'))
+  check('githubusercontent redirect trusted', isTrustedOllamaUrl('https://objects.githubusercontent.com/abc'))
+  check('http (non-TLS) rejected', isTrustedOllamaUrl('http://github.com/x') === false)
+  check('arbitrary host rejected', isTrustedOllamaUrl('https://evil.com/payload') === false)
+  check('lookalike host rejected', isTrustedOllamaUrl('https://github.com.evil.com/x') === false)
   // Cycle 44: force-push + recursive-chmod detection regardless of flag position/spelling
   check('git push --force (flag first) flagged', rmClass('git push --force origin main') === 'dangerous')
   check('git push ... --force (flag last) flagged', rmClass('git push origin main --force') === 'dangerous')
