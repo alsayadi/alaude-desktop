@@ -11881,6 +11881,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.skipped': '{n} too large to undo',
         'voice.micTitle': 'Voice input — uses your {provider} key (hold Space to talk)',
         'voice.listening': 'Listening… release Space to send',
+        'voice.listeningHotkey': 'Listening… press ⌘⇧Space again to send',
         'voice.listeningClick': 'Listening… click 🎤 or press Esc to stop',
         'voice.transcribing': 'Transcribing…',
         'voice.micDenied': '🎤 Microphone blocked — System Settings → Privacy & Security → Microphone, then try again',
@@ -12178,6 +12179,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.skipped': '{n} 个文件过大，无法撤销',
         'voice.micTitle': '语音输入——使用你的 {provider} 密钥（按住空格说话）',
         'voice.listening': '正在聆听……松开空格键发送',
+        'voice.listeningHotkey': '正在聆听……再按一次 ⌘⇧Space 发送',
         'voice.listeningClick': '正在聆听……点击 🎤 或按 Esc 停止',
         'voice.transcribing': '正在转写……',
         'voice.micDenied': '🎤 麦克风被禁用——请在「系统设置 → 隐私与安全性 → 麦克风」中允许后重试',
@@ -12475,6 +12477,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.skipped': '{n} أكبر من أن يُتراجع عنه',
         'voice.micTitle': 'إدخال صوتي — يستخدم مفتاح {provider} الخاص بك (اضغط مطوّلًا على المسافة للتحدث)',
         'voice.listening': 'يستمع… حرِّر مسطرة المسافة للإرسال',
+        'voice.listeningHotkey': 'يستمع… اضغط ⌘⇧Space مرة أخرى للإرسال',
         'voice.listeningClick': 'يستمع… انقر 🎤 أو اضغط Esc للتوقف',
         'voice.transcribing': 'يحوِّل الكلام إلى نص…',
         'voice.micDenied': '🎤 الميكروفون محظور — إعدادات النظام ← الخصوصية والأمان ← الميكروفون، ثم أعد المحاولة',
@@ -18681,7 +18684,7 @@ Title:`
     // user's key) instead of webkitSpeechRecognition, which had no
     // backend in Electron and died with 'network' on every attempt.
     async function startVoice(opts = {}) {
-      const { pushToTalk = false } = opts
+      const { pushToTalk = false, hotkey = false } = opts
       if (voiceCaptureActive() || isRecording) return
       isPushToTalk = pushToTalk
       pttCancelled = false
@@ -18695,7 +18698,7 @@ Title:`
       }
       isRecording = true
       document.getElementById('mic-btn')?.classList.add('recording')
-      showPtt(pushToTalk ? t('voice.listening') : t('voice.listeningClick'))
+      showPtt(pushToTalk ? t(hotkey ? 'voice.listeningHotkey' : 'voice.listening') : t('voice.listeningClick'))
     }
 
     async function stopVoice(cancel = false) {
@@ -18731,6 +18734,17 @@ Title:`
       if (isRecording) { stopVoice(false); return }
       startVoice({ pushToTalk: false })
     }
+
+    // v0.8 cycle 10 — kitchen mode: ⌘⇧Space from ANYWHERE (main shows +
+    // focuses the window first). PTT semantics: the second press stops,
+    // transcribes, and auto-sends — hands stay in the dough.
+    try {
+      window.alaude.onGlobalPtt?.(() => {
+        if (!VOICE_ENABLED) { showRewindToast?.(t('voice.err.no-backend'), false); return }
+        if (isRecording) { stopVoice(false); return }
+        startVoice({ pushToTalk: true, hotkey: true })
+      })
+    } catch {}
 
     // Push-to-Talk: hold Space when input is empty and unfocused.
     let spacePressed = false

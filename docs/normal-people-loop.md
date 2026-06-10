@@ -127,3 +127,15 @@
   google fallback) and the mic tooltip now names the actual provider
   ("uses your {OpenAI|Google} key"). no-backend message updated ×3
   locales. 5 hermetic route tests — 180 checks green.
+
+### Cycle 10 — kitchen-mode dictation hotkey (2026-06-11)
+- ⌘⇧Space from ANYWHERE: main registers a global shortcut that shows +
+  focuses Labaik and tells the renderer to start dictation; pressing it
+  again stops, transcribes, and auto-sends (PTT semantics — hands stay
+  in the dough). Esc still cancels.
+- globalShortcut has no key-up events, so this is press-to-start /
+  press-to-send rather than literal hold-to-talk; overlay copy says so
+  ("press ⌘⇧Space again to send") in EN/中文/العربية. Registration
+  failure (hotkey taken) degrades with a console note, never a crash.
+- VOICE ARC CORE COMPLETE (cycles 6-10): capture → Whisper → gate lift
+  → Gemini → global hotkey. 180 checks green. Next: Paperwork Desk.

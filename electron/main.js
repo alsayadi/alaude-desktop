@@ -2239,6 +2239,24 @@ app.whenReady().then(() => {
     const accel = process.platform === 'darwin' ? 'Cmd+Shift+A' : 'Ctrl+Shift+A'
     globalShortcut.register(accel, toggleQuickWindow)
   } catch (err) { console.warn('[shortcut] register failed:', err.message) }
+  // v0.8 cycle 10 — kitchen-mode dictation: ⌘⇧Space from ANYWHERE brings
+  // Labaik up listening; pressing it again stops, transcribes, and sends.
+  // globalShortcut has no key-up events, so this is a press-to-start /
+  // press-to-send toggle rather than true hold-to-talk. The renderer
+  // decides whether voice is actually capable (key present) and toasts
+  // honestly when it isn't.
+  try {
+    const pttAccel = process.platform === 'darwin' ? 'Cmd+Shift+Space' : 'Ctrl+Shift+Space'
+    const ok = globalShortcut.register(pttAccel, () => {
+      try {
+        if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+        mainWindow.show()
+        mainWindow.focus()
+        mainWindow.webContents.send('global-ptt')
+      } catch (err) { console.warn('[global-ptt]', err.message) }
+    })
+    if (!ok) console.warn('[shortcut] global dictation hotkey already taken — skipped')
+  } catch (err) { console.warn('[shortcut] ptt register failed:', err.message) }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

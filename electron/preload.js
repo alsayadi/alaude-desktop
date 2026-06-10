@@ -186,6 +186,12 @@ contextBridge.exposeInMainWorld('alaude', {
   undoRestoreTurn: (turnId) => ipcRenderer.invoke('undo-restore-turn', turnId),
   // v0.8 cycle 6 — voice dictation: recorded audio → STT engine in main.
   voiceTranscribe: (payload) => ipcRenderer.invoke('voice-transcribe', payload),
+  // v0.8 cycle 10 — global dictation hotkey (⌘⇧Space from anywhere).
+  onGlobalPtt: (callback) => {
+    const h = () => callback()
+    ipcRenderer.on('global-ptt', h)
+    return () => ipcRenderer.removeListener('global-ptt', h)
+  },
   ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
   ollamaCancel: (model) => ipcRenderer.invoke('ollama-cancel', model),
   ollamaRemove: (model) => ipcRenderer.invoke('ollama-remove', model),
