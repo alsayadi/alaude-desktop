@@ -245,3 +245,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   hostname-based, so DNS-rebinding to a private IP isn't blocked —
   acceptable for a single-operator desktop tool; revisit if a server mode
   ever lands.
+
+### Cycle 24 — per-routine notification toggle (2026-06-10)
+- Every routine notified on every run, so a 15-min check spammed while the
+  daily digest got buried. routines.notify field (default on); 🔔 Notify
+  checkbox in the Add form + a 🔔/🔕 toggle on each row; main gates both
+  success and failure notifications on it. Honest skips this cycle:
+  cross-history search (global search already spans all sessions incl.
+  imports) and per-routine model (the model select already existed).

@@ -2169,7 +2169,7 @@ app.whenReady().then(() => {
             // might as well not exist. Surface it as a real macOS
             // notification when the window isn't focused.
             try {
-              if (Notification.isSupported() && !mainWindow?.isFocused()) {
+              if (routine.notify !== false && Notification.isSupported() && !mainWindow?.isFocused()) {
                 const n = new Notification({ title: `⏰ ${routine.name}`, body: preview.slice(0, 140) })
                 n.on('click', () => {
                   try {
@@ -2187,7 +2187,7 @@ app.whenReady().then(() => {
             routines.recordRun(routine.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: false, error: String(err?.message || err) }) } catch {}
             try {
-              if (Notification.isSupported() && !mainWindow?.isFocused()) {
+              if (routine.notify !== false && Notification.isSupported() && !mainWindow?.isFocused()) {
                 new Notification({ title: `⏰ ${routine.name} failed`, body: String(err?.message || err).slice(0, 140) }).show()
               }
             } catch {}

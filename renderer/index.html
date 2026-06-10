@@ -6857,6 +6857,9 @@
 
         <div style="display:flex;gap:8px;align-items:center">
           <select id="routine-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-dim);cursor:pointer;white-space:nowrap" data-i18n-attr="title:routines.notify.title" title="Show a desktop notification each run">
+            <input type="checkbox" id="routine-notify" checked /> <span data-i18n="routines.notify">🔔 Notify</span>
+          </label>
           <button class="key-save-btn" data-i18n="routines.add" onclick="addRoutine()">Add</button>
         </div>
       </div>
@@ -9026,7 +9029,7 @@ SUMMARY:`
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(s.name)}</div>
-                <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
+                <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''} · <span title="${s.notify === false ? 'Notifications off' : 'Notifications on'}" style="cursor:pointer" onclick="toggleRoutineNotify('${s.id}', ${s.notify === false})">${s.notify === false ? '🔕' : '🔔'}</span></div>
               </div>
               <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
                 <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleRoutineEnabled('${s.id}', this.checked)" />
@@ -9056,13 +9059,15 @@ SUMMARY:`
         showRewindToast?.('Fill name, prompt, and schedule', true)
         return
       }
-      await window.alaude.routinesUpsert({ name, prompt, cron, model })
+      const notify = document.getElementById('routine-notify')?.checked !== false
+      await window.alaude.routinesUpsert({ name, prompt, cron, model, notify })
       document.getElementById('routine-name').value = ''
       document.getElementById('routine-prompt').value = ''
       document.getElementById('routine-cron-custom').value = ''
       document.getElementById('routine-freq').value = 'daily'
       document.getElementById('routine-time').value = '08:00'
       document.getElementById('routine-model').value = ''
+      const _rn = document.getElementById('routine-notify'); if (_rn) _rn.checked = true
       onRoutineFreqChange()
       await refreshRoutinesList()
       showRewindToast?.(`⏰ Routine "${name}" scheduled`, false)
@@ -9078,6 +9083,12 @@ SUMMARY:`
         // The routine-ran event refreshes the list; history follows shortly.
         setTimeout(() => refreshRoutinesHistory(), 4000)
       } catch (e) { showRewindToast?.('Run failed: ' + (e?.message || e), true) }
+    }
+    async function toggleRoutineNotify(id, turnOn) {
+      const r = (await window.alaude.routinesList() || []).find(x => x.id === id)
+      if (!r) return
+      await window.alaude.routinesUpsert({ ...r, notify: !!turnOn })
+      refreshRoutinesList()
     }
     async function deleteRoutine(id) {
       if (!confirm('Delete this routine?')) return
@@ -11607,6 +11618,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
         'routines.recentRuns': 'Recent runs',
+        'routines.notify': '🔔 Notify',
+        'routines.notify.title': 'Show a desktop notification each run',
         'routines.runNow': 'Run now',
         'routines.running': '▶ Running — result lands in Recent runs below.',
         'routines.noRuns': 'No runs yet — routines report here after they fire.',
@@ -11880,6 +11893,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
         'routines.recentRuns': '近期运行',
+        'routines.notify': '🔔 通知',
+        'routines.notify.title': '每次运行显示桌面通知',
         'routines.runNow': '立即运行',
         'routines.running': '▶ 正在运行——结果稍后显示在下方「近期运行」。',
         'routines.noRuns': '还没有运行记录——例行任务触发后会在这里汇报。',
@@ -12138,6 +12153,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
         'routines.recentRuns': 'عمليات التشغيل الأخيرة',
+        'routines.notify': '🔔 إشعار',
+        'routines.notify.title': 'إظهار إشعار سطح المكتب عند كل تشغيل',
         'routines.runNow': 'تشغيل الآن',
         'routines.running': '▶ قيد التشغيل — ستظهر النتيجة أدناه في «عمليات التشغيل الأخيرة».',
         'routines.noRuns': 'لا سجلّ بعد — تظهر نتائج المهام هنا بعد تشغيلها.',

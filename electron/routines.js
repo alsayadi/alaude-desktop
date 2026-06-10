@@ -73,6 +73,7 @@ function upsert(routine) {
     model: routine.model || '',
     cron: String(routine.cron || ''),  // e.g. "0 8 * * *" or "*/15 * * * *"
     enabled: routine.enabled !== false,
+    notify: routine.notify !== false,  // v0.8 cycle 24: per-routine desktop notifications
     lastRunAt: existing?.lastRunAt || null,
     lastStatus: existing?.lastStatus || null,
     lastResult: existing?.lastResult || null,
