@@ -211,6 +211,40 @@ function _nextFire(expr, fromTs) {
   return null
 }
 
+// v0.8 cycle 21 — most recent fire time at or before fromTs, within the
+// window. Minute-by-minute backwards scan: 7 days = 10,080 cheap set
+// lookups, ~1ms. Used for catch-up runs.
+const CATCHUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+function _prevFire(expr, fromTs, windowMs = CATCHUP_WINDOW_MS) {
+  const parsed = _parseCron(expr)
+  if (!parsed) return null
+  const d = new Date(fromTs)
+  d.setSeconds(0, 0)
+  const floor = fromTs - windowMs
+  while (d.getTime() >= floor) {
+    if (_matchesNow(parsed, d)) return d.getTime()
+    d.setMinutes(d.getMinutes() - 1)
+  }
+  return null
+}
+
+/**
+ * v0.8 cycle 21 — catch-up semantics (the Claude Desktop pattern, and the
+ * fix for scheduled-task tools' #1 complaint: silent non-firing). If the
+ * machine was asleep or the app closed when a routine should have fired,
+ * run EXACTLY ONE catch-up for the most recent missed occurrence within
+ * a 7-day window. Guarded by createdAt so a routine created after today's
+ * slot doesn't retro-fire, and by lastRunAt so each miss is made up once.
+ * Returns the missed fire's timestamp, or null when nothing is owed.
+ */
+function _catchUpDue(s, nowMs, windowMs = CATCHUP_WINDOW_MS) {
+  if (!s || !s.enabled) return null
+  const prev = _prevFire(s.cron, nowMs - 60000, windowMs) // exclude current minute (normal tick owns it)
+  if (!prev) return null
+  const baseline = Math.max(s.lastRunAt || 0, s.createdAt || 0)
+  return prev > baseline ? prev : null
+}
+
 // ── Scheduler ──────────────────────────────────────────────────────────────
 let _pollTimer = null
 let _running = false
@@ -224,13 +258,18 @@ function startScheduler(onFire) {
     for (const s of state.routines) {
       if (!s.enabled) continue
       const parsed = _parseCron(s.cron)
-      if (!_matchesNow(parsed, currentMinute)) continue
+      let catchUp = false
+      if (!_matchesNow(parsed, currentMinute)) {
+        // v0.8 cycle 21 — missed while asleep/closed? Make up exactly one.
+        if (!_catchUpDue(s, currentMinute.getTime())) continue
+        catchUp = true
+      }
       // Skip if we already ran THIS minute.
       if (s.lastRunAt && Math.floor(s.lastRunAt / 60000) === Math.floor(currentMinute.getTime() / 60000)) continue
       if (_running) continue // serialise
       _running = true
       try {
-        await onFire(s)
+        await onFire(s, { catchUp })
       } catch (err) {
         console.error('[routines] fire failed:', err.message)
         recordRun(s.id, { status: 'error', resultPreview: String(err.message).slice(0, 400) })
@@ -252,5 +291,5 @@ function stopScheduler() {
 module.exports = {
   list, upsert, remove, setEnabled, recordRun, history,
   startScheduler, stopScheduler,
-  _parseCron, _nextFire,  // exposed for tests
+  _parseCron, _nextFire, _prevFire, _catchUpDue,  // exposed for tests
 }

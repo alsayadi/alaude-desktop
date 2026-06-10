@@ -706,6 +706,37 @@ console.log('\n[18/18] schedule-parse — natural-language reminders EN/中文/�
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 19: routines catch-up — missed fires run exactly once (cycle 21)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[19/19] routines — catch-up for missed fires')
+{
+  const { createRequire } = await import('node:module')
+  const require = createRequire(import.meta.url)
+  const routines = require('../electron/routines.js')
+
+  const noonToday = new Date(); noonToday.setHours(12, 0, 0, 0)
+  const NOW = noonToday.getTime() // deterministic: today 12:00 local
+  const nineAm = new Date(NOW); nineAm.setHours(9, 0, 0, 0)
+
+  check('_prevFire finds this morning 9am from noon',
+    routines._prevFire('0 9 * * *', NOW) === nineAm.getTime())
+  check('_prevFire null outside window',
+    routines._prevFire('0 9 31 2 *', NOW) === null) // Feb 31 never matches
+
+  const mk = (over) => ({ enabled: true, cron: '0 9 * * *', createdAt: NOW - 3 * 86400000, lastRunAt: null, ...over })
+  check('missed fire owed when never run',
+    routines._catchUpDue(mk({}), NOW) === nineAm.getTime())
+  check('not owed when already ran after the slot',
+    routines._catchUpDue(mk({ lastRunAt: nineAm.getTime() + 60000 }), NOW) === null)
+  check('owed when last run was before the slot',
+    routines._catchUpDue(mk({ lastRunAt: nineAm.getTime() - 86400000 }), NOW) === nineAm.getTime())
+  check('routine created AFTER the slot does not retro-fire',
+    routines._catchUpDue(mk({ createdAt: NOW - 3600000 }), NOW) === null) // created 11:00 today
+  check('disabled routine never owed',
+    routines._catchUpDue(mk({ enabled: false }), NOW) === null)
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

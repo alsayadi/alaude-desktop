@@ -283,3 +283,21 @@
   recurrences, am-pm + 24h + 下午5点/点半 + الساعة ٥ مساء times,
   Arabic-digit normalization, task extraction. 12 unit tests; 217
   checks green.
+
+### Cycle 21 — routine catch-up runs (2026-06-11)
+- The fix for scheduled tools' #1 complaint: silent non-firing. If the
+  Mac was asleep or Labaik closed when a routine should have fired, the
+  scheduler now runs EXACTLY ONE catch-up for the most recent missed
+  occurrence (7-day window) — the Claude Desktop pattern. Guards:
+  createdAt (a routine created after today's slot doesn't retro-fire),
+  lastRunAt (each miss made up once), disabled respected.
+- Catch-up runs are labeled "↺ catch-up ·" in run history so the
+  off-schedule fire explains itself. Paperwork deadline reminders are
+  now sleep-proof. 7 unit tests; 228 checks green.
+
+### BLOCKED — v0.7.76 release awaiting keychain (2026-06-11)
+- The alaude-notarize keychain profile became unreachable mid-build
+  (worked for v0.7.74/75 two hours earlier; login keychain likely
+  re-locked). The 0.7.76 build is signed but NOT notarized — release
+  held; v0.7.75 stays latest so users are unaffected. Owner action:
+  unlock keychain / rerun, then rebuild + notarize + publish.

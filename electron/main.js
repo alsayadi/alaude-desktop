@@ -2302,7 +2302,7 @@ app.whenReady().then(() => {
   try {
     // Extracted so both the cron scheduler and the "Run now" IPC share the
     // exact same fire path (v0.8 cycle 13).
-    async function fireRoutine(routine) {
+    async function fireRoutine(routine, meta = {}) {
       const worker = getWorker()
       const id = ++requestId
       const messageId = `routine_${routine.id}_${Date.now()}`
@@ -2311,7 +2311,9 @@ app.whenReady().then(() => {
           sender: mainWindow?.webContents,  // route any activity to main window
           resolve: (result) => {
             const preview = (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 400)
-            routines.recordRun(routine.id, { status: 'ok', resultPreview: preview })
+            // v0.8 cycle 21 — catch-up runs are labeled so the history
+            // explains WHY this fired off-schedule (machine was asleep).
+            routines.recordRun(routine.id, { status: 'ok', resultPreview: (meta.catchUp ? '↺ catch-up · ' : '') + preview })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: true, result }) } catch {}
             // v0.8 retention: a routine that runs silently into a toast
             // might as well not exist. Surface it as a real macOS
