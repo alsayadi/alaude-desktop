@@ -8921,6 +8921,25 @@ SUMMARY:`
       onRoutineFreqChange()
     }
 
+    // v0.8 retention: promote a good one-off prompt into a scheduled
+    // routine in two clicks — ⌘K → "Turn last prompt into a routine".
+    function routineFromLastPrompt() {
+      const lastUser = [...messages].reverse().find(m => m.role === 'user')
+      const text = lastUser
+        ? (Array.isArray(lastUser.content)
+            ? lastUser.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+            : String(lastUser.content || ''))
+        : ''
+      if (!text.trim()) { showRewindToast?.('No prompt in this session yet', true); return }
+      const m = document.getElementById('routines-modal')
+      if (!m.classList.contains('show')) toggleRoutinesModal()
+      document.getElementById('routine-name').value = generateSessionTitle(text).slice(0, 60)
+      document.getElementById('routine-prompt').value = text
+      _loadCronIntoPicker('0 8 * * *')  // sensible default: daily 8am
+      document.getElementById('routine-name').focus()
+      document.getElementById('routine-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
     function toggleRoutinesModal() {
       const m = document.getElementById('routines-modal')
       const opening = !m.classList.contains('show')
@@ -10485,6 +10504,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 general-use: one-click install of three bundled starter skills
         // (meeting notes, trip planner, weekly review). Idempotent — existing
         // folders are never overwritten.
+        { kind: 'action', icon: '⏰', label: 'Turn last prompt into a routine', search: 'routine from prompt schedule repeat daily automate this recurring', action: () => { closeCmdPalette(); routineFromLastPrompt() } },
         { kind: 'action', icon: '🛸', label: 'Future Console (experimental)', search: 'future console experimental cockpit neural agent', action: () => { closeCmdPalette(); window.alaude.openFutureConsole?.() } },
         { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
           closeCmdPalette()

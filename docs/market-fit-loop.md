@@ -134,3 +134,8 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   window isn't focused. First Phase D retention hook, pulled forward.
 - Quick window triage decision: KEEP — spotlight-style access serves the
   wedge directly.
+
+### Cycle 9 — turn last prompt into a routine (2026-06-10)
+- ⌘K → "Turn last prompt into a routine" prefills the Routines Add form
+  (auto-name, prompt text, daily 8am default). The bridge from a good
+  one-off prompt to the week-one retention metric.
