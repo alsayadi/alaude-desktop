@@ -4050,6 +4050,23 @@
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    /* v0.8 cycle 19 — settings hub */
+    .hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .hub-card {
+      display: flex; align-items: center; gap: 10px; text-align: start;
+      padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg); cursor: pointer; font: inherit; color: var(--text);
+    }
+    .hub-card:hover { border-color: var(--green); background: var(--green-dim); }
+    .hub-card-icon { font-size: 20px; flex-shrink: 0; }
+    .hub-card-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .hub-card-name { font-size: 13px; font-weight: 600; }
+    .hub-card-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.35; }
+    .hub-inline { display: flex; flex-direction: column; gap: 4px; }
+    .hub-inline-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+    }
     /* v0.8 cycle 17 — stall note + collapsed error details */
     #stall-note {
       position: fixed; bottom: 128px; left: 50%; transform: translateX(-50%) translateY(4px);
@@ -6313,6 +6330,8 @@
         <!-- v0.7.50: tighter topbar. Only theme + memory visible; everything
              else (including Crew) lives in the ⋯ dropdown. Crew's active
              state is reflected in the menu item via a class hook. -->
+        <!-- v0.8 cycle 19 — one front door for every setting (⌘,) -->
+        <button class="topbar-keys-btn" id="settings-btn" onclick="toggleSettingsHub()" data-i18n-attr="title:hub.btn.title,aria-label:hub.btn.title" title="Settings (⌘,)" aria-label="Settings">⚙️</button>
         <button class="topbar-keys-btn" id="theme-btn" onclick="toggleTheme()" data-i18n-attr="title:topbar.theme.title,aria-label:topbar.theme.title" title="Toggle theme (⌘⇧L)" aria-label="Toggle theme">
           <span id="theme-icon">🌙</span>
         </button>
@@ -6841,6 +6860,17 @@
         <button class="modal-close" onclick="toggleUxInsightsModal()">&times;</button>
       </h2>
       <div id="ux-body" class="ux-scroll"></div>
+    </div>
+  </div>
+
+  <!-- v0.8 cycle 19 — Settings hub: the one front door (⌘,) -->
+  <div class="modal-overlay" id="settings-hub-modal">
+    <div class="modal" style="max-width:680px;width:92vw">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">
+        <span data-i18n="hub.title">⚙️ Settings</span>
+        <button class="modal-close" onclick="toggleSettingsHub()">&times;</button>
+      </h2>
+      <div id="settings-hub-body"></div>
     </div>
   </div>
 
@@ -10787,6 +10817,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '🔑', label: 'API Keys', search: 'api keys', action: () => { closeCmdPalette(); toggleKeysModal() } },
         { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
         { kind: 'action', icon: '↩︎', label: 'Undo last file changes', search: 'undo revert restore rollback files agent', action: () => { closeCmdPalette(); undoLastAgentTurn() } },
+        { kind: 'action', icon: '⚙️', label: 'Settings', search: 'settings preferences options config hub gear', action: () => { closeCmdPalette(); toggleSettingsHub() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
@@ -11757,6 +11788,30 @@ footer a { color: var(--accent); text-decoration: none; }
         'err.ollamaDown': '🦙 Your local AI isn\'t running — open Local Models (⌘K) and press Start, or pick a cloud model.',
         'err.offline': '📡 You appear to be offline — check your internet connection and try again.',
         'stall.note': '⏳ Still working — slow models can take a while. Esc stops it.',
+        'hub.title': '⚙️ Settings',
+        'hub.btn.title': 'Settings (⌘,)',
+        'hub.lang': 'Language',
+        'hub.voice': 'Voice',
+        'hub.voice.ready': 'Ready — click 🎤, hold Space, or press ⌘⇧Space anywhere',
+        'hub.voice.needsKey': 'Needs an OpenAI or Google key',
+        'hub.theme': 'Appearance',
+        'hub.theme.toggle': 'Switch light / dark',
+        'hub.keys': 'AI services & keys',
+        'hub.keys.desc': 'Connect Claude, GPT, Gemini and more',
+        'hub.local': 'Local models',
+        'hub.local.desc': 'Free, private AI that runs on this Mac',
+        'hub.routines': 'Reminders & routines',
+        'hub.routines.desc': 'Things Labaik does on a schedule',
+        'hub.snippets': 'Snippets',
+        'hub.snippets.desc': 'Reusable prompts — type / to use them',
+        'hub.memory': 'Memory',
+        'hub.memory.desc': 'What Labaik remembers about you',
+        'hub.data': 'Your data & privacy',
+        'hub.data.desc': 'What is stored, every network call, clear anything',
+        'hub.usage': 'Usage & spending',
+        'hub.usage.desc': 'This month\'s costs, per-model stats',
+        'hub.backup': 'Back up & restore',
+        'hub.backup.desc': 'One file with everything — keys excluded',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12110,6 +12165,30 @@ footer a { color: var(--accent); text-decoration: none; }
         'err.ollamaDown': '🦙 本地 AI 未在运行——打开「本地模型」（⌘K）启动它，或改用云端模型。',
         'err.offline': '📡 你似乎已离线——请检查网络连接后重试。',
         'stall.note': '⏳ 仍在处理——较慢的模型可能需要一些时间。按 Esc 可停止。',
+        'hub.title': '⚙️ 设置',
+        'hub.btn.title': '设置（⌘,）',
+        'hub.lang': '语言',
+        'hub.voice': '语音',
+        'hub.voice.ready': '已就绪——点 🎤、按住空格，或在任何地方按 ⌘⇧Space',
+        'hub.voice.needsKey': '需要 OpenAI 或 Google 密钥',
+        'hub.theme': '外观',
+        'hub.theme.toggle': '切换浅色 / 深色',
+        'hub.keys': 'AI 服务与密钥',
+        'hub.keys.desc': '连接 Claude、GPT、Gemini 等',
+        'hub.local': '本地模型',
+        'hub.local.desc': '在这台 Mac 上运行的免费私密 AI',
+        'hub.routines': '提醒与例程',
+        'hub.routines.desc': 'Labaik 按计划做的事情',
+        'hub.snippets': '快捷指令',
+        'hub.snippets.desc': '可复用的提示语——输入 / 使用',
+        'hub.memory': '记忆',
+        'hub.memory.desc': 'Labaik 记住的关于你的信息',
+        'hub.data': '你的数据与隐私',
+        'hub.data.desc': '存了什么、每次网络请求、随时清除',
+        'hub.usage': '用量与花费',
+        'hub.usage.desc': '本月花费、各模型统计',
+        'hub.backup': '备份与恢复',
+        'hub.backup.desc': '一个文件包含全部——不含密钥',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12439,6 +12518,30 @@ footer a { color: var(--accent); text-decoration: none; }
         'err.ollamaDown': '🦙 الذكاء الاصطناعي المحلي لا يعمل — افتح «النماذج المحلية» (⌘K) وشغِّله، أو اختر نموذجًا سحابيًّا.',
         'err.offline': '📡 يبدو أنك غير متصل — تحقَّق من الإنترنت وأعد المحاولة.',
         'stall.note': '⏳ ما زال يعمل — النماذج البطيئة قد تستغرق وقتًا. اضغط Esc للإيقاف.',
+        'hub.title': '⚙️ الإعدادات',
+        'hub.btn.title': 'الإعدادات (⌘,)',
+        'hub.lang': 'اللغة',
+        'hub.voice': 'الصوت',
+        'hub.voice.ready': 'جاهز — انقر 🎤، أو اضغط مطوّلًا على المسافة، أو ⌘⇧Space من أي مكان',
+        'hub.voice.needsKey': 'يحتاج مفتاح OpenAI أو Google',
+        'hub.theme': 'المظهر',
+        'hub.theme.toggle': 'تبديل فاتح / داكن',
+        'hub.keys': 'خدمات الذكاء الاصطناعي والمفاتيح',
+        'hub.keys.desc': 'اربط Claude وGPT وGemini وغيرها',
+        'hub.local': 'النماذج المحلية',
+        'hub.local.desc': 'ذكاء اصطناعي مجاني وخاص يعمل على هذا الجهاز',
+        'hub.routines': 'التذكيرات والمهام المجدولة',
+        'hub.routines.desc': 'ما ينفّذه لبيك وفق جدول',
+        'hub.snippets': 'المقتطفات',
+        'hub.snippets.desc': 'أوامر جاهزة لإعادة الاستخدام — اكتب /',
+        'hub.memory': 'الذاكرة',
+        'hub.memory.desc': 'ما يتذكره لبيك عنك',
+        'hub.data': 'بياناتك وخصوصيتك',
+        'hub.data.desc': 'ما هو مخزَّن، وكل نداء شبكة، وامسح ما تشاء',
+        'hub.usage': 'الاستخدام والإنفاق',
+        'hub.usage.desc': 'تكاليف هذا الشهر وإحصاءات النماذج',
+        'hub.backup': 'النسخ الاحتياطي والاستعادة',
+        'hub.backup.desc': 'ملف واحد يضم كل شيء — دون المفاتيح',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -19965,6 +20068,55 @@ Title:`
       closeYourDataModal()
     }
     function closeYourDataModal() { document.getElementById('yourdata-modal')?.classList.remove('show') }
+
+    // ── v0.8 cycle 19 — Settings hub ─────────────────────────────────────
+    // One front door (⚙️ in the topbar, ⌘,) for every settings surface.
+    // v1 is a launcher: each card opens the existing modal; Language and
+    // Voice render inline. v2 (next cycle) migrates panes in fully.
+    function settingsHubSections() {
+      return [
+        { icon: '🔑', name: t('hub.keys'), desc: t('hub.keys.desc'), act: () => toggleKeysModal() },
+        { icon: '🦙', name: t('hub.local'), desc: t('hub.local.desc'), act: () => toggleLocalModelsModal() },
+        { icon: '⏰', name: t('hub.routines'), desc: t('hub.routines.desc'), act: () => toggleRoutinesModal() },
+        { icon: '✂️', name: t('hub.snippets'), desc: t('hub.snippets.desc'), act: () => toggleSnippetModal() },
+        { icon: '🧠', name: t('hub.memory'), desc: t('hub.memory.desc'), act: () => toggleMemoryModal() },
+        { icon: '🔒', name: t('hub.data'), desc: t('hub.data.desc'), act: () => toggleYourDataModal() },
+        { icon: '📈', name: t('hub.usage'), desc: t('hub.usage.desc'), act: () => toggleModelPerfModal() },
+        { icon: '💾', name: t('hub.backup'), desc: t('hub.backup.desc'), act: () => openBackupFromData() },
+      ]
+    }
+    function toggleSettingsHub() {
+      const m = document.getElementById('settings-hub-modal')
+      if (!m) return
+      if (m.classList.contains('show')) { m.classList.remove('show'); return }
+      const body = document.getElementById('settings-hub-body')
+      const sections = settingsHubSections()
+      window._hubActs = sections.map(s => s.act)
+      const cards = sections.map((s, i) => `
+        <button class="hub-card" onclick="document.getElementById('settings-hub-modal').classList.remove('show'); window._hubActs[${i}]()">
+          <span class="hub-card-icon">${s.icon}</span>
+          <span class="hub-card-body"><span class="hub-card-name">${escapeHtml(s.name)}</span>
+          <span class="hub-card-desc">${escapeHtml(s.desc)}</span></span>
+        </button>`).join('')
+      // Inline panes: language (instant switch) + voice status + theme.
+      const langBtn = (code, label) => `<button class="key-save-btn" style="${i18n.lang === code ? '' : 'background:var(--bg-sidebar);color:var(--text);'}padding:5px 14px" onclick="i18n.apply('${code}'); toggleSettingsHub(); toggleSettingsHub()">${label}</button>`
+      const voiceStatus = (typeof VOICE_ENABLED !== 'undefined' && VOICE_ENABLED) ? t('hub.voice.ready') : t('hub.voice.needsKey')
+      body.innerHTML = `
+        <div class="hub-inline">
+          <div class="hub-inline-row"><span class="hub-card-icon">🌐</span><span class="hub-card-name">${escapeHtml(t('hub.lang'))}</span>
+            <span style="display:flex;gap:6px;margin-left:auto">${langBtn('en', 'English')}${langBtn('zh', '中文')}${langBtn('ar', 'العربية')}</span></div>
+          <div class="hub-inline-row"><span class="hub-card-icon">🎤</span><span class="hub-card-name">${escapeHtml(t('hub.voice'))}</span>
+            <span class="hub-card-desc" style="margin-left:auto;text-align:end">${escapeHtml(voiceStatus)}</span></div>
+          <div class="hub-inline-row"><span class="hub-card-icon">🎨</span><span class="hub-card-name">${escapeHtml(t('hub.theme'))}</span>
+            <button class="key-save-btn" style="margin-left:auto;background:var(--bg-sidebar);color:var(--text);padding:5px 14px" onclick="toggleTheme()">${escapeHtml(t('hub.theme.toggle'))}</button></div>
+        </div>
+        <div class="hub-grid">${cards}</div>`
+      m.classList.add('show')
+    }
+    // ⌘, — the universal macOS settings shortcut.
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); toggleSettingsHub() }
+    })
     async function clearDataStore(key, label) {
       const isKeys = false  // credentials are not in the clearable set
       if (!confirm(t('data.clearConfirm').replace('{label}', label))) return

@@ -257,3 +257,14 @@
   login footer (zh 服务商 / ar مزوّد were already everyday words and
   stay). "workspace" was already "folder" in all visible strings —
   verified, not re-shipped. 209 checks green.
+
+### Cycle 19 — Settings hub v1: one front door (2026-06-11)
+- New ⚙️ topbar button + ⌘, (the universal macOS settings shortcut) +
+  ⌘K "Settings": one modal listing every settings surface as cards —
+  AI services & keys, Local models, Reminders & routines, Snippets,
+  Memory, Your data & privacy, Usage & spending, Backup & restore.
+- Three inline rows handled right in the hub: 🌐 Language (one-tap
+  EN/中文/العربية switch), 🎤 Voice status ("Ready — click 🎤, hold
+  Space, or ⌘⇧Space anywhere" vs "needs a key"), 🎨 theme toggle.
+- v1 is a launcher (cards open the existing modals); v2 migrates panes
+  in fully. All names + descriptions ×3 locales. 209 checks green.
