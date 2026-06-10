@@ -7553,16 +7553,42 @@
       { id: 'summary',  trigger: '/summary',  icon: '📝', name: 'Summarize',   desc: 'TL;DR of something long',                         body: 'Summarize the following in 3 bullet points, then a single-sentence takeaway:\n\n{{content}}' },
       { id: 'translate',trigger: '/translate',icon: '🌍', name: 'Translate',   desc: 'Translate text to another language',              body: 'Translate the following into {{target_language}}. Preserve tone and any technical terms.\n\n{{text}}' },
       { id: 'diff',     trigger: '/diff',     icon: '📊', name: 'Compare',     desc: 'Compare two options side-by-side',                body: 'Compare these two options in a pros/cons table, then give a clear recommendation with reasoning.\n\nOption A: {{a}}\n\nOption B: {{b}}' },
+      // v0.8 general-use additions — the original eight skewed heavily
+      // toward coding; these cover the everyday non-developer asks.
+      { id: 'email',    trigger: '/email',    icon: '✉️', name: 'Draft email',  desc: 'Write or polish an email in the right tone',     body: 'Draft an email.\n\nTo: {{who}}\nGoal: {{what_you_want}}\nTone: {{formal_or_friendly}}\n\nKeep it short — no filler phrases, clear ask, subject line included.' },
+      { id: 'brainstorm',trigger: '/brainstorm',icon: '🌪️', name: 'Brainstorm', desc: '10 distinct ideas, then the top 3 developed',    body: 'Brainstorm 10 genuinely different ideas for: {{topic}}\n\nOne line each. Then pick the 3 strongest and develop each in a short paragraph (why it works, first step to try it).' },
+      { id: 'rewrite',  trigger: '/rewrite',  icon: '✍️', name: 'Rewrite',     desc: 'Same content, different tone or length',         body: 'Rewrite the following as: {{tone_or_format}} (e.g. "friendlier", "half the length", "for a 10-year-old", "as bullet points"). Keep the meaning intact.\n\n{{text}}' },
+      { id: 'plan',     trigger: '/plan',     icon: '🗓️', name: 'Plan it',     desc: 'Turn a goal into a concrete plan',               body: 'Help me plan: {{goal}}\n\nConstraints: {{time_money_other}}\n\nGive me a concrete step-by-step plan with rough time estimates, the single most likely failure point, and what to do this week.' },
+      { id: 'decide',   trigger: '/decide',   icon: '⚖️', name: 'Decide',      desc: 'Think through a decision properly',              body: "I'm deciding: {{decision}}\n\nAsk me the 2-3 questions that matter most, then give a recommendation with the strongest argument for AND against it." },
     ]
+    // Tracks which default snippet ids this install has already offered, so
+    // NEW defaults added in an update reach existing users exactly once —
+    // without resurrecting defaults the user deliberately deleted.
+    const LS_SNIPPETS_SEEN = 'alaude:snippets:seen:v1'
     let snippets = loadSnippets()
     function loadSnippets() {
+      const markAllSeen = () => {
+        try { localStorage.setItem(LS_SNIPPETS_SEEN, JSON.stringify(DEFAULT_SNIPPETS.map(d => d.id))) } catch {}
+      }
       try {
         const raw = localStorage.getItem(LS_SNIPPETS)
-        if (!raw) return [...DEFAULT_SNIPPETS]
+        if (!raw) { markAllSeen(); return [...DEFAULT_SNIPPETS] }
         const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed) || !parsed.length) return [...DEFAULT_SNIPPETS]
-        return parsed
-      } catch { return [...DEFAULT_SNIPPETS] }
+        if (!Array.isArray(parsed) || !parsed.length) { markAllSeen(); return [...DEFAULT_SNIPPETS] }
+        // Merge in defaults this install has never seen (added by an update).
+        let seen = []
+        try { seen = JSON.parse(localStorage.getItem(LS_SNIPPETS_SEEN) || '[]') } catch {}
+        const have = new Set(parsed.map(s => s.id))
+        const seenSet = new Set(Array.isArray(seen) ? seen : [])
+        const fresh = DEFAULT_SNIPPETS.filter(d => !have.has(d.id) && !seenSet.has(d.id))
+        const merged = fresh.length ? [...parsed, ...fresh] : parsed
+        if (fresh.length) {
+          try { localStorage.setItem(LS_SNIPPETS, JSON.stringify(merged)) } catch {}
+          console.log('[snippets] merged', fresh.length, 'new default snippet(s):', fresh.map(f => f.trigger).join(', '))
+        }
+        markAllSeen()
+        return merged
+      } catch { markAllSeen(); return [...DEFAULT_SNIPPETS] }
     }
     function saveSnippets() {
       try { localStorage.setItem(LS_SNIPPETS, JSON.stringify(snippets)) } catch {}
