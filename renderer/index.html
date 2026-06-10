@@ -4022,6 +4022,20 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
+    #cmdk-hint {
+      position: fixed; bottom: 86px; right: 18px; z-index: 800;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 10px; padding: 9px 12px; font-size: 12.5px;
+      color: var(--text-dim); cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+      opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s;
+    }
+    #cmdk-hint.show { opacity: 1; transform: none; }
+    #cmdk-hint kbd {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      padding: 2px 7px; font-size: 11.5px; color: var(--text);
+    }
+    .cmdk-hint-close { color: var(--text-faint); margin-left: 2px; font-size: 14px; }
     .send-btn.stopping { background: #c0392b; }
     .send-btn.stopping:hover { opacity: 0.85; }
     .send-btn:not(:disabled):hover { opacity: 0.85; }
@@ -10351,7 +10365,28 @@ footer a { color: var(--accent); text-decoration: none; }
       }
     }
 
+    // v0.8 ease-of-use: one-time coach mark for the command palette. The
+    // palette is the app's hub but nothing on screen reveals it exists.
+    const LS_CK_HINT = 'alaude:ck-hint-done:v1'
+    function maybeShowCmdkHint() {
+      try { if (localStorage.getItem(LS_CK_HINT)) return } catch {}
+      if (document.getElementById('cmdk-hint')) return
+      const el = document.createElement('div')
+      el.id = 'cmdk-hint'
+      el.innerHTML = `<span>${escapeHtml(t('cmdk.hint'))}</span><kbd>${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}K</kbd><span class="cmdk-hint-close">×</span>`
+      el.onclick = () => dismissCmdkHint()
+      document.body.appendChild(el)
+      requestAnimationFrame(() => el.classList.add('show'))
+    }
+    function dismissCmdkHint() {
+      try { localStorage.setItem(LS_CK_HINT, '1') } catch {}
+      const el = document.getElementById('cmdk-hint')
+      if (el) { el.classList.remove('show'); setTimeout(() => el.remove(), 300) }
+    }
+    setTimeout(maybeShowCmdkHint, 8000)
+
     function openCmdPalette() {
+      dismissCmdkHint()
       const overlay = document.getElementById('cmd-palette-overlay')
       const input = document.getElementById('cmd-palette-input')
       input.value = ''
@@ -11427,6 +11462,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ New snippet',
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
+        'cmdk.hint': 'Everything is one shortcut away —',
         'slash.skillDesc': 'Skill (SKILL.md)',
         'slash.match': 'match',
         'slash.matches': 'matches',
@@ -11681,6 +11717,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults.title': '恢复内置片段',
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
+        'cmdk.hint': '一切功能尽在一个快捷键 —',
         'slash.skillDesc': '技能（SKILL.md）',
         'slash.match': '条匹配',
         'slash.matches': '条匹配',
@@ -11920,6 +11957,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults.title': 'استعادة المقاطع المضمَّنة',
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
+        'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
         'slash.skillDesc': 'مهارة (SKILL.md)',
         'slash.match': 'مطابقة',
         'slash.matches': 'مطابقات',

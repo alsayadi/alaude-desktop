@@ -86,8 +86,12 @@ Coding bias found (backlog, highest leverage first):
   (OpenAI-compat, Anthropic, Ollama native). Partial text is salvaged and
   marked "⏹ Stopped." Fixture scenario 4 proves it against a hung stream.
 
+### Cycle 8 — ⌘K coach mark (2026-06-10)
+- One-time dismissible hint chip (bottom-right, 8s after boot) telling new
+  users the command palette exists. Gone forever after first ⌘K or click.
+  Localized in all 3 languages.
+
 Ease-of-use backlog (working list):
-- One-time coach mark for ⌘K (palette is the app's hub but undiscoverable)
 - Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
 - Model picker: surface "which model should I pick?" guidance
 - Error messages: provider errors → plain-language + one-click fix action
