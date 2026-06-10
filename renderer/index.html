@@ -8795,10 +8795,9 @@ SUMMARY:`
       renderMessages()
     }
     function toggleReadAloud(idx) {
-      // v0.7.41 kill-switch — TTS is part of voice, disabled in this build.
-      if (typeof VOICE_ENABLED !== 'undefined' && !VOICE_ENABLED) {
-        showRewindToast?.('🔇 Voice is disabled in this build.', false); return
-      }
+      // v0.8 cycle 8: read-aloud is OS-voice TTS — zero network, no key
+      // needed. It was collateral damage of the v0.7.41 STT kill-switch;
+      // ungated now that the gate is a capability check for INPUT only.
       if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
         showRewindToast?.('TTS not available in this environment', true)
         return
@@ -9293,17 +9292,26 @@ SUMMARY:`
       })
     } catch {}
 
-    // ── v0.7.41 — GLOBAL VOICE KILL-SWITCH ──────────────────────────────
-    // Single feature flag that disables every voice entry point. Flip to
-    // true to re-enable voice input (dictate) + voice output (TTS) + Siri-
-    // style conversation mode. When false:
-    //   - loadVoiceMode() no-ops
-    //   - toggleVoice() / toggleVoiceMode() show a toast + return
-    //   - maybeAutoSpeakReply() no-ops (no reply gets spoken)
-    //   - Push-to-talk Space key does nothing
-    //   - Voice icons in composer already hidden (v0.7.2); untouched here
-    // No code deleted — one line flip re-enables everything.
-    const VOICE_ENABLED = false
+    // ── v0.8 cycle 8 — KILL-SWITCH → CAPABILITY CHECK ───────────────────
+    // v0.7.41 disabled voice because webkitSpeechRecognition has no
+    // backend in Electron. The engine is real now (cycles 6-7:
+    // MediaRecorder → voice-transcribe IPC → Whisper on the user's own
+    // key), so dictation turns ON automatically when a capable key
+    // exists. Gemini joins as a backend next cycle; conversation mode
+    // (auto-TTS + auto-listen) stays hard-off until a VAD/endpointing
+    // cycle lands — without endpointing the mic would record forever.
+    let VOICE_ENABLED = false
+    const CONVERSATION_MODE = false
+    function refreshVoiceCapability(statuses) {
+      // openai only until the Gemini route ships (voice.js cycle 9).
+      const can = !!statuses && statuses.openai === 'set'
+      VOICE_ENABLED = can
+      const mic = document.getElementById('mic-btn')
+      if (mic) {
+        mic.style.display = can ? '' : 'none'
+        mic.title = t('voice.micTitle')
+      }
+    }
 
     // ── v0.5.3 Voice conversation mode ───────────────────────────────────
     // When enabled: every completed assistant reply auto-reads via TTS, and
@@ -9313,8 +9321,8 @@ SUMMARY:`
     const LS_VOICE_MODE = 'alaude:voiceMode:v1'
     let voiceMode = false
     function loadVoiceMode() {
-      // v0.7.41 kill-switch: don't load or reveal voice UI at all.
-      if (!VOICE_ENABLED) { voiceMode = false; return }
+      // Conversation mode stays hard-off until VAD/endpointing exists.
+      if (!CONVERSATION_MODE) { voiceMode = false; return }
       try { voiceMode = localStorage.getItem(LS_VOICE_MODE) === '1' } catch {}
       refreshVoiceModeUi()
     }
@@ -9328,8 +9336,9 @@ SUMMARY:`
         : 'Voice conversation (auto-read replies + auto-listen)'
     }
     function toggleVoiceMode() {
-      // v0.7.41 kill-switch.
-      if (!VOICE_ENABLED) { showRewindToast?.('🔇 Voice is disabled in this build.', false); return }
+      // Hard-off until a VAD/endpointing cycle lands (plan ~cycle 23) —
+      // without endpointing, auto-listen would record without end.
+      if (!CONVERSATION_MODE) { showRewindToast?.(t('voice.convSoon'), false); return }
       voiceMode = !voiceMode
       try { localStorage.setItem(LS_VOICE_MODE, voiceMode ? '1' : '0') } catch {}
       refreshVoiceModeUi()
@@ -9344,8 +9353,8 @@ SUMMARY:`
     // the one the user is looking at AND voice mode is on AND the reply is a
     // real non-error message, speak it + auto-listen for the next turn.
     function maybeAutoSpeakReply() {
-      // v0.7.41 kill-switch.
-      if (!VOICE_ENABLED) return
+      // Conversation mode only — see CONVERSATION_MODE gate.
+      if (!CONVERSATION_MODE) return
       if (!voiceMode) return
       if (!Array.isArray(messages) || messages.length === 0) return
       const last = messages[messages.length - 1]
@@ -11865,6 +11874,20 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': 'Nothing to undo',
         'undo.done': 'Put back {n} file(s)',
         'undo.skipped': '{n} too large to undo',
+        'voice.micTitle': 'Voice input — uses your OpenAI key (hold Space to talk)',
+        'voice.listening': 'Listening… release Space to send',
+        'voice.listeningClick': 'Listening… click 🎤 or press Esc to stop',
+        'voice.transcribing': 'Transcribing…',
+        'voice.micDenied': '🎤 Microphone blocked — System Settings → Privacy & Security → Microphone, then try again',
+        'voice.convSoon': '🗣️ Voice conversation mode is coming soon',
+        'voice.err.no-backend': '🎤 Voice needs an OpenAI key — add one in API Keys',
+        'voice.err.key-rejected': '🔑 Your OpenAI key was rejected — check it in API Keys',
+        'voice.err.rate-limited': '⏳ OpenAI is rate-limiting — try again in a moment',
+        'voice.err.no-speech': '🎤 Didn’t catch anything',
+        'voice.err.too-short': '🎤 Too short — hold and speak',
+        'voice.err.stt-timeout': '🎤 Took too long — try again',
+        'voice.err.stt-network': '🎤 Voice needs internet for now — local voice is coming',
+        'voice.err.generic': '🎤 Voice failed — try again',
         'session.defaultTitle': 'New session',
         'tag.suggest.label': '🏷️ Tag this session?',
         'model.optgroup.local': 'Local (Ollama)',
@@ -12148,6 +12171,20 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': '没有可撤销的更改',
         'undo.done': '已恢复 {n} 个文件',
         'undo.skipped': '{n} 个文件过大，无法撤销',
+        'voice.micTitle': '语音输入——使用你的 OpenAI 密钥（按住空格说话）',
+        'voice.listening': '正在聆听……松开空格键发送',
+        'voice.listeningClick': '正在聆听……点击 🎤 或按 Esc 停止',
+        'voice.transcribing': '正在转写……',
+        'voice.micDenied': '🎤 麦克风被禁用——请在「系统设置 → 隐私与安全性 → 麦克风」中允许后重试',
+        'voice.convSoon': '🗣️ 语音对话模式即将推出',
+        'voice.err.no-backend': '🎤 语音需要 OpenAI 密钥——请在 API 密钥中添加',
+        'voice.err.key-rejected': '🔑 你的 OpenAI 密钥被拒绝——请检查 API 密钥',
+        'voice.err.rate-limited': '⏳ OpenAI 正在限流——请稍后再试',
+        'voice.err.no-speech': '🎤 没有听到任何内容',
+        'voice.err.too-short': '🎤 太短了——请按住并说话',
+        'voice.err.stt-timeout': '🎤 耗时过长——请重试',
+        'voice.err.stt-network': '🎤 语音暂时需要联网——本地语音即将推出',
+        'voice.err.generic': '🎤 语音失败——请重试',
         'session.defaultTitle': '新会话',
         'tag.suggest.label': '🏷️ 给会话加标签？',
         'model.optgroup.local': '本地 (Ollama)',
@@ -12431,6 +12468,20 @@ footer a { color: var(--accent); text-decoration: none; }
         'undo.none': 'لا شيء للتراجع عنه',
         'undo.done': 'أُعيد {n} ملف(ات)',
         'undo.skipped': '{n} أكبر من أن يُتراجع عنه',
+        'voice.micTitle': 'إدخال صوتي — يستخدم مفتاح OpenAI الخاص بك (اضغط مطوّلًا على المسافة للتحدث)',
+        'voice.listening': 'يستمع… حرِّر مسطرة المسافة للإرسال',
+        'voice.listeningClick': 'يستمع… انقر 🎤 أو اضغط Esc للتوقف',
+        'voice.transcribing': 'يحوِّل الكلام إلى نص…',
+        'voice.micDenied': '🎤 الميكروفون محظور — إعدادات النظام ← الخصوصية والأمان ← الميكروفون، ثم أعد المحاولة',
+        'voice.convSoon': '🗣️ وضع المحادثة الصوتية قادم قريبًا',
+        'voice.err.no-backend': '🎤 الصوت يحتاج مفتاح OpenAI — أضِفه في مفاتيح API',
+        'voice.err.key-rejected': '🔑 رُفض مفتاح OpenAI — تحقَّق منه في مفاتيح API',
+        'voice.err.rate-limited': '⏳ OpenAI يحدُّ من الطلبات — حاول بعد قليل',
+        'voice.err.no-speech': '🎤 لم أسمع شيئًا',
+        'voice.err.too-short': '🎤 قصير جدًّا — اضغط مطوّلًا وتحدَّث',
+        'voice.err.stt-timeout': '🎤 استغرق وقتًا طويلًا — أعد المحاولة',
+        'voice.err.stt-network': '🎤 الصوت يحتاج إنترنت حاليًا — الصوت المحلي قادم',
+        'voice.err.generic': '🎤 فشل الإدخال الصوتي — أعد المحاولة',
         'session.defaultTitle': 'جلسة جديدة',
         'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
         'model.optgroup.local': 'محلي (Ollama)',
@@ -17453,6 +17504,9 @@ Title:`
       }
       const hasAny = statuses && Object.values(statuses).some(s => s === 'set')
       console.log('[login] statuses:', statuses, 'hasAny:', hasAny)
+      // v0.8 cycle 8 — voice follows key availability (central refresh
+      // point: boot + every key save lands here).
+      refreshVoiceCapability?.(statuses)
       if (hasAny) {
         loginScreen.classList.add('hidden')
         // Belt-and-braces: some older CSS with !important could theoretically
@@ -18602,20 +18656,9 @@ Title:`
     //  2. Hold Space (outside input, input empty) → push-to-talk. Release
     //     sends automatically if there's a transcript.
     //  3. Esc during voice → cancels without sending.
-    let recognition = null
     let isRecording = false
     let isPushToTalk = false
     let pttCancelled = false
-
-    function makeRecognition() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return null
-      const R = window.SpeechRecognition || window.webkitSpeechRecognition
-      const r = new R()
-      r.continuous = true
-      r.interimResults = true
-      r.lang = 'en-US'
-      return r
-    }
 
     function showPtt(text) {
       const el = document.getElementById('ptt-overlay')
@@ -18628,71 +18671,58 @@ Title:`
       document.getElementById('ptt-overlay')?.classList.remove('show')
     }
 
-    function startVoice(opts = {}) {
+    // v0.8 cycle 8 — startVoice/stopVoice now ride the real engine
+    // (cycles 6-7: MediaRecorder → voice-transcribe IPC → Whisper on the
+    // user's key) instead of webkitSpeechRecognition, which had no
+    // backend in Electron and died with 'network' on every attempt.
+    async function startVoice(opts = {}) {
       const { pushToTalk = false } = opts
-      const r = makeRecognition()
-      if (!r) { alert('Voice input not supported here.'); return }
-      recognition = r
+      if (voiceCaptureActive() || isRecording) return
       isPushToTalk = pushToTalk
       pttCancelled = false
-
-      r.onstart = () => {
-        isRecording = true
-        document.getElementById('mic-btn')?.classList.add('recording')
-        if (pushToTalk) showPtt('Listening… release Space to send')
-      }
-      r.onresult = (event) => {
-        let transcript = ''
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript
-        }
-        input.value = transcript
-        input.dispatchEvent(new Event('input'))
-        if (pushToTalk && transcript.trim()) {
-          // Live preview right in the PTT overlay so user sees recognition
-          const preview = transcript.trim().slice(-60)
-          showPtt('"' + preview + '"')
-        }
-      }
-      r.onend = () => {
-        isRecording = false
-        document.getElementById('mic-btn')?.classList.remove('recording')
-        hidePtt()
-        // Push-to-talk: auto-send the transcript (unless explicitly cancelled).
-        if (isPushToTalk && !pttCancelled && input.value.trim() && !isStreaming) {
-          sendMessage()
-        }
+      try {
+        await voiceCaptureStart()
+      } catch (err) {
         isPushToTalk = false
+        const denied = /NotAllowed|denied|dismissed/i.test(String(err?.name || '') + String(err?.message || ''))
+        showRewindToast?.(denied ? t('voice.micDenied') : ('🎤 ' + (err?.message || 'mic failed')), true)
+        return
       }
-      r.onerror = (e) => {
-        isRecording = false
-        document.getElementById('mic-btn')?.classList.remove('recording')
-        hidePtt()
-        isPushToTalk = false
-        // Surface the reason — "silent mic flicker" was baffling users.
-        const msg = e?.error === 'not-allowed' ? '🎤 Microphone blocked — enable it in System Settings › Privacy › Microphone'
-          : e?.error === 'no-speech' ? '🎤 No speech detected'
-          : e?.error === 'network' ? '🎤 Voice needs internet (Web Speech API)'
-          : `🎤 Voice: ${e?.error || 'failed'}`
-        showRewindToast?.(msg, e?.error !== 'no-speech')
-      }
-      try { r.start() } catch (err) { console.warn('[voice] start failed:', err.message); isRecording = false; hidePtt() }
+      isRecording = true
+      document.getElementById('mic-btn')?.classList.add('recording')
+      showPtt(pushToTalk ? t('voice.listening') : t('voice.listeningClick'))
     }
 
-    function stopVoice(cancel = false) {
-      if (!recognition || !isRecording) return
+    async function stopVoice(cancel = false) {
+      if (!voiceCaptureActive()) return
       pttCancelled = !!cancel
+      isRecording = false
+      document.getElementById('mic-btn')?.classList.remove('recording')
+      const wasPtt = isPushToTalk
+      isPushToTalk = false
       if (cancel) {
-        // Clear the input so the accidental transcript doesn't get sent.
-        input.value = ''
-        input.dispatchEvent(new Event('input'))
+        hidePtt()
+        await voiceCaptureStop({ cancel: true })
+        return
       }
-      try { recognition.stop() } catch {}
+      showPtt(t('voice.transcribing'))
+      const res = await voiceCaptureStop()
+      hidePtt()
+      if (!res) return
+      if (res.error) {
+        const quiet = res.error === 'no-speech' || res.error === 'too-short'
+        showRewindToast?.(t('voice.err.' + res.error, t('voice.err.generic')), !quiet)
+        return
+      }
+      // Append (don't replace) so dictation can extend typed text.
+      input.value = (input.value.trim() ? input.value.trimEnd() + ' ' : '') + res.text
+      input.dispatchEvent(new Event('input'))
+      input.focus()
+      if (wasPtt && !pttCancelled && input.value.trim() && !isStreaming) sendMessage()
     }
 
     function toggleVoice() {
-      // v0.7.41 kill-switch.
-      if (!VOICE_ENABLED) { showRewindToast?.('🔇 Voice is disabled in this build.', false); return }
+      if (!VOICE_ENABLED) { showRewindToast?.(t('voice.err.no-backend'), false); return }
       if (isRecording) { stopVoice(false); return }
       startVoice({ pushToTalk: false })
     }

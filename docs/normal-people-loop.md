@@ -99,3 +99,21 @@
   rate-limited / no-speech / stt-timeout / stt-network). Injectable
   fetch keeps tests hermetic — 7 more checks (175 total). Next: gate
   lift (mic button returns, capability-checked).
+
+### Cycle 8 — VOICE IS BACK: gate lift onto the real engine (2026-06-11)
+- `VOICE_ENABLED` const → capability check: the 🎤 button appears
+  automatically when an OpenAI key exists (Gemini joins next cycle),
+  refreshed at the central key-status point (checkLoginStatus).
+- startVoice/stopVoice rewired from dead webkitSpeechRecognition onto
+  the capture pipeline: click-to-talk and hold-Space push-to-talk both
+  record → "Transcribing…" → text appends to the composer (PTT
+  auto-sends). Esc cancels. Mic-denied error explains the exact System
+  Settings path.
+- Read-aloud TTS ungated — it's OS voices, zero network; it was
+  collateral damage of the v0.7.41 kill-switch.
+- Conversation mode stays HARD-OFF behind `CONVERSATION_MODE=false`
+  until a VAD/endpointing cycle lands (without endpointing, auto-listen
+  records forever — feasibility critic's catch).
+- Tooltip discloses "uses your OpenAI key" (privacy honesty). Full
+  error taxonomy + all strings in EN/中文/العربية. 175 checks green.
+  Voice arc remaining: Gemini route, dictation QA, tests, local engine.
