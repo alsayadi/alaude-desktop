@@ -336,3 +336,22 @@
   UI: optional URL field in the routines form + a "Watch a page for
   changes" template (every 3h). Catch-up runs (cycle 21) make watchers
   sleep-proof too. 6 unit tests; 234 checks green. EN/中文/العربية.
+
+### Cycle 25 — CHECKPOINT (2026-06-11)
+- Fresh-install CDP audit, 11/11 live assertions green: settings hub
+  (8 cards + 3 inline rows, ⌘,), Ollama-down error class + collapsed
+  details disclosure rendering through markdown, NL reminder parser
+  in-page ("…every friday at 5pm" → 0 17 * * 5), 5 welcome templates
+  (📄 paperwork + 🌐 translate present), watcher URL field + 👁 template
+  first in the gallery, audio/share/undo/remind functions live, mic
+  correctly hidden on a keyless fresh home. Hub screenshot verified.
+- Arc go/no-go: A done · B core done (local STT engine + Record mode
+  remain) · C done · D receipts done (dry-run diffs pending, gates
+  errands) · E hub done, panic-path pending · F watchers+catch-up done
+  (template gallery partial) · G NOT STARTED (needs dry-run + guardrail
+  trio first) · H not started · I partial (bridge timeouts, stall
+  watchdog done; archive + Future-Console removal pending).
+- Cycles 1-25 scorecard: 24 substantive ships + this checkpoint, 3
+  releases live (0.7.73-75), 154 → 234 automated checks, two re-scopes
+  honestly taken (hub migration, conversation mode). v0.7.76 release
+  HELD on keychain access.
