@@ -1479,11 +1479,8 @@ async function runImageGen(args) {
   const b64 = resp?.data?.[0]?.b64_json
   if (!b64) return { error: 'OpenAI returned no image data.' }
 
-  // Save to ~/.labaik/images/{id}.png
-  const fs = require('fs')
-  const path = require('path')
-  const os = require('os')
-  const imagesDir = path.join(os.homedir(), '.labaik', 'images')
+  // Save to ~/.labaik/images/{id}.png (honors LABAIK_HOME via paths.BASE_DIR)
+  const imagesDir = path.join(paths.BASE_DIR, 'images')
   try { fs.mkdirSync(imagesDir, { recursive: true }) } catch {}
   const id = 'img_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
   const filePath = path.join(imagesDir, `${id}.png`)

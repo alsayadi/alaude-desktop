@@ -1121,6 +1121,7 @@ function handleApprovalRequest(resp, pendingChat) {
   const approvalId = 'pa_' + (++requestId) + '_' + Date.now().toString(36)
   pendingApprovals.set(approvalId, {
     workerId: resp.id,
+    chatId: resp.chatId,  // pendingRequests key — workerId is the ap_ bridge id
     workspacePath,
     tool: resp.tool,
     args: resp.args || {},
@@ -1169,7 +1170,7 @@ ipcMain.handle('perm-respond', (_e, approvalId, decision) => {
   if (!pend) return false
   pendingApprovals.delete(approvalId)
   // Re-arm the chat's idle timer now that the human has answered.
-  const pendingChat = pendingRequests.get(pend.workerId)
+  const pendingChat = pendingRequests.get(pend.chatId)
   if (pendingChat) { pendingChat.awaitingApproval = false; pendingChat.onActivity?.() }
 
   if (decision === 'deny') {
