@@ -211,3 +211,16 @@
   per month (localStorage-keyed by month).
 - Confirm-before-expensive: Deep Research asks once per app run with a
   plain-words cost range before arming. EN/中文/العربية. 201 checks.
+
+### Cycle 16 — Receipts v2: the network ledger (2026-06-11)
+- New electron/net-ledger.js: an append-only, rotating, LOCAL record of
+  every outbound call (host · why · when) at ~/.labaik/net-ledger.ndjson.
+  Wired at the five call sites that carry user content: chat requests
+  for every provider (incl. 🦙 localhost marked "stays on this Mac"),
+  web search, fetch_page, voice transcription, Ollama installer.
+- "Your data" panel (⌘K) grows a Network section: newest 25 calls with
+  the honest headline — "🔒 All recent calls stayed on this Mac" on
+  local models, or "☁️ N calls went to a cloud provider — on your own
+  key, never through us." One-click Clear.
+- The anti-Recall: privacy you can inspect, not just believe. 8 unit
+  tests; 209 checks green. EN/中文/العربية.

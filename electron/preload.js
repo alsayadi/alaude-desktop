@@ -188,6 +188,9 @@ contextBridge.exposeInMainWorld('alaude', {
   voiceTranscribe: (payload) => ipcRenderer.invoke('voice-transcribe', payload),
   // v0.8 cycle 12 — print a clean document (Paperwork reply letters).
   printHtml: (html) => ipcRenderer.invoke('print-html', html),
+  // v0.8 cycle 16 — Receipts: the visible network ledger.
+  netLedgerRecent: (n) => ipcRenderer.invoke('net-ledger-recent', n),
+  netLedgerClear: () => ipcRenderer.invoke('net-ledger-clear'),
   // v0.8 cycle 10 — global dictation hotkey (⌘⇧Space from anywhere).
   onGlobalPtt: (callback) => {
     const h = () => callback()

@@ -651,6 +651,32 @@ console.log('\n[16/16] paperwork-dates — deadline extraction + reminder timing
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 17: net-ledger — log/recent/clear + host parsing (cycle 16)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[17/17] net-ledger — log/recent/clear + host parsing')
+{
+  const { createRequire } = await import('node:module')
+  const fs = await import('node:fs')
+  const require = createRequire(import.meta.url)
+  const ledger = require('../electron/net-ledger.js')
+
+  ledger.clear()
+  check('recent on empty ledger → []', ledger.recent().length === 0)
+  ledger.log('api.openai.com', 'chat (openai)')
+  ledger.log('localhost', 'chat (local Ollama — stays on this Mac)')
+  ledger.log('html.duckduckgo.com', 'web search')
+  const r = ledger.recent(10)
+  check('three entries recorded', r.length === 3)
+  check('newest first', r[0].host === 'html.duckduckgo.com' && r[2].host === 'api.openai.com')
+  check('entries carry ts + why', typeof r[0].ts === 'number' && r[1].why.includes('stays on this Mac'))
+  check('hostOf parses URLs', ledger.hostOf('https://api.x.ai/v1/chat') === 'api.x.ai')
+  check('hostOf tolerates garbage', ledger.hostOf('not a url') === 'unknown')
+  check('recent(1) caps results', ledger.recent(1).length === 1)
+  ledger.clear()
+  check('clear removes the file', !fs.existsSync(ledger.FILE) && ledger.recent().length === 0)
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

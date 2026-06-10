@@ -28,6 +28,7 @@ const {
 // v0.7.39 / v0.8 cycle 46 — shell scope guard, extracted to a tested module.
 const { checkCommandScope } = require('./command-scope')
 const undoSnaps = require('./undo-snapshots')
+const netLedger = require('./net-ledger')
 
 
 // ── Crash handlers ─────────────────────────────────────────────────────────
@@ -728,6 +729,7 @@ async function runWebSearch(query) {
   const base = process.env.LABAIK_SEARCH_BASE || 'https://html.duckduckgo.com'
   let html
   try {
+    netLedger.log(netLedger.hostOf(base), 'web search')
     const res = await fetch(`${base}/html/?q=${encodeURIComponent(q)}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' }, redirect: 'follow',
     })
@@ -801,6 +803,7 @@ async function runFetchPage(rawUrl) {
   if (blocked) return { error: `Blocked: ${blocked}` }
   let res, html
   try {
+    netLedger.log(netLedger.hostOf(rawUrl), 'read web page')
     res = await safeFetch(rawUrl)
     if (!res.ok) return { error: `Fetch failed: HTTP ${res.status}` }
     html = await readCapped(res)
@@ -1610,6 +1613,8 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const wrappedFetch = async (url, init = {}) => {
     const headers = new Headers(init.headers || {})
     headers.set('Connection', 'close')
+    // v0.8 cycle 16 — receipts: every chat request lands in the ledger.
+    try { netLedger.log(netLedger.hostOf(url), 'chat (' + provider + ')') } catch {}
     return globalThis.fetch(url, { ...init, headers })
   }
   const client = new OpenAI({
@@ -1978,6 +1983,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
 
     let res
     try {
+      netLedger.log('localhost', 'chat (local Ollama — stays on this Mac)')
       res = await fetch(`${baseURL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2090,6 +2096,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     clientOpts.apiKey = cred.value
   }
   const client = new Anthropic(clientOpts)
+  netLedger.log('api.anthropic.com', 'chat (anthropic)')
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   // v0.7.67 — plan mode strips ALL tools so the model physically can't act.
   const mcpTools = planMode ? [] : await getMcpTools().catch(() => [])
@@ -2217,6 +2224,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
 async function chatGemini(msgs, model, sysPrompt) {
   const { GoogleGenAI } = require('@google/genai')
   const client = new GoogleGenAI({ apiKey: getApiKey('google') })
+  netLedger.log('generativelanguage.googleapis.com', 'chat (google)')
   const chatMsgs = msgs.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }))
   const res = await client.models.generateContent({ model: model || 'gemini-2.0-flash', contents: chatMsgs, ...(sysPrompt ? { systemInstruction: sysPrompt } : {}) })
   return res.text || '(No response)'

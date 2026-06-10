@@ -1476,6 +1476,7 @@ ipcMain.handle('ollama-list', async () => ollama.listInstalled())
 // v0.5.0: in-app Ollama installer. No website trip. Progress streams back
 // to renderer via `ollama-install-progress` events.
 ipcMain.handle('ollama-install', async (event) => {
+  netLedger.log('github.com', 'Ollama installer download')
   try {
     const result = await ollama.installOllama({
       onProgress: (p) => {
@@ -1507,6 +1508,10 @@ const undoSnaps = require('./undo-snapshots')
 ipcMain.handle('undo-list-turns', async () => undoSnaps.listTurns())
 ipcMain.handle('undo-restore-turn', async (_e, turnId) => undoSnaps.restoreTurn(turnId))
 
+// v0.8 cycle 16 — Receipts: the network ledger behind "Your data".
+ipcMain.handle('net-ledger-recent', async (_e, n) => netLedger.recent(Math.min(200, Math.max(1, n || 50))))
+ipcMain.handle('net-ledger-clear', async () => { netLedger.clear(); return { ok: true } })
+
 // v0.8 cycle 12 — print a clean HTML document (Paperwork reply letters).
 // A hidden window loads the static markup and opens the native print
 // dialog (which includes save-as-PDF on macOS). The window is destroyed
@@ -1531,10 +1536,15 @@ ipcMain.handle('print-html', async (_e, html) => {
 // (openai whisper → gemini → on-device, by key availability). Base64 is
 // 4/3 of raw, so the wire cap is MAX_AUDIO_BYTES * 4/3.
 const voice = require('./voice')
+const netLedger = require('./net-ledger')
 ipcMain.handle('voice-transcribe', async (_e, payload) => {
   try {
     if (!payload?.audioB64) return { error: 'empty-audio' }
     if (payload.audioB64.length > Math.ceil(voice.MAX_AUDIO_BYTES * 4 / 3)) return { error: 'too-large' }
+    // Receipts: voice recordings leaving the machine are ledger-visible.
+    const backend = voice.pickBackend(getApiKey)
+    if (backend === 'openai') netLedger.log('api.openai.com', 'voice transcription')
+    else if (backend === 'google') netLedger.log('generativelanguage.googleapis.com', 'voice transcription')
     return await voice.transcribe({
       buffer: Buffer.from(payload.audioB64, 'base64'),
       mime: payload.mime || 'audio/webm',

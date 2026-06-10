@@ -11703,6 +11703,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'receipts.replies': '{n} replies this month',
         'receipts.alert': '💰 AI spend this month passed {usd} — details in the 📈 model dashboard (⌘K)',
         'receipts.drConfirm': 'Deep Research runs many web searches and reads several pages — on a cloud model it can cost from a few cents up to ~$1. Continue?',
+        'data.net.title': 'Network — every call this app made',
+        'data.net.empty': 'No network calls recorded yet.',
+        'data.net.allLocal': '🔒 All recent calls stayed on this Mac (local model).',
+        'data.net.summary': '☁️ {n} of the recent calls went to a cloud provider — on your own key, never through us.',
+        'data.net.clear': 'Clear',
+        'data.net.cleared': '🧹 Network ledger cleared',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12046,6 +12052,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'receipts.replies': '本月 {n} 条回复',
         'receipts.alert': '💰 本月 AI 花费已超过 {usd}——详见 📈 模型仪表盘（⌘K）',
         'receipts.drConfirm': '深度研究会进行多次网络搜索并阅读多个页面——使用云端模型时可能花费几美分到约 1 美元。继续吗？',
+        'data.net.title': '网络——这个应用发出的每一次请求',
+        'data.net.empty': '尚未记录任何网络请求。',
+        'data.net.allLocal': '🔒 最近的请求全部留在这台 Mac 上（本地模型）。',
+        'data.net.summary': '☁️ 最近有 {n} 次请求发往云端服务商——使用你自己的密钥，绝不经过我们。',
+        'data.net.clear': '清除',
+        'data.net.cleared': '🧹 网络记录已清除',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12365,6 +12377,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'receipts.replies': '{n} ردًّا هذا الشهر',
         'receipts.alert': '💰 تجاوز إنفاقك على الذكاء الاصطناعي هذا الشهر {usd} — التفاصيل في 📈 لوحة النماذج (⌘K)',
         'receipts.drConfirm': 'البحث المعمّق يجري عدة عمليات بحث ويقرأ صفحات عديدة — وقد يكلّف على نموذج سحابي من سنتات قليلة إلى نحو دولار واحد. أتريد المتابعة؟',
+        'data.net.title': 'الشبكة — كل نداء أجراه هذا التطبيق',
+        'data.net.empty': 'لم تُسجَّل أي نداءات شبكة بعد.',
+        'data.net.allLocal': '🔒 كل النداءات الأخيرة بقيت على هذا الجهاز (نموذج محلي).',
+        'data.net.summary': '☁️ {n} من النداءات الأخيرة ذهبت إلى مزوّد سحابي — بمفتاحك أنت، ولا تمرّ عبرنا أبدًا.',
+        'data.net.clear': 'مسح',
+        'data.net.cleared': '🧹 مُسح سجلّ الشبكة',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -19824,6 +19842,29 @@ Title:`
       _yourDataBaseDir = inv.baseDir
       const total = inv.items.reduce((a, b) => a + (b.bytes || 0), 0)
       const CLEARABLE = new Set(['sessions.json','memory.json','profile.json','routines.json','routine-history.ndjson','spaces.json','events.ndjson','images','skills'])
+      // v0.8 cycle 16 — Receipts: the network ledger. "Nothing leaves this
+      // Mac" becomes inspectable: which host, why, when — newest first.
+      let ledger = []
+      try { ledger = await window.alaude.netLedgerRecent(40) || [] } catch {}
+      const cloudCalls = ledger.filter(e => e.host !== 'localhost').length
+      const ledgerRows = ledger.slice(0, 25).map(e => `
+        <div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:11.5px;border-bottom:1px dashed var(--border)">
+          <span style="font-family:var(--mono,monospace);color:${e.host === 'localhost' ? 'var(--green)' : 'var(--text)'};min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.host === 'localhost' ? '🦙 ' : '☁️ '}${escapeHtml(e.host)}</span>
+          <span style="color:var(--text-dim);flex:1">${escapeHtml(e.why || '')}</span>
+          <span style="color:var(--text-faint);white-space:nowrap">${escapeHtml(formatRelTime(e.ts))}</span>
+        </div>`).join('')
+      const ledgerHtml = `
+        <div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div style="font-weight:700">${escapeHtml(t('data.net.title'))}</div>
+            ${ledger.length ? `<button class="msg-action-btn" onclick="clearNetLedger()" style="padding:1px 8px;font-size:11px">${escapeHtml(t('data.net.clear'))}</button>` : ''}
+          </div>
+          <div style="font-size:11.5px;color:var(--text-dim);margin:4px 0 8px">${escapeHtml(
+            ledger.length === 0 ? t('data.net.empty')
+            : cloudCalls === 0 ? t('data.net.allLocal')
+            : t('data.net.summary').replace('{n}', String(cloudCalls)))}</div>
+          ${ledgerRows}
+        </div>`
       list.innerHTML = inv.items.map(it => `
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
           <span style="color:var(--text);flex:1">${escapeHtml(it.label)}</span>
@@ -19834,7 +19875,13 @@ Title:`
           <span style="color:var(--text)">${escapeHtml(t('data.total'))}</span>
           <span style="color:var(--text)">${fmtBytes(total)}</span>
         </div>
-        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-family:var(--mono,monospace)">${escapeHtml(inv.baseDir)}</div>`
+        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-family:var(--mono,monospace)">${escapeHtml(inv.baseDir)}</div>` +
+        ledgerHtml
+    }
+    async function clearNetLedger() {
+      try { await window.alaude.netLedgerClear() } catch {}
+      showRewindToast?.(t('data.net.cleared'), false)
+      closeYourDataModal()
     }
     function closeYourDataModal() { document.getElementById('yourdata-modal')?.classList.remove('show') }
     async function clearDataStore(key, label) {
