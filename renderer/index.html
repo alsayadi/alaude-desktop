@@ -4050,6 +4050,27 @@
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    /* v0.8 cycle 17 — stall note + collapsed error details */
+    #stall-note {
+      position: fixed; bottom: 128px; left: 50%; transform: translateX(-50%) translateY(4px);
+      z-index: 790; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 99px; padding: 5px 14px; font-size: 12px; color: var(--text-dim);
+      opacity: 0; transition: opacity 0.4s, transform 0.4s; pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-width: 86vw; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    #stall-note.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .err-details { margin-top: 6px; }
+    .err-details summary {
+      cursor: pointer; font-size: 11px; color: var(--text-faint);
+      user-select: none; list-style-position: inside;
+    }
+    .err-details summary:hover { color: var(--text-dim); }
+    .err-raw {
+      font-family: var(--mono, monospace); font-size: 11px; color: var(--text-faint);
+      background: var(--bg-sidebar); border-radius: 6px; padding: 6px 8px; margin-top: 4px;
+      white-space: pre-wrap; word-break: break-word;
+    }
     #cmdk-hint {
       position: fixed; bottom: 86px; right: 18px; z-index: 800;
       display: flex; align-items: center; gap: 8px;
@@ -7535,6 +7556,29 @@
         setTimeout(() => el.classList.contains('show') && el.classList.remove('show'), 18000)
       } catch {}
     }
+
+    // v0.8 cycle 17 — no silent stalls. Cowork's top UX complaint: the
+    // agent goes quiet and silence reads as broken. If a turn is running
+    // but nothing has happened for 12s, a soft note appears; it hides the
+    // moment tokens or tool activity resume (or the turn ends).
+    setInterval(() => {
+      try {
+        const stalled = typeof isStreaming !== 'undefined' && isStreaming &&
+          window._lastStreamActivity && (Date.now() - window._lastStreamActivity > 12000)
+        let el = document.getElementById('stall-note')
+        if (stalled) {
+          if (!el) {
+            el = document.createElement('div')
+            el.id = 'stall-note'
+            document.body.appendChild(el)
+          }
+          el.textContent = t('stall.note')
+          requestAnimationFrame(() => el.classList.add('show'))
+        } else if (el) {
+          el.classList.remove('show')
+        }
+      } catch {}
+    }, 3000)
 
     // v0.8 cycle 5 — reversibility surfaced. When a turn wrote files, a
     // dismissible chip offers one-click undo; the same action lives in ⌘K
@@ -11709,6 +11753,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.net.summary': '☁️ {n} of the recent calls went to a cloud provider — on your own key, never through us.',
         'data.net.clear': 'Clear',
         'data.net.cleared': '🧹 Network ledger cleared',
+        'err.details': 'Show technical details',
+        'err.ollamaDown': '🦙 Your local AI isn\'t running — open Local Models (⌘K) and press Start, or pick a cloud model.',
+        'err.offline': '📡 You appear to be offline — check your internet connection and try again.',
+        'stall.note': '⏳ Still working — slow models can take a while. Esc stops it.',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12058,6 +12106,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.net.summary': '☁️ 最近有 {n} 次请求发往云端服务商——使用你自己的密钥，绝不经过我们。',
         'data.net.clear': '清除',
         'data.net.cleared': '🧹 网络记录已清除',
+        'err.details': '显示技术细节',
+        'err.ollamaDown': '🦙 本地 AI 未在运行——打开「本地模型」（⌘K）启动它，或改用云端模型。',
+        'err.offline': '📡 你似乎已离线——请检查网络连接后重试。',
+        'stall.note': '⏳ 仍在处理——较慢的模型可能需要一些时间。按 Esc 可停止。',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12383,6 +12435,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.net.summary': '☁️ {n} من النداءات الأخيرة ذهبت إلى مزوّد سحابي — بمفتاحك أنت، ولا تمرّ عبرنا أبدًا.',
         'data.net.clear': 'مسح',
         'data.net.cleared': '🧹 مُسح سجلّ الشبكة',
+        'err.details': 'إظهار التفاصيل التقنية',
+        'err.ollamaDown': '🦙 الذكاء الاصطناعي المحلي لا يعمل — افتح «النماذج المحلية» (⌘K) وشغِّله، أو اختر نموذجًا سحابيًّا.',
+        'err.offline': '📡 يبدو أنك غير متصل — تحقَّق من الإنترنت وأعد المحاولة.',
+        'stall.note': '⏳ ما زال يعمل — النماذج البطيئة قد تستغرق وقتًا. اضغط Esc للإيقاف.',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -13777,7 +13833,10 @@ footer a { color: var(--accent); text-decoration: none; }
       const r = String(raw || '')
       const low = r.toLowerCase()
       let friendly = null
-      if (/401|unauthorized|invalid[_ ]api[_ ]key|incorrect api key|authentication/.test(low)) {
+      if (/econnrefused/.test(low) && /11434|localhost|127\.0\.0\.1/.test(low)) {
+        // v0.8 cycle 17 — local model selected but Ollama isn't running.
+        friendly = t('err.ollamaDown')
+      } else if (/401|unauthorized|invalid[_ ]api[_ ]key|incorrect api key|authentication/.test(low)) {
         friendly = t('err.key')
       } else if (/insufficient[_ ]quota|exceeded your current quota|payment|402|billing/.test(low)) {
         friendly = t('err.credits')
@@ -13786,14 +13845,17 @@ footer a { color: var(--accent); text-decoration: none; }
       } else if (/context[_ ]length|maximum context|too long|prompt is too long|context window/.test(low)) {
         friendly = t('err.context')
       } else if (/enotfound|econnrefused|econnreset|network|fetch failed|dns|socket|etimedout/.test(low)) {
-        friendly = t('err.network')
+        // v0.8 cycle 17 — distinguish "your wifi is off" from "their server".
+        friendly = (typeof navigator !== 'undefined' && navigator.onLine === false) ? t('err.offline') : t('err.network')
       } else if (/timed? ?out|timeout/.test(low)) {
         friendly = t('err.timeout')
       } else if (/5\d\d|overloaded|server error|unavailable|bad gateway/.test(low)) {
         friendly = t('err.provider')
       }
       if (!friendly) return 'Error: ' + r
-      return friendly + '\n\n<small>' + r.slice(0, 300) + '</small>'
+      // Raw detail collapses behind "Show technical details" (cycle 17) —
+      // one calm sentence up front, the stack trace only on request.
+      return friendly + '\n\n<!--ERR_DETAILS-->' + r.slice(0, 300) + '<!--/ERR_DETAILS-->'
     }
 
     async function callAI(userText, uxMeta) {
@@ -13815,6 +13877,7 @@ footer a { color: var(--accent); text-decoration: none; }
       const targetSessionId = currentSessionId
 
       // Add typing indicator — tag it with uxMessageId so tokens route correctly
+      window._lastStreamActivity = Date.now()  // cycle 17: stall watchdog baseline
       target.push({
         role: 'assistant', content: '', streaming: true,
         uxMessageId: uxMeta?.messageId,
@@ -16444,6 +16507,18 @@ Title:`
         return `${CARD_TOKEN}${cards.length - 1}${CARD_TOKEN}`
       })
 
+      // 1a. v0.8 cycle 17 — error raw-detail disclosures. humanizeChatError
+      // wraps the raw provider error in ERR_DETAILS markers; it renders as
+      // a collapsed "Show technical details" so a normal person sees one
+      // calm sentence, not a stack trace shouting at them. Body is
+      // re-escaped at restore time — no HTML rides through.
+      const errDetails = []
+      const ERR_TOKEN = '␚ERRD'
+      s = s.replace(/<!--ERR_DETAILS-->([\s\S]*?)<!--\/ERR_DETAILS-->/g, (_m, body) => {
+        errDetails.push(body)
+        return `${ERR_TOKEN}${errDetails.length - 1}${ERR_TOKEN}`
+      })
+
       // 1b. Extract raw <svg>…</svg> blocks BEFORE escaping, sanitize, and
       //     stash. This lets the model hand-draw an SVG and have it render.
       //     Skipped while streaming — partial SVG would sanitize down to junk.
@@ -16843,6 +16918,10 @@ Title:`
 
       // 8. Re-insert health cards (raw HTML, trusted)
       s = s.replace(new RegExp(`${CARD_TOKEN}(\\d+)${CARD_TOKEN}`, 'g'), (_m, i) => cards[+i] || '')
+      s = s.replace(new RegExp(`${ERR_TOKEN}(\\d+)${ERR_TOKEN}`, 'g'), (_m, i) => {
+        const body = errDetails[+i] || ''
+        return `<details class="err-details"><summary>${escapeHtml(t('err.details'))}</summary><div class="err-raw">${escapeHtml(body)}</div></details>`
+      })
 
       return s
     }
@@ -18323,6 +18402,8 @@ Title:`
     // Live tool activity — refresh the streaming bubble as the agent works.
     window.alaude.onToolActivity((activity) => {
       if (!activity) return
+      // v0.8 cycle 17 — any sign of life feeds the stall watchdog.
+      window._lastStreamActivity = Date.now()
       // v0.7.65: reasoning_content from DeepSeek's thinking-mode stream.
       // Captured on the assistant message so sanitizeHistoryForApi can
       // round-trip it to DeepSeek on the next turn (else DeepSeek 400s

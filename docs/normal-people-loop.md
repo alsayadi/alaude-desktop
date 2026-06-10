@@ -230,3 +230,18 @@
   7 assets on GitHub (individual uploads — the resilient pattern),
   labaik.ai auto-updates within 60s. Session totals: cycles 1-16, three
   releases (0.7.73 / 0.7.74 / 0.7.75), 154 → 209 automated checks.
+
+### Cycle 17 — quiet errors + no silent stalls (2026-06-11)
+- Raw provider errors now collapse behind a localized "Show technical
+  details" disclosure (token-based through renderMarkdown, re-escaped —
+  no HTML rides along). This also FIXED an existing bug: the old
+  <small> tag was being escaped and shown as literal text.
+- Two new error classes: 🦙 Ollama-down (ECONNREFUSED on :11434 → "your
+  local AI isn't running, open Local Models or pick a cloud model") and
+  📡 offline (navigator.onLine false → "check your internet"), replacing
+  the generic network message when they apply.
+- Stall watchdog: if a turn is running but nothing has happened for 12s
+  (no tokens, no tool activity), a soft pill appears — "⏳ Still working
+  — slow models can take a while. Esc stops it." — and hides the moment
+  life resumes. Cowork's top complaint (silence reads as broken) closed.
+- EN/中文/العربية. 209 checks green.
