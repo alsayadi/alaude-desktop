@@ -1172,6 +1172,30 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8 market-fit: ChatGPT history import. Parses conversations.json from
+// ChatGPT's data export (Settings → Data controls → Export) and converts
+// each conversation to a plain {title, createdAt, messages[]} the renderer
+// merges into its sessions. The mapping is a node tree; we walk parent
+// links from current_node and reverse — the standard linearization.
+ipcMain.handle('import-chatgpt', async () => {
+  const fs = require('fs')
+  const res = await dialog.showOpenDialog({
+    title: 'Pick conversations.json from your ChatGPT export',
+    filters: [{ name: 'ChatGPT export', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false, reason: 'cancelled' }
+  let data
+  try {
+    const stat = fs.statSync(res.filePaths[0])
+    if (stat.size > 300 * 1024 * 1024) return { ok: false, reason: 'File larger than 300MB' }
+    data = JSON.parse(fs.readFileSync(res.filePaths[0], 'utf8'))
+  } catch (err) {
+    return { ok: false, reason: 'Could not parse: ' + err.message }
+  }
+  return require('./import-chatgpt').convertChatGPTExport(data)
+})
+
 // v0.8 market-fit: paste-any-key provider detection. Pattern fast-paths
 // for unambiguous formats; the ambiguous sk-… family gets resolved by
 // probing each candidate's cheap GET /models endpoint in parallel with the

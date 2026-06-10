@@ -146,3 +146,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - Checkpoint 1 of 10: cycles 1-10 pushed. Score so far: 1 strategy doc,
   1 test layer (boot smoke), 2 demotions, 1 safety gate (screen tools),
   1 activation feature (paste-any-key), funnel metrics, 2 retention hooks.
+
+### Cycle 11 — ChatGPT history import (2026-06-10)
+- ⌘K → "Import ChatGPT history": picks conversations.json from a ChatGPT
+  data export, linearizes each conversation's mapping tree (current_node →
+  parent walk), and merges them as 📥-prefixed sessions. Converter is a
+  pure module (electron/import-chatgpt.js) with 5 unit tests. Switching
+  cost is THE adoption barrier for the target user — this lowers it.

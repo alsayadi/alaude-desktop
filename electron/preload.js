@@ -34,6 +34,8 @@ contextBridge.exposeInMainWorld('alaude', {
   chatCancelAll: () => ipcRenderer.invoke('chat-cancel-all'),
   // v0.8 — paste-any-key: detect which provider a key belongs to.
   loginDetectKey: (key) => ipcRenderer.invoke('login-detect-key', key),
+  // v0.8 — import conversations.json from a ChatGPT data export.
+  importChatGPT: () => ipcRenderer.invoke('import-chatgpt'),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

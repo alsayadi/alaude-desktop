@@ -42,7 +42,7 @@ function check(label, cond, extra = '') {
 // ═══════════════════════════════════════════════════════════════
 // TEST 1: MemoryStore — basic CRUD + dedup + scope
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[1/8] MemoryStore — basic CRUD + scope')
+console.log('\n[1/9] MemoryStore — basic CRUD + scope')
 {
   const storage = new FakeStorage()
   const store = new MemoryStore({ storage })
@@ -78,7 +78,7 @@ console.log('\n[1/8] MemoryStore — basic CRUD + scope')
 // ═══════════════════════════════════════════════════════════════
 // TEST 2: MemoryStore — visiblePool scope filter
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[2/8] MemoryStore — scope filtering')
+console.log('\n[2/9] MemoryStore — scope filtering')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   store.add('global fact', null, { scope: 'global' })
@@ -120,7 +120,7 @@ console.log('\n[2/8] MemoryStore — scope filtering')
 // ═══════════════════════════════════════════════════════════════
 // TEST 3: ProfileStore — store + grouping + system block
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[3/8] ProfileStore — CRUD + grouping + system block')
+console.log('\n[3/9] ProfileStore — CRUD + grouping + system block')
 {
   const storage = new FakeStorage()
   const profile = new ProfileStore({ storage })
@@ -164,7 +164,7 @@ console.log('\n[3/8] ProfileStore — CRUD + grouping + system block')
 // ═══════════════════════════════════════════════════════════════
 // TEST 4: MemoryExtract — regex + candidates
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[4/8] MemoryExtract — patterns + candidates')
+console.log('\n[4/9] MemoryExtract — patterns + candidates')
 {
   const cases = [
     { text: 'My name is Ahmed', expect: 'Name: Ahmed', cat: 'identity', promotes: true },
@@ -199,7 +199,7 @@ console.log('\n[4/8] MemoryExtract — patterns + candidates')
 // ═══════════════════════════════════════════════════════════════
 // TEST 5: MemoryEmbeddings — cosine + backfill
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[5/8] MemoryEmbeddings — cosine + backfill loop')
+console.log('\n[5/9] MemoryEmbeddings — cosine + backfill loop')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -227,7 +227,7 @@ console.log('\n[5/8] MemoryEmbeddings — cosine + backfill loop')
 // ═══════════════════════════════════════════════════════════════
 // TEST 6: MemoryRecall — scoring + profile injection
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[6/8] MemoryRecall — scoring + injection')
+console.log('\n[6/9] MemoryRecall — scoring + injection')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -276,7 +276,7 @@ console.log('\n[6/8] MemoryRecall — scoring + injection')
 // (CJS module; loaded with LABAIK_HOME pointed at a temp dir so the
 // test never touches ~/.labaik.)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
+console.log('\n[7/9] folder-skills — discovery + frontmatter + guards')
 {
   const { createRequire } = await import('node:module')
   const fs = await import('node:fs')
@@ -327,7 +327,7 @@ console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
   check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
 
   // ═══ TEST 8: routines — cron parse + legacy shape ═══
-  console.log('\n[8/8] routines — cron parsing + legacy skills.json shape')
+  console.log('\n[8/9] routines — cron parsing + legacy skills.json shape')
   const routines = require('../electron/routines.js')
   check('parses standard cron', routines._parseCron('0 8 * * *') !== null)
   check('rejects 4-field cron', routines._parseCron('0 8 * *') === null)
@@ -342,6 +342,27 @@ console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
   const onDisk = JSON.parse(fs.readFileSync(path.join(testHome, 'routines.json'), 'utf8'))
   check('save writes routines key (not skills)', Array.isArray(onDisk.routines) && onDisk.routines.length === 2 && !onDisk.skills)
   check('new ids use rt_ prefix', onDisk.routines[1].id.startsWith('rt_'))
+
+  // ═══ TEST 9: ChatGPT import converter ═══
+  console.log('\n[9/9] import-chatgpt — mapping linearization')
+  const { convertChatGPTExport } = require('../electron/import-chatgpt.js')
+  const mkExport = () => ([{
+    title: 'Test conv', create_time: 1700000000, current_node: 'n3',
+    mapping: {
+      n0: { id: 'n0', parent: null, children: ['n1'], message: { author: { role: 'system' }, content: { parts: ['sys'] } } },
+      n1: { id: 'n1', parent: 'n0', children: ['n2'], message: { author: { role: 'user' }, content: { parts: ['hello'] }, create_time: 1700000001 } },
+      n2: { id: 'n2', parent: 'n1', children: ['n3'], message: { author: { role: 'assistant' }, content: { parts: ['hi there'] }, create_time: 1700000002 } },
+      n3: { id: 'n3', parent: 'n2', children: [], message: { author: { role: 'user' }, content: { parts: ['bye'] } } },
+    },
+  }, { title: 'Empty', current_node: 'x', mapping: {} }])
+  const conv = convertChatGPTExport(mkExport())
+  check('converts the active thread in order',
+    conv.ok && conv.sessions.length === 1 &&
+    conv.sessions[0].messages.map(m => m.content).join('|') === 'hello|hi there|bye')
+  check('system messages dropped', !conv.sessions[0].messages.some(m => m.role !== 'user' && m.role !== 'assistant'))
+  check('empty conversation skipped, counted', conv.skipped === 1)
+  check('wrapped {conversations:[...]} accepted', convertChatGPTExport({ conversations: mkExport() }).ok)
+  check('garbage input rejected gracefully', convertChatGPTExport({ nope: 1 }).ok === false)
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

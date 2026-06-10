@@ -10504,6 +10504,26 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 general-use: one-click install of three bundled starter skills
         // (meeting notes, trip planner, weekly review). Idempotent — existing
         // folders are never overwritten.
+        { kind: 'action', icon: '📥', label: 'Import ChatGPT history (conversations.json)', search: 'import chatgpt openai history migrate switch export conversations json', action: async () => {
+          closeCmdPalette()
+          showRewindToast?.('📥 Pick conversations.json from your ChatGPT export…', false)
+          let r
+          try { r = await window.alaude.importChatGPT() } catch (e) { r = { ok: false, reason: e?.message } }
+          if (!r?.ok) {
+            if (r?.reason !== 'cancelled') showRewindToast?.('Import failed: ' + (r?.reason || 'unknown'), true)
+            return
+          }
+          const base = Date.now()
+          const imported = r.sessions.map((c, i) => ({
+            id: base + i,
+            title: '📥 ' + c.title,
+            messages: c.messages.map(m => ({ role: m.role, content: m.content, ...(m.ts ? { ts: m.ts } : {}) })),
+          }))
+          sessions.unshift(...imported)
+          persistSessions()
+          renderSessions()
+          showRewindToast?.(`📥 Imported ${imported.length} conversation${imported.length === 1 ? '' : 's'}${r.skipped ? ` (${r.skipped} skipped)` : ''}`, false)
+        } },
         { kind: 'action', icon: '⏰', label: 'Turn last prompt into a routine', search: 'routine from prompt schedule repeat daily automate this recurring', action: () => { closeCmdPalette(); routineFromLastPrompt() } },
         { kind: 'action', icon: '🛸', label: 'Future Console (experimental)', search: 'future console experimental cockpit neural agent', action: () => { closeCmdPalette(); window.alaude.openFutureConsole?.() } },
         { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
