@@ -165,3 +165,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   the cron scheduler (fireRoutine extracted in main; routines-run-now IPC).
   Kills the "save it, then wait until 8am to find out it's broken" loop —
   result lands in Recent runs within seconds.
+
+### Cycle 14 — tour rebuilt around wedge moments (2026-06-10)
+- "What's in Labaik" now opens with "Start here — five things Labaik does
+  that your browser tab can't": any-model switching, routines, skills,
+  drop-any-file, ChatGPT import — each with a working Try button. The
+  full feature timeline demoted to "Everything else" below.
+- ChatGPT import flow extracted to importChatGPTFlow() (shared by ⌘K and
+  the tour). Boot smoke test gained a one-retry policy after a flaky
+  cold-start false alarm under full-suite load.

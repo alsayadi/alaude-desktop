@@ -34,49 +34,57 @@ if (!fs.existsSync(electronBin)) {
   process.exit(0)
 }
 
+function runAttempt() {
+  return new Promise((resolve) => {
+    const child = spawn(electronBin, ['.'], {
+      cwd: ROOT,
+      env: { ...process.env, LABAIK_HOME: home, LABAIK_USERDATA: userData },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let out = ''
+    let settled = false
+    const finish = (ok, why) => {
+      if (settled) return
+      settled = true
+      try { child.kill('SIGTERM') } catch {}
+      setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, 2000).unref()
+      resolve({ ok, why, out })
+    }
+    const t0 = Date.now()
+    const onData = (d) => {
+      out += d.toString()
+      if (out.includes(BEACON)) finish(true, `${Date.now() - t0}ms`)
+    }
+    child.stdout.on('data', onData)
+    child.stderr.on('data', onData)
+    child.on('exit', (code, sig) => finish(false, `app exited before beacon (code=${code} sig=${sig})`))
+    setTimeout(() => finish(false, `beacon not seen within ${TIMEOUT_MS / 1000}s — main script likely crashed`), TIMEOUT_MS).unref()
+  })
+}
+
 console.log('Boot smoke test — launching the real app (a window will flash briefly)…')
-const child = spawn(electronBin, ['.'], {
-  cwd: ROOT,
-  env: { ...process.env, LABAIK_HOME: home, LABAIK_USERDATA: userData },
-  stdio: ['ignore', 'pipe', 'pipe'],
-})
-
-let out = ''
-let settled = false
-const finish = (ok, why) => {
-  if (settled) return
-  settled = true
-  try { child.kill('SIGTERM') } catch {}
-  setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, 2000).unref()
-  // Best-effort cleanup with one delayed retry — the dying Electron can
-  // still be writing into userData when the first rm lands.
-  const cleanup = () => {
-    try { fs.rmSync(home, { recursive: true, force: true }) } catch {}
-    try { fs.rmSync(userData, { recursive: true, force: true }) } catch {}
-  }
-  cleanup()
-  setTimeout(cleanup, 2500).unref()
-  if (ok) {
-    console.log(`  ✅ boot beacon reached (${why})`)
-    console.log('\nBOOT SMOKE: PASS')
-    process.exit(0)
-  } else {
-    console.log(`  ❌ ${why}`)
-    // Show the tail of what the app DID say — usually contains the
-    // uncaught error that killed the main script.
-    console.log('\n─── last app output ───')
-    console.log(out.split('\n').slice(-25).join('\n'))
-    console.log('\nBOOT SMOKE: FAIL')
-    process.exit(1)
-  }
+let result = await runAttempt()
+if (!result.ok) {
+  // Cold-start contention (full suite, other Electron instances) can blow
+  // the window without any real regression. One retry separates flaky from
+  // genuinely broken — a true main-script crash fails both times.
+  console.log(`  ⚠️  first attempt failed (${result.why}) — retrying once…`)
+  result = await runAttempt()
 }
-
-const onData = (d) => {
-  out += d.toString()
-  if (out.includes(BEACON)) finish(true, `${Date.now() - t0}ms`)
+const cleanup = () => {
+  try { fs.rmSync(home, { recursive: true, force: true }) } catch {}
+  try { fs.rmSync(userData, { recursive: true, force: true }) } catch {}
 }
-const t0 = Date.now()
-child.stdout.on('data', onData)
-child.stderr.on('data', onData)
-child.on('exit', (code, sig) => finish(false, `app exited before beacon (code=${code} sig=${sig})`))
-setTimeout(() => finish(false, `beacon not seen within ${TIMEOUT_MS / 1000}s — main script likely crashed`), TIMEOUT_MS)
+cleanup()
+setTimeout(cleanup, 2500).unref()
+if (result.ok) {
+  console.log(`  ✅ boot beacon reached (${result.why})`)
+  console.log('\nBOOT SMOKE: PASS')
+  process.exit(0)
+} else {
+  console.log(`  ❌ ${result.why}`)
+  console.log('\n─── last app output ───')
+  console.log(result.out.split('\n').slice(-25).join('\n'))
+  console.log('\nBOOT SMOKE: FAIL')
+  process.exit(1)
+}
