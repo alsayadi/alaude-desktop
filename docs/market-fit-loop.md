@@ -230,3 +230,18 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   overwrites (.pre-import-<ts>) then reloads. electron/backup.js is a
   pure module with 8 round-trip unit tests (incl. keys-never-exported).
   Kills the "my whole AI life is trapped on this Mac" fear.
+
+### Cycle 23 — adversarial self-review of cycles 11-22 (2026-06-10)
+- Reviewed the whole big-feature diff for cycle-19-class latent bugs.
+  FOUND + FIXED: the deep-research one-shot flag (window._researchModeNext)
+  was only cleared deep inside sendMessage, AFTER its early-return guards —
+  so triggering Deep Research while a stream was running (or on empty
+  input) leaked the flag into the user's NEXT ordinary message. Now cleared
+  at every early return.
+- Audited + cleared: session-id types are uniformly Date.now() numbers
+  (no string/number mismatch from import/routine-log/restore); skipTools
+  gates web search out of tiny-local-model turns; backup excludes creds
+  (unit-tested). KNOWN LIMITATION logged: fetch_page's SSRF guard is
+  hostname-based, so DNS-rebinding to a private IP isn't blocked —
+  acceptable for a single-operator desktop tool; revisit if a server mode
+  ever lands.

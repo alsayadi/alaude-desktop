@@ -12889,8 +12889,11 @@ footer a { color: var(--accent); text-decoration: none; }
 
     function sendMessage() {
       let text = input.value.trim()
-      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
-      if (isStreaming) return
+      // v0.8 cycle 23: clear one-shot mode flags on any early return so a
+      // research/plan trigger that hits a guard can't leak into the NEXT
+      // ordinary message.
+      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { window._researchModeNext = false; return }
+      if (isStreaming) { window._researchModeNext = false; return }
       // v0.7.67 — if the user is sending a message while an ask-popup is
       // open AND the message wasn't built by the popup itself, treat it as
       // the user bypassing the popup. Append a "use defaults for the rest"
