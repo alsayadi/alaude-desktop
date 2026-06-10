@@ -91,8 +91,16 @@ Coding bias found (backlog, highest leverage first):
   users the command palette exists. Gone forever after first ⌘K or click.
   Localized in all 3 languages.
 
+### Cycle 9 — plain-language errors (2026-06-10)
+- humanizeChatError(): raw provider errors ("401 unauthorized…",
+  "ENOTFOUND…") become a friendly line with the next step ("🔑 Your API
+  key was rejected — open ⌘⇧K…"), raw detail kept in small print.
+  Covers key/credits/rate-limit/context/network/timeout/server classes,
+  wired into all four error render sites (single, council ×2, crew synth).
+  Localized EN/中文/العربية. Also deduped cycle-7's double
+  updateSendBtnMode() insertions.
+
 Ease-of-use backlog (working list):
 - Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
 - Model picker: surface "which model should I pick?" guidance
-- Error messages: provider errors → plain-language + one-click fix action
 - Session organization: auto-title quality, archive old sessions

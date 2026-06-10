@@ -11463,6 +11463,13 @@ footer a { color: var(--accent); text-decoration: none; }
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
         'cmdk.hint': 'Everything is one shortcut away —',
+        'err.key': "🔑 Your API key was rejected by the provider. Open the Keys modal (⌘⇧K) and check it — it may have expired or been pasted with a typo.",
+        'err.credits': '💳 The provider says your account is out of credits or quota. Top up your account, or switch to another model from the picker.',
+        'err.rate': '⏳ The provider is rate-limiting you. Wait a moment and try again, or switch models.',
+        'err.context': '📜 This conversation is too long for the model. Start a new session (⌘N) or switch to a model with a bigger context window.',
+        'err.network': '🌐 Could not reach the provider — looks like a network problem. Check your connection (or VPN) and try again.',
+        'err.timeout': '⏱️ The provider took too long to answer. Try again — or switch models if it keeps happening.',
+        'err.provider': '🛠️ The provider is having trouble right now (server error). Try again in a minute, or switch models.',
         'slash.skillDesc': 'Skill (SKILL.md)',
         'slash.match': 'match',
         'slash.matches': 'matches',
@@ -11718,6 +11725,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
         'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'err.key': '🔑 服务商拒绝了你的 API 密钥。打开密钥窗口（⌘⇧K）检查一下——可能已过期或粘贴有误。',
+        'err.credits': '💳 服务商提示账户余额或配额不足。请充值，或在模型选择器中换一个模型。',
+        'err.rate': '⏳ 服务商正在限流。稍等片刻再试，或换一个模型。',
+        'err.context': '📜 对话对该模型来说太长了。开个新会话（⌘N），或换用上下文窗口更大的模型。',
+        'err.network': '🌐 无法连接服务商——像是网络问题。检查网络（或 VPN）后重试。',
+        'err.timeout': '⏱️ 服务商响应超时。请重试——若持续出现请换模型。',
+        'err.provider': '🛠️ 服务商当前出现故障（服务器错误）。请稍后重试，或换一个模型。',
         'slash.skillDesc': '技能（SKILL.md）',
         'slash.match': '条匹配',
         'slash.matches': '条匹配',
@@ -11958,6 +11972,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'err.key': '🔑 رفض المزوّد مفتاح الـ API. افتح نافذة المفاتيح (⌘⇧K) وتحقّق منه — ربما انتهت صلاحيته أو نُسخ بخطأ.',
+        'err.credits': '💳 يقول المزوّد إن رصيدك أو حصّتك نفدت. اشحن حسابك أو بدّل إلى نموذج آخر.',
+        'err.rate': '⏳ المزوّد يحدّ من معدل الطلبات. انتظر لحظة وأعد المحاولة، أو بدّل النموذج.',
+        'err.context': '📜 المحادثة أطول من سعة النموذج. ابدأ جلسة جديدة (⌘N) أو بدّل إلى نموذج بسياق أكبر.',
+        'err.network': '🌐 تعذّر الوصول إلى المزوّد — تبدو مشكلة شبكة. تحقّق من الاتصال (أو الـ VPN) وأعد المحاولة.',
+        'err.timeout': '⏱️ تأخّر المزوّد في الرد. أعد المحاولة — وإن تكرر بدّل النموذج.',
+        'err.provider': '🛠️ المزوّد يواجه عطلًا حاليًا (خطأ خادم). أعد المحاولة بعد قليل أو بدّل النموذج.',
         'slash.skillDesc': 'مهارة (SKILL.md)',
         'slash.match': 'مطابقة',
         'slash.matches': 'مطابقات',
@@ -12911,7 +12932,7 @@ footer a { color: var(--accent); text-decoration: none; }
           const response = await window.alaude.chat(msgs, laneModels[i], workspacePath, currentSpaceId, { ...uxMeta, messageId: lanes[i].uxMessageId })
           lanes[i].content = (typeof response === 'string') ? response : (JSON.stringify(response) || '(no response)')
         } catch (err) {
-          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].content = humanizeChatError(err.message || String(err))
           lanes[i].error = true
         }
         lanes[i].streaming = false
@@ -12930,7 +12951,6 @@ footer a { color: var(--accent); text-decoration: none; }
         if (idx >= 0) councilSynthesize(idx)
       }
       isStreaming = false
-      updateSendBtnMode()
       updateSendBtnMode()
     }
 
@@ -12996,7 +13016,7 @@ footer a { color: var(--accent); text-decoration: none; }
           lanes[i].elapsed = Date.now() - lanes[i].startedAt
           return { i, ok: true }
         } catch (err) {
-          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].content = humanizeChatError(err.message || String(err))
           lanes[i].streaming = false
           lanes[i].error = true
           lanes[i].elapsed = Date.now() - lanes[i].startedAt
@@ -13007,7 +13027,6 @@ footer a { color: var(--accent); text-decoration: none; }
       clearInterval(elapsedTimer)
       councilMessage.streaming = false
       isStreaming = false
-      updateSendBtnMode()
       updateSendBtnMode()
       renderMessages()
       persistSessions()
@@ -13064,7 +13083,7 @@ footer a { color: var(--accent); text-decoration: none; }
         const response = await window.alaude.chat(synthMsgs, synthModel, workspacePath, currentSpaceId, synthMeta)
         msg.synthLane.content = response || '(no response)'
       } catch (err) {
-        msg.synthLane.content = `Error: ${err.message}`
+        msg.synthLane.content = humanizeChatError(err.message)
         msg.synthLane.error = true
       }
       msg.synthLane.streaming = false
@@ -13136,6 +13155,33 @@ footer a { color: var(--accent); text-decoration: none; }
         }
       }
       return out
+    }
+
+
+    // v0.8 ease-of-use: translate raw provider errors into plain language
+    // with the next step. The raw message stays underneath in small print —
+    // useful for bug reports without being the headline.
+    function humanizeChatError(raw) {
+      const r = String(raw || '')
+      const low = r.toLowerCase()
+      let friendly = null
+      if (/401|unauthorized|invalid[_ ]api[_ ]key|incorrect api key|authentication/.test(low)) {
+        friendly = t('err.key')
+      } else if (/insufficient[_ ]quota|exceeded your current quota|payment|402|billing/.test(low)) {
+        friendly = t('err.credits')
+      } else if (/429|rate[_ ]limit|too many requests/.test(low)) {
+        friendly = t('err.rate')
+      } else if (/context[_ ]length|maximum context|too long|prompt is too long|context window/.test(low)) {
+        friendly = t('err.context')
+      } else if (/enotfound|econnrefused|econnreset|network|fetch failed|dns|socket|etimedout/.test(low)) {
+        friendly = t('err.network')
+      } else if (/timed? ?out|timeout/.test(low)) {
+        friendly = t('err.timeout')
+      } else if (/5\d\d|overloaded|server error|unavailable|bad gateway/.test(low)) {
+        friendly = t('err.provider')
+      }
+      if (!friendly) return 'Error: ' + r
+      return friendly + '\n\n<small>' + r.slice(0, 300) + '</small>'
     }
 
     async function callAI(userText, uxMeta) {
@@ -13287,7 +13333,7 @@ footer a { color: var(--accent); text-decoration: none; }
         const prev = target[target.length - 1]
         target[target.length - 1] = {
           role: 'assistant',
-          content: `Error: ${err.message || String(err)}`,
+          content: humanizeChatError(err.message || String(err)),
           model,
           ts: Date.now(),
           fileEdits: prev?.fileEdits,
@@ -13302,7 +13348,6 @@ footer a { color: var(--accent); text-decoration: none; }
       // would be wrong. persistSessions() always runs so the reply is saved.
       if (currentSessionId === targetSessionId) {
         isStreaming = false
-        updateSendBtnMode()
         updateSendBtnMode()
         renderMessages()
         // Voice conversation mode: read the reply + auto-listen for next turn.
