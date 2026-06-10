@@ -112,3 +112,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   /models probing for the ambiguous sk-… family (OpenAI/DeepSeek/Kimi/
   Moonshot/Qwen/Hunyuan) — first authenticated 200 wins. Manual dropdown
   stays as fallback. Directly attacks the <60s activation metric.
+
+### Cycle 6 — screen-control tools gated on intent (2026-06-10)
+- SCREEN_TOOLS (click/type/keystroke on the user's real desktop) were
+  offered to the model in EVERY chat. Now gated behind screen intent in
+  the latest user message — same pattern as browser/image tools — in all
+  three provider loops. Fixture asserts normal chats carry zero screen_*
+  tools. (Screen Vision UI chrome was already hidden; ⌘⇧V still works.)

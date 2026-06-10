@@ -768,6 +768,28 @@ function userWantsBrowserIntent(messages) {
   return false
 }
 
+// v0.8 market-fit: screen-control gating. screen_click/type/key operate the
+// user's REAL desktop — offering them in every chat let any model
+// speculatively click around outside the app. Same pattern as browser
+// tools: only offer when the latest user message signals screen intent.
+function userWantsScreenIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    if (/\b(my screen|on (the |my )?screen|screenshot|screen ?shot|control (my |the )?(mac|desktop|computer)|click (on |the )|press (the )?\w+ (button|key)|type (into|in) )/.test(text)) return true
+    return false
+  }
+  return false
+}
+
 // ── Image generation ──────────────────────────────────────────────────────
 // v0.7.72: tool-callable image generation. Same gating discipline as the
 // browser tools — only expose to the model when the user's latest message
@@ -1553,6 +1575,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // for tasks that don't need it.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const offerImage = !skipTools && userWantsImageIntent(msgs)
+  const offerScreen = !skipTools && userWantsScreenIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     // Sub-agents only at the top level + when a workspace is open. A spawned
@@ -1560,7 +1583,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
-    ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -1842,11 +1865,12 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   // v0.7.72: same browser-intent gating as chatOpenAI above.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const offerImage = !skipTools && userWantsImageIntent(msgs)
+  const offerScreen = !skipTools && userWantsScreenIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
-    ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
@@ -2005,8 +2029,9 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   // v0.7.72: gate browser tools by user intent (same heuristic as the
   // OpenAI/Ollama paths). Plan mode already strips everything anyway.
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
+  const offerScreen = !planMode && userWantsScreenIntent(msgs)
   const offerImage = !planMode && userWantsImageIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...(offerScreen ? SCREEN_TOOLS : []), ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs

@@ -215,6 +215,12 @@ try {
   const mSys = String(mReq?.body?.messages?.[0]?.content || '')
   check('git context injected (branch + commit)', mSys.includes('## Git status') && mSys.includes('fixture-branch') && mSys.includes('fixture commit'))
 
+  // Screen-control gating (v0.8): no chat in these scenarios mentioned the
+  // screen, so screen_* tools must never have been offered to the model.
+  const anyScreenTools = requests.some(r =>
+    (r.body?.tools || []).some(t => (t?.function?.name || '').startsWith('screen_')))
+  check('screen tools withheld without screen intent', !anyScreenTools)
+
   // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
   console.log('\n[4/4] stop generation — chat-cancel mid-stream')
   const cancelPromise = chat(4, 'HANG forever please')
