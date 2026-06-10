@@ -363,3 +363,12 @@
   tree). Persisted across launches; toast confirms each flip; state
   shown in the hub row. The "set it up for someone you love" arc
   begins. EN/中文/العربية. 234 checks green.
+
+### Cycle 27 — session archive (2026-06-11)
+- Every session row gains a 🗂 button: archived conversations leave the
+  main list and collect under a collapsed "🗂 Archived (N)" section at
+  the sidebar bottom (▸/▾ toggle, ↩ to restore). Search still finds
+  them — retrieval is retention. Live-verified via hermetic CDP
+  (4/4 assertions: section count, hidden-when-closed, visible-when-
+  open, scoping). Long-standing backlog item closed. EN/中文/العربية.
+  234 checks green.

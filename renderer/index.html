@@ -4050,6 +4050,13 @@
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    /* v0.8 cycle 27 — archived sessions section */
+    .archived-head {
+      padding: 8px 16px 6px; font-size: 11.5px; color: var(--text-faint);
+      cursor: pointer; user-select: none; border-top: 1px dashed var(--border);
+      margin-top: 8px;
+    }
+    .archived-head:hover { color: var(--text-dim); }
     /* v0.8 cycle 26 — Easy mode: bigger everything, fewer buttons. The
        adult child setting Labaik up for a parent flips one switch. */
     html[data-easy="1"] body { zoom: 1.18; }
@@ -11936,6 +11943,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.easy.off': 'Off',
         'easy.on': '🧓 Easy mode is ON — bigger text, fewer buttons',
         'easy.off': 'Easy mode is off',
+        'archive.archive': 'Archive — tuck away without deleting',
+        'archive.unarchive': 'Bring back to the list',
+        'archive.section': 'Archived',
+        'archive.done': '🗂 Archived — find it at the bottom of the sidebar, or via search',
+        'archive.restored': '↩ Back in your list',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12330,6 +12342,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.easy.off': '已关闭',
         'easy.on': '🧓 轻松模式已开启——字更大、按钮更少',
         'easy.off': '轻松模式已关闭',
+        'archive.archive': '归档——收起但不删除',
+        'archive.unarchive': '恢复到列表',
+        'archive.section': '已归档',
+        'archive.done': '🗂 已归档——在侧栏底部或通过搜索找到它',
+        'archive.restored': '↩ 已恢复到列表',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12700,6 +12717,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.easy.off': 'متوقف',
         'easy.on': '🧓 الوضع الميسَّر مفعَّل — خط أكبر وأزرار أقل',
         'easy.off': 'الوضع الميسَّر متوقف',
+        'archive.archive': 'أرشفة — يُطوى دون حذف',
+        'archive.unarchive': 'أعده إلى القائمة',
+        'archive.section': 'المؤرشفة',
+        'archive.done': '🗂 أُرشف — تجده أسفل الشريط الجانبي أو عبر البحث',
+        'archive.restored': '↩ عاد إلى قائمتك',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -17249,7 +17271,7 @@ Title:`
         container.innerHTML = `<div style="color:var(--text-faint);font-size:12px;padding:14px 16px">${reason}</div>`
         return
       }
-      container.innerHTML = list.map(s => {
+      const rowHtml = (s) => {
         const active = s.id === currentSessionId ? 'active' : ''
         const isBranch = !!s.parentId
         const parent = isBranch ? sessions.find(p => p.id === s.parentId) : null
@@ -17273,6 +17295,9 @@ Title:`
           ? `<span class="session-color-dot" onclick="event.stopPropagation(); cycleSessionColor(${s.id})" style="background:${escapeHtml(s.color)};border-color:${escapeHtml(s.color)}" title="Click to cycle color"></span>`
           : ''
         const displayTitle = displaySessionTitle(s)
+        // v0.8 cycle 27 — archive: tuck old conversations away without
+        // deleting them.
+        const archiveBtn = `<button class="session-item-delete" onclick="event.stopPropagation(); toggleSessionArchive(${s.id})" title="${s.archived ? escapeHtml(t('archive.unarchive')) : escapeHtml(t('archive.archive'))}">${s.archived ? '↩' : '🗂'}</button>`
         return `<div class="session-item ${active} ${branchCls}" title="${escapeHtml(displayTitle)}${parentTip}${goalTip}">
           ${starBtn}
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
@@ -17282,9 +17307,29 @@ Title:`
             </div>
             ${tagsHtml}
           </div>
+          ${archiveBtn}
           <button class="session-item-delete" onclick="event.stopPropagation(); if(confirm('Delete this session?')) deleteSession(${s.id})" title="Delete">×</button>
         </div>`
-      }).join('')
+      }
+      // Archived sessions leave the main list (search still finds them).
+      const archivedList = list.filter(s => s.archived)
+      const mainList = sessionSearchQuery ? list : list.filter(s => !s.archived)
+      let html = mainList.map(rowHtml).join('')
+      if (!sessionSearchQuery && archivedList.length) {
+        html += `<div class="archived-head" onclick="window._archOpen = !window._archOpen; renderSessions()">
+          ${window._archOpen ? '▾' : '▸'} 🗂 ${escapeHtml(t('archive.section'))} (${archivedList.length})</div>`
+        if (window._archOpen) html += archivedList.map(rowHtml).join('')
+      }
+      container.innerHTML = html
+    }
+
+    function toggleSessionArchive(id) {
+      const s = sessions.find(x => x.id === id)
+      if (!s) return
+      s.archived = !s.archived
+      persistSessions()
+      renderSessions()
+      showRewindToast?.(s.archived ? t('archive.done') : t('archive.restored'), false)
     }
 
     // ── Session Templates ─────────────────────────────────────────
