@@ -200,3 +200,9 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - Clicking a routine's macOS notification now focuses the app AND switches
   to the "⏰ Routine runs" session. The retention chain is complete:
   schedule → fire → notify → click → read.
+
+### Cycle 19 — model selection survives Recommended rebuilds (2026-06-10)
+- Self-review caught a cycle-10 bug: rebuilding the ✨ Recommended optgroup
+  on key-status refresh removed the selected option if the user had picked
+  from that group, silently falling back to option 0. Selection is now
+  captured before the rebuild and restored after.

@@ -16886,6 +16886,9 @@ Title:`
         // (local). Duplicate values are fine — select.value matches the
         // first occurrence, so picking a recommendation just works.
         try {
+          // Capture the selection first: if the user picked a Recommended
+          // entry, removing the group would silently fall back to option 0.
+          const _selBefore = select.value
           select.querySelector('#model-select-recommended')?.remove()
           const connectedOpts = Array.from(select.options).filter(o => o.dataset.connected === '1' && o.value)
           const byPrefix = (prefixes) => {
@@ -16915,6 +16918,9 @@ Title:`
             }
             select.insertBefore(grp, select.firstElementChild)
           }
+          // Restore the pre-rebuild selection (value duplicates resolve to
+          // the first occurrence, which is fine — same model id).
+          if (_selBefore && select.value !== _selBefore) select.value = _selBefore
         } catch (e) { console.warn('[model-rec] failed:', e?.message) }
         // Auto-switch only when the CURRENT selection looks like a dead-on-boot
         // default the user never intentionally picked — i.e. the HTML-marked
