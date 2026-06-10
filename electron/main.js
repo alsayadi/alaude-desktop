@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences, Notification } = require('electron')
 const path = require('path')
 const os = require('os')
 const http = require('http')
@@ -28,14 +28,21 @@ for (const stream of [process.stdout, process.stderr]) {
 // dir (first-run on a fresh install) we fall back to Electron's default.
 try {
   const fsMod = require('fs')
-  const legacyDir = path.join(app.getPath('appData'), 'alaude-desktop')
-  const brandedDir = path.join(app.getPath('appData'), 'Alaude')
-  // Prefer legacy if it exists (keep existing users' data). Use branded
-  // only on a truly fresh install where neither dir has anything.
-  if (fsMod.existsSync(legacyDir)) {
-    app.setPath('userData', legacyDir)
-  } else if (fsMod.existsSync(brandedDir)) {
-    app.setPath('userData', brandedDir)
+  // Test harnesses (scripts/test-boot.mjs) point LABAIK_USERDATA at a temp
+  // dir so a smoke-test instance can't fight the user's running app over
+  // the LevelDB lock — and can't touch real localStorage.
+  if (process.env.LABAIK_USERDATA) {
+    app.setPath('userData', process.env.LABAIK_USERDATA)
+  } else {
+    const legacyDir = path.join(app.getPath('appData'), 'alaude-desktop')
+    const brandedDir = path.join(app.getPath('appData'), 'Alaude')
+    // Prefer legacy if it exists (keep existing users' data). Use branded
+    // only on a truly fresh install where neither dir has anything.
+    if (fsMod.existsSync(legacyDir)) {
+      app.setPath('userData', legacyDir)
+    } else if (fsMod.existsSync(brandedDir)) {
+      app.setPath('userData', brandedDir)
+    }
   }
   // Otherwise leave as-is; setName below will produce /Alaude on first run.
 } catch {}
@@ -178,6 +185,13 @@ function createWindow() {
   })
   mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
     const lvl = ['log','warn','error'][level] || 'log'
+    // The boot beacon (scripts/test-boot.mjs watches for it) rides the
+    // warn/error channel to reach stderr, but it is NOT an error — log it
+    // plainly so it doesn't masquerade as one in the dev console.
+    if (typeof message === 'string' && message.includes('[boot] main script completed')) {
+      try { process.stderr.write(`${message}\n`) } catch {}
+      return
+    }
     if (lvl === 'error' || lvl === 'warn') {
       // EPIPE-safe: when the parent shell exits (or a background-task
       // wrapper reaps our stderr FD) the next sync write throws EPIPE
@@ -856,7 +870,8 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // worker uses it to swap in the plan-only system prompt and skip tool
     // offerings so the model can't sneak past the "no execution" rule.
     const planMode = !!uxMeta?.planMode
-    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode }) + '\n'
+    const researchMode = !!uxMeta?.researchMode
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode, researchMode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
     armIdle()
@@ -1165,6 +1180,171 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8 cycle 25: "Your data" — reinforce the private wedge by showing
+// exactly what Labaik keeps on this Mac, with sizes. Read-only inventory;
+// reveal/clear go through existing show-in-folder / per-store handlers.
+ipcMain.handle('data-inventory', () => {
+  const fs = require('fs')
+  const items = [
+    { key: 'sessions.json', label: 'Conversations' },
+    { key: 'memory.json', label: 'Memory' },
+    { key: 'profile.json', label: 'Profile' },
+    { key: 'routines.json', label: 'Routines' },
+    { key: 'routine-history.ndjson', label: 'Routine run log' },
+    { key: 'spaces.json', label: 'Spaces' },
+    { key: 'credentials.json', label: 'API keys (never leave this Mac)' },
+    { key: 'events.ndjson', label: 'Local usage events' },
+    { key: 'images', label: 'Generated images', dir: true },
+    { key: 'skills', label: 'Folder skills', dir: true },
+  ]
+  const dirSize = (d) => {
+    let total = 0
+    try {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const fp = require('path').join(d, e.name)
+        try { total += e.isDirectory() ? dirSize(fp) : fs.statSync(fp).size } catch {}
+      }
+    } catch {}
+    return total
+  }
+  const out = []
+  for (const it of items) {
+    const fp = require('path').join(paths.BASE_DIR, it.key)
+    let bytes = 0, exists = false
+    try {
+      const st = fs.statSync(fp)
+      exists = true
+      bytes = it.dir ? dirSize(fp) : st.size
+    } catch {}
+    out.push({ ...it, bytes, exists })
+  }
+  return { baseDir: paths.BASE_DIR, items: out }
+})
+
+// v0.8 cycle 26: clear one store. Renames the file to .cleared-<ts> rather
+// than hard-deleting, so an accidental clear is recoverable from the data
+// folder. Allowed keys are pinned to the inventory — no arbitrary paths.
+const CLEARABLE = new Set(['sessions.json', 'memory.json', 'profile.json', 'routines.json', 'routine-history.ndjson', 'spaces.json', 'events.ndjson', 'images', 'skills'])
+ipcMain.handle('data-clear', (_e, key) => {
+  if (!CLEARABLE.has(key)) return { ok: false, reason: 'not clearable' }
+  const fs = require('fs')
+  const fp = require('path').join(paths.BASE_DIR, key)
+  try {
+    if (!fs.existsSync(fp)) return { ok: true, note: 'already empty' }
+    fs.renameSync(fp, `${fp}.cleared-${Date.now().toString(36)}`)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: err.message }
+  }
+})
+
+// v0.8 cycle 22: backup & restore. One portable JSON bundle (sessions,
+// memory, profile, routines, spaces, skills) — credentials excluded by
+// design. Import backs up every file it overwrites.
+ipcMain.handle('backup-export', async (_e, rendererExtras) => {
+  const backup = require('./backup')
+  const res = await dialog.showSaveDialog({
+    title: 'Save Labaik backup',
+    defaultPath: `labaik-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'Labaik backup', extensions: ['json'] }],
+  })
+  if (res.canceled || !res.filePath) return { ok: false, reason: 'cancelled' }
+  try {
+    const bundle = backup.exportBundle(rendererExtras)
+    require('fs').writeFileSync(res.filePath, JSON.stringify(bundle), 'utf8')
+    return { ok: true, path: res.filePath, files: Object.keys(bundle.files).length, skills: bundle.skills.length }
+  } catch (err) {
+    return { ok: false, reason: err.message }
+  }
+})
+ipcMain.handle('backup-import', async () => {
+  const backup = require('./backup')
+  const res = await dialog.showOpenDialog({
+    title: 'Pick a Labaik backup file',
+    filters: [{ name: 'Labaik backup', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false, reason: 'cancelled' }
+  try {
+    const bundle = JSON.parse(require('fs').readFileSync(res.filePaths[0], 'utf8'))
+    return backup.importBundle(bundle)
+  } catch (err) {
+    return { ok: false, reason: 'Could not read backup: ' + err.message }
+  }
+})
+
+// v0.8 market-fit: ChatGPT history import. Parses conversations.json from
+// ChatGPT's data export (Settings → Data controls → Export) and converts
+// each conversation to a plain {title, createdAt, messages[]} the renderer
+// merges into its sessions. The mapping is a node tree; we walk parent
+// links from current_node and reverse — the standard linearization.
+ipcMain.handle('import-chatgpt', async () => {
+  const fs = require('fs')
+  const res = await dialog.showOpenDialog({
+    title: 'Pick conversations.json from your ChatGPT export',
+    filters: [{ name: 'ChatGPT export', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false, reason: 'cancelled' }
+  let data
+  try {
+    const stat = fs.statSync(res.filePaths[0])
+    if (stat.size > 300 * 1024 * 1024) return { ok: false, reason: 'File larger than 300MB' }
+    data = JSON.parse(fs.readFileSync(res.filePaths[0], 'utf8'))
+  } catch (err) {
+    return { ok: false, reason: 'Could not parse: ' + err.message }
+  }
+  return require('./import-chatgpt').convertChatGPTExport(data)
+})
+
+// v0.8 market-fit: paste-any-key provider detection. Pattern fast-paths
+// for unambiguous formats; the ambiguous sk-… family gets resolved by
+// probing each candidate's cheap GET /models endpoint in parallel with the
+// pasted key — first authenticated 200 wins.
+const KEY_PATTERNS = [
+  [/^sk-ant-/, 'anthropic'],
+  [/^AIza/, 'google'],
+  [/^xai-/, 'xai'],
+  [/^eyJ[A-Za-z0-9_-]+\./, 'minimax'],            // JWT
+  [/^[0-9a-f]{16,}\.[A-Za-z0-9]+$/, 'zhipu'],      // id.secret
+]
+const PROBE_ORDER = ['openai', 'deepseek', 'moonshot', 'kimi', 'dashscope', 'hunyuan', 'zhipu']
+function probeProviderKey(provider, key) {
+  const https = require('https')
+  const base = (getBaseURL(provider) || 'https://api.openai.com/v1').replace(/\/$/, '')
+  return new Promise((resolve) => {
+    let u
+    try { u = new URL(base + '/models') } catch { return resolve(null) }
+    const req = https.request(u, { method: 'GET', headers: { Authorization: `Bearer ${key}` }, timeout: 6000 }, (res) => {
+      res.resume()
+      resolve(res.statusCode === 200 ? provider : null)
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { try { req.destroy() } catch {}; resolve(null) })
+    req.end()
+  })
+}
+ipcMain.handle('login-detect-key', async (_e, rawKey) => {
+  const key = String(rawKey || '').trim()
+  if (!key) return { provider: null }
+  for (const [re, prov] of KEY_PATTERNS) {
+    if (re.test(key)) return { provider: prov, method: 'pattern' }
+  }
+  const hits = (await Promise.all(PROBE_ORDER.map((p) => probeProviderKey(p, key)))).filter(Boolean)
+  if (hits.length) return { provider: hits[0], method: 'probe', also: hits.slice(1) }
+  return { provider: null }
+})
+
+// v0.8: Stop generation. Cancels every in-flight worker chat — the worker
+// aborts its provider stream(s) and each chat resolves with partial text.
+ipcMain.handle('chat-cancel-all', () => {
+  let n = 0
+  for (const id of pendingRequests.keys()) {
+    try { apiWorker?.stdin.write(JSON.stringify({ type: 'chat-cancel', id }) + '\n'); n++ } catch {}
+  }
+  return n
+})
+
 ipcMain.handle('perm-respond', (_e, approvalId, decision) => {
   const pend = pendingApprovals.get(approvalId)
   if (!pend) return false
@@ -1193,6 +1373,7 @@ ipcMain.handle('routines-list', () => routines.list())
 ipcMain.handle('routines-upsert', (_e, routine) => routines.upsert(routine))
 ipcMain.handle('routines-remove', (_e, id) => { routines.remove(id); return true })
 ipcMain.handle('routines-set-enabled', (_e, id, enabled) => routines.setEnabled(id, enabled))
+ipcMain.handle('routines-history', (_e, limit) => routines.history(limit))
 
 // ── IPC: folder-skills (v0.7.67) ─────────────────────────────────────────
 // Filesystem-discovered skill templates from ~/.labaik/skills/<slug>/SKILL.md.
@@ -1203,6 +1384,8 @@ ipcMain.handle('folder-skills-list', () => {
   return { skills: folderSkills.discover(), root: folderSkills.getRoot() }
 })
 ipcMain.handle('folder-skills-get', (_e, slug) => folderSkills.get(slug))
+// v0.8 — one-click general-use starter skills (idempotent; never overwrites).
+ipcMain.handle('folder-skills-install-starters', () => folderSkills.installStarters())
 
 // ── IPC: durable JSON store (v0.7.59) ─────────────────────────────────────
 // Renderer-side stores (memory, profile, eventually sessions) used to live
@@ -1933,7 +2116,6 @@ function createTray() {
         if (!mainWindow || mainWindow.isDestroyed()) createWindow()
         else mainWindow.show()
       }},
-      { label: 'Open Future Console', click: () => createFutureWindow() },
       { type: 'separator' },
       { label: 'Quit Labaik', click: () => app.quit() },
     ])
@@ -1975,7 +2157,6 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'New Session', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('new-session') },
-        { label: 'Future Console', accelerator: 'CmdOrCtrl+Shift+F', click: () => createFutureWindow() },
         { type: 'separator' },
         { role: 'close' },
       ],
@@ -2036,7 +2217,9 @@ app.whenReady().then(() => {
   }).catch(err => console.warn('[mcp] startAll failed:', err.message))
 
   try {
-    routines.startScheduler(async (routine) => {
+    // Extracted so both the cron scheduler and the "Run now" IPC share the
+    // exact same fire path (v0.8 cycle 13).
+    async function fireRoutine(routine) {
       const worker = getWorker()
       const id = ++requestId
       const messageId = `routine_${routine.id}_${Date.now()}`
@@ -2047,11 +2230,32 @@ app.whenReady().then(() => {
             const preview = (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 400)
             routines.recordRun(routine.id, { status: 'ok', resultPreview: preview })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: true, result }) } catch {}
+            // v0.8 retention: a routine that runs silently into a toast
+            // might as well not exist. Surface it as a real macOS
+            // notification when the window isn't focused.
+            try {
+              if (routine.notify !== false && Notification.isSupported() && !mainWindow?.isFocused()) {
+                const n = new Notification({ title: `⏰ ${routine.name}`, body: preview.slice(0, 140) })
+                n.on('click', () => {
+                  try {
+                    mainWindow?.show(); mainWindow?.focus()
+                    // v0.8 cycle 18: land directly on the full result.
+                    mainWindow?.webContents?.send('open-routines-log')
+                  } catch {}
+                })
+                n.show()
+              }
+            } catch {}
             resolve()
           },
           reject: (err) => {
             routines.recordRun(routine.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: false, error: String(err?.message || err) }) } catch {}
+            try {
+              if (routine.notify !== false && Notification.isSupported() && !mainWindow?.isFocused()) {
+                new Notification({ title: `⏰ ${routine.name} failed`, body: String(err?.message || err).slice(0, 140) }).show()
+              }
+            } catch {}
             resolve()
           },
         })
@@ -2072,6 +2276,14 @@ app.whenReady().then(() => {
           }
         }, 5 * 60 * 1000)
       })
+    }
+    routines.startScheduler(fireRoutine)
+    // v0.8 cycle 13: run a routine immediately (the ▶ button in the modal).
+    ipcMain.handle('routines-run-now', (_e, id) => {
+      const r = routines.list().find((x) => x.id === id)
+      if (!r) return false
+      fireRoutine(r).catch((err) => console.warn('[routines] run-now failed:', err.message))
+      return true
     })
   } catch (err) { console.warn('[routines] start failed:', err.message) }
 })

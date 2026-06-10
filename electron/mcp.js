@@ -61,15 +61,19 @@ function _send(server, method, params) {
   const id = ++server._msgId
   const msg = { jsonrpc: '2.0', id, method, params: params || {} }
   return new Promise((resolve, reject) => {
-    server._pending.set(id, { resolve, reject })
-    try { server.proc.stdin.write(JSON.stringify(msg) + '\n') } catch (err) { reject(err); server._pending.delete(id) }
     // 30s per-call deadline — prevents a hung server from wedging the chat.
-    setTimeout(() => {
+    // v0.8 cycle 42: the timer is stored on the pending entry and CLEARED on
+    // response — previously it lingered 30s after every successful call,
+    // leaking a timer + closure per request.
+    const timer = setTimeout(() => {
       if (server._pending.has(id)) {
         server._pending.delete(id)
         reject(new Error(`MCP ${server.name} method ${method} timed out`))
       }
     }, 30000)
+    server._pending.set(id, { resolve, reject, timer })
+    try { server.proc.stdin.write(JSON.stringify(msg) + '\n') }
+    catch (err) { clearTimeout(timer); server._pending.delete(id); reject(err) }
   })
 }
 
@@ -80,6 +84,7 @@ function _onServerLine(server, line) {
   if (msg.id == null) return // notification, ignore
   const pending = server._pending.get(msg.id)
   if (!pending) return
+  clearTimeout(pending.timer)
   server._pending.delete(msg.id)
   if (msg.error) pending.reject(new Error(`MCP ${server.name}: ${msg.error.message || 'error'}`))
   else pending.resolve(msg.result)
@@ -103,6 +108,12 @@ async function startServer(cfg) {
       server._buf = server._buf.slice(idx + 1)
       _onServerLine(server, line)
     }
+    // v0.8 cycle 42: cap the line buffer. A server that streams a huge blob
+    // with no newline would otherwise grow _buf without bound and OOM main.
+    if (server._buf.length > 16 * 1024 * 1024) {
+      process.stderr.write(`[mcp:${cfg.name}] dropping oversize line buffer (>16MB, no newline)\n`)
+      server._buf = ''
+    }
   })
   proc.stderr.on('data', (d) => { try { process.stderr.write(`[mcp:${cfg.name}] ${d}`) } catch {} })
   proc.on('error', (err) => {
@@ -113,8 +124,8 @@ async function startServer(cfg) {
   proc.on('exit', (code) => {
     server.status = 'stopped'
     server.exitCode = code
-    // Reject any in-flight
-    for (const [id, p] of server._pending) p.reject(new Error(`MCP ${cfg.name} exited (${code})`))
+    // Reject any in-flight (and clear their deadline timers).
+    for (const [, p] of server._pending) { clearTimeout(p.timer); p.reject(new Error(`MCP ${cfg.name} exited (${code})`)) }
     server._pending.clear()
     _servers.delete(cfg.name)
   })
@@ -184,12 +195,24 @@ function getToolSchemas() {
   return out
 }
 
+// Parse `mcp_<server>__<tool>` into { serverName, toolName }, or null.
+// v0.8 cycle 42: replaced a fragile dual-regex with a deterministic
+// strip-prefix-then-split-on-first-`__`, which correctly handles server
+// names containing single underscores and tool names containing `__`.
+function parseMcpToolName(fullName) {
+  if (typeof fullName !== 'string' || !fullName.startsWith('mcp_')) return null
+  const rest = fullName.slice(4)            // after the "mcp_" prefix
+  const sep = rest.indexOf('__')
+  if (sep <= 0 || sep + 2 >= rest.length) return null
+  return { serverName: rest.slice(0, sep), toolName: rest.slice(sep + 2) }
+}
+
 // Execute a tool call. Name is `mcp_<server>__<tool>`. Returns either the
 // tool's content array (MCP standard) or an { error } object.
 async function callTool(fullName, args) {
-  const m = /^mcp_([^_][^_]*(?:_[^_]+)*)__([^_].+)$/.exec(fullName) || /^mcp_([^_]+)__(.+)$/.exec(fullName)
-  if (!m) return { error: `invalid MCP tool name: ${fullName}` }
-  const [, serverName, toolName] = m
+  const parsed = parseMcpToolName(fullName)
+  if (!parsed) return { error: `invalid MCP tool name: ${fullName}` }
+  const { serverName, toolName } = parsed
   const server = _servers.get(serverName)
   if (!server) return { error: `MCP server not running: ${serverName}` }
   if (server.status !== 'ready') return { error: `MCP server ${serverName} not ready: ${server.status} ${server.error || ''}` }
@@ -236,4 +259,5 @@ module.exports = {
   startAll, stopAll,
   startServer, addServer, removeServer,
   getToolSchemas, callTool, listStatus,
+  parseMcpToolName,  // exposed for tests
 }

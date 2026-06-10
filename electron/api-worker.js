@@ -25,43 +25,9 @@ const {
   ENV_MAP,
 } = require('./provider-registry')
 
-// ── v0.7.39 — Scope boundary check for shell commands ─────────────────
-//
-// Tools with `cwd: workspacePath` (run_command, start_dev_server) would
-// otherwise be trivially bypassed by a command string that names an
-// absolute path or `cd ..`s out of scope. This helper does a best-effort
-// check:
-//   1. Reject `cd ..` / `cd /absolute` patterns
-//   2. Reject absolute paths (start with /) that resolve outside workspace
-//      UNLESS they point to system-neutral dirs like /tmp, /usr, /etc,
-//      /var, /bin, /opt, /Library (read-only system locations are fine for
-//      most tool invocations — e.g. `cp /tmp/foo .` is legit).
-// Returns { ok: true } or { ok: false, reason: string }.
-function checkCommandScope(command, workspacePath) {
-  if (!command || !workspacePath) return { ok: true }
-  const root = path.resolve(workspacePath)
-  // 1. cd escape attempts
-  if (/\bcd\s+(?:\.\.(?:\/|$|\s)|\/)/i.test(command)) {
-    return { ok: false, reason: '`cd ..` or `cd /` attempts to escape the scope' }
-  }
-  // 2. Absolute path mentions. Extract anything that starts with `/` preceded
-  //    by word boundary or quote/space. Ignore URLs (http://) and system dirs.
-  const systemDirs = ['/tmp', '/usr', '/etc', '/var', '/bin', '/sbin', '/opt', '/Library', '/System', '/dev', '/private']
-  const absMatches = [...command.matchAll(/(?:^|[\s'"`;|&()<>])(\/(?:[^\s'"`;|&()<>]|\\ )+)/g)]
-  for (const m of absMatches) {
-    const p = m[1]
-    // URL fragments like /api/foo after a hostname — ignore (caller's tool should have validated)
-    if (p.match(/^\/\w+:\/\//)) continue
-    // System dirs are always fine
-    if (systemDirs.some(d => p === d || p.startsWith(d + '/'))) continue
-    // Resolve and check containment
-    let resolved
-    try { resolved = path.resolve(p) } catch { continue }
-    if (resolved === root || resolved.startsWith(root + path.sep)) continue
-    return { ok: false, reason: `absolute path ${p} is outside ${workspacePath}` }
-  }
-  return { ok: true }
-}
+// v0.7.39 / v0.8 cycle 46 — shell scope guard, extracted to a tested module.
+const { checkCommandScope } = require('./command-scope')
+
 
 // ── Crash handlers ─────────────────────────────────────────────────────────
 // The worker is a request loop serving one chat at a time. A single bad
@@ -72,6 +38,8 @@ function checkCommandScope(command, workspacePath) {
 // error promptly instead of waiting 30s for the parent-process's `exit`
 // handler to notice a dead worker.
 let _inFlightRequest = null  // { id, rejectOnCrash } — set when handleChat starts
+// v0.8: per-chat AbortControllers so main can stop a generation mid-stream.
+const _activeAborts = new Map()  // chat id -> AbortController
 function formatErrorForUser(err) {
   const base = err?.message || String(err)
   const cause = err?.cause?.message || err?.cause?.code || err?.error?.message
@@ -468,27 +436,27 @@ Rules:
   // browser tools as opt-in: only fire when the user explicitly asks.
   sys += `
 
-## Browser tools are opt-in
+## Web search
 
-The browser_* tools (browser_navigate, browser_get_text, browser_click,
-browser_fill, browser_screenshot) open a real Chromium window the user
-will see. DO NOT use them unless:
+web_search / fetch_page are available for CURRENT or external info (news,
+prices, releases, post-cutoff facts). Use them when freshness matters;
+don't search for things you already know. Cite the source URL when you
+use a result.`
+  // v0.8 cycle 32 — the browser-restraint block (~230 tok) is only relevant
+  // when browser_* tools are actually offered, which (since cycle 6) only
+  // happens when the user's message signals browser intent. On every other
+  // message the tools don't exist, so the warning is dead weight. Gate it on
+  // the same intent signal over userText.
+  if (/\bhttps?:\/\/\S+|\bbrowse\b|navigate to|open the (url|link|page|site|website)|look (it|that|this) up online|search the web|scrape|\bbrowser\b/i.test(userText || '')) {
+    sys += `
 
-1. The user explicitly asks you to "open", "go to", "visit", "look up
-   online", "browse", or "fetch" a URL or website, OR
-2. They asked a question that genuinely cannot be answered without live
-   web data (e.g. "what's the latest version of X right now?", "what
-   does this URL say?") AND the answer would be wrong without it.
+## Browser tools
 
-Do NOT browse to:
-- Look up package documentation, library docs, npm/PyPI pages — write
-  your answer from training. If you're unsure, say so and offer to look
-  it up if the user wants.
-- "Verify" facts, "research", or grab examples speculatively.
-- Find sample code for a task — write it yourself.
-
-When in doubt: don't browse. Tell the user what you'd browse for and
-let them say "yes look it up" first.`
+The browser_* tools open a real Chromium window. Use them only for the
+specific URL/site the user asked about — don't browse to look up docs,
+"verify" facts, or grab sample code (write those from training). When in
+doubt, ask before opening a window.`
+  }
 
   // v0.7.72 — Output cleanliness rules. Two failure modes the user has
   // flagged: chatty per-step narration during tool work, and raw shell
@@ -514,100 +482,35 @@ just app.py — never as a markdown link to a fake URL. Same for
 sentence-end words: write "scaffold it now. Now let me…" with a real
 sentence break, not a domain-looking pseudo-link.`
 
-  // v0.7.67 — Ask-user-question capability. Any chat can use this; the
-  // renderer turns the block into a single multi-question popup.
+  // v0.7.67 — Ask-user-question capability (compressed v0.8 cycle 31: the
+  // full block was ~930 tokens on EVERY message; this keeps the schema +
+  // the rules that matter and drops the redundant domain examples, saving
+  // ~650 tokens/message with no behavior change).
   sys += `
 
-## Asking the user clarifying questions
+## Asking clarifying questions
 
-You can ask 1-3 clarifying questions when the user's request has a real
-fork in it — different scope / format / approach / tone — that would
-shape the answer meaningfully. The user gets a tidy popup with picker
-options + a "Skip — use defaults" button, so asking is cheap on their
-side. Use it.
-
-Ask when:
-- The decision genuinely changes the shape of the answer (scope, tone,
-  output format, level of depth, target audience, approach).
-- The request is open-ended enough that you'd otherwise be making
-  meaningful assumptions (e.g. "build me an app" → which kind?
-  "summarize this" → how long? for whom?).
-- A wrong guess would waste the user's time or cost them real money.
-
-Don't ask when:
-- The decision is trivial and one-line — just pick reasonably and
-  mention your assumption in passing ("I'll assume Python — say if
-  you want a different stack").
-- The user already specified the answer somewhere in the conversation.
-- You're in autopilot for a tiny task (rename a variable, fix a typo).
-
-When you DO ask, emit a SINGLE structured question block with up to 3
-questions inside it. The user gets ONE popup with all questions stacked
-and answers them in one click of "Submit". Never emit multiple ask-blocks
-across turns — gather every question you need ONCE.
-
-### What to ask about
-
-Anywhere you'd otherwise GUESS at the user's intent. Examples across
-different domains:
-
-- **Scope**: "Should this run on every save or only when I push?"
-- **Behavior**: "On error, should it halt the flow or log and continue?"
-- **Output format**: "Markdown report, CSV, or JSON?"
-- **Trade-offs**: "Optimize for speed or for readability?"
-- **Coverage**: "Just the happy path, or full edge-case handling?"
-- **Tone / register**: "Casual / formal / academic?"
-- **Approach**: "Quick patch on top of the existing code, or refactor it properly?"
-- **Audience**: "Are you new to this topic, or comfortable with the basics?"
-- **Privacy**: "Run locally only, or sync to the cloud?"
-- **Length**: "1-paragraph summary, 1-page brief, or full deep-dive?"
-- **Data source**: "Use the sample CSV, or the live API?"
-- **Tech stack** — when relevant. Don't ask about tools when the task
-  isn't tool-flavored (writing a poem doesn't need a framework choice).
-
-### Format
-
-Fenced \`\`\`ask\`\`\` block with JSON. Below is just an EXAMPLE — use the
-schema for whatever your actual questions are:
+When the request has a real fork (scope / format / approach / tone /
+depth / audience) and a wrong guess would waste the user's time or money,
+ask 1-3 questions via a SINGLE fenced \`\`\`ask\`\`\` block — the UI renders it
+as one popup with pickers and a "Skip — use defaults" button. Don't ask
+when intent is clear, the answer is already in the conversation, the
+decision is trivial (just state your assumption), or you need free-form
+data like a name/path/URL (use prose). Never emit more than one ask-block
+per turn, and don't re-ask after a Skip — proceed with the recommended
+options.
 
 \`\`\`ask
-{
-  "questions": [
-    {
-      "question": "How long should the summary be?",
-      "options": [
-        {"label": "One paragraph", "desc": "Quick gist, ~3-4 sentences", "recommended": true},
-        {"label": "One page", "desc": "Structured with headings, ~500 words"},
-        {"label": "Full deep-dive", "desc": "Everything you'd put in a report"}
-      ]
-    },
-    {
-      "question": "What tone?",
-      "options": [
-        {"label": "Casual", "desc": "Like explaining to a friend", "recommended": true},
-        {"label": "Professional", "desc": "Suitable for a stakeholder email"}
-      ]
-    }
-  ]
-}
+{"questions":[
+  {"question":"How long should the summary be?","options":[
+    {"label":"One paragraph","desc":"Quick gist","recommended":true},
+    {"label":"One page","desc":"Structured, ~500 words"},
+    {"label":"Full deep-dive","desc":"Everything"}]}
+]}
 \`\`\`
 
-### Hard rules
-
-- AT MOST 3 questions per block. 1-2 is better. Pick the decisions where
-  guessing wrong would actually waste the user's time.
-- 2-4 options per question. 3 is usually best.
-- ALWAYS mark exactly ONE option per question with \`"recommended": true\`.
-- Each option's "desc" is ONE short sentence on the trade-off.
-- If the user clicks "Skip — use defaults", proceed with the recommended
-  options as the answer. Do NOT re-ask.
-
-### When NOT to ask
-
-- The intent is unambiguous — just do the work.
-- A yes/no that's obviously yes — just do it.
-- Asking for free-form data (a name, a path, a URL) — use prose.
-- The user has already answered / skipped — don't re-ask.`
+Rules: ≤3 questions; 2-4 options each (3 is best); EXACTLY ONE option per
+question marked \`"recommended": true\`; each \`desc\` one short sentence.`
   // v0.8 — folder skills index. Names + descriptions only; bodies load via
   // the use_skill tool so unused skills cost ~a line of tokens each. Skipped
   // for local models (same latency budget reasoning as the task checklist —
@@ -764,6 +667,152 @@ function userWantsBrowserIntent(messages) {
     return false
   }
   return false
+}
+
+// v0.8 market-fit: screen-control gating. screen_click/type/key operate the
+// user's REAL desktop — offering them in every chat let any model
+// speculatively click around outside the app. Same pattern as browser
+// tools: only offer when the latest user message signals screen intent.
+function userWantsScreenIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    if (/\b(my screen|on (the |my )?screen|screenshot|screen ?shot|control (my |the )?(mac|desktop|computer)|click (on |the )|press (the )?\w+ (button|key)|type (into|in) )/.test(text)) return true
+    return false
+  }
+  return false
+}
+
+// ── Web search (v0.8 cycle 20) ─────────────────────────────────────────────
+// Lightweight, headless web access for EVERY model — the everyday "what's
+// the latest…" capability without popping the Chromium browser window.
+// DuckDuckGo's HTML endpoint needs no API key; LABAIK_SEARCH_BASE lets the
+// test fixture point at a mock. fetch_page returns readable text with an
+// SSRF guard (no localhost / private ranges / non-http schemes).
+const SEARCH_TOOLS = [
+  { type: 'function', function: {
+    name: 'web_search',
+    description: 'Search the web. Use ONLY when the answer genuinely needs current or external information (news, prices, weather, recent releases, facts after your training cutoff). Do not search for things you already know. Returns titles, URLs, and snippets — follow up with fetch_page on the most promising result when the snippet is not enough.',
+    parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search query — keep it short and specific.' } }, required: ['query'] },
+  } },
+  { type: 'function', function: {
+    name: 'fetch_page',
+    description: 'Fetch a web page and return its readable text (scripts/markup stripped, capped at 20KB). Use after web_search to read a result, or when the user gives a URL.',
+    parameters: { type: 'object', properties: { url: { type: 'string', description: 'http(s) URL to fetch.' } }, required: ['url'] },
+  } },
+]
+
+function _blockedUrl(raw) {
+  let u
+  try { u = new URL(raw) } catch { return 'invalid URL' }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return 'only http(s) allowed'
+  const h = u.hostname.toLowerCase()
+  if (h === 'localhost' || h === '0.0.0.0' || h.endsWith('.local') || h.endsWith('.internal')) return 'local addresses blocked'
+  if (/^127\.|^10\.|^192\.168\.|^169\.254\./.test(h)) return 'private addresses blocked'
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return 'private addresses blocked'
+  return null
+}
+
+async function runWebSearch(query) {
+  const q = String(query || '').trim()
+  if (!q) return { error: 'web_search requires a query.' }
+  const base = process.env.LABAIK_SEARCH_BASE || 'https://html.duckduckgo.com'
+  let html
+  try {
+    const res = await fetch(`${base}/html/?q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' }, redirect: 'follow',
+    })
+    if (!res.ok) return { error: `Search failed: HTTP ${res.status}` }
+    html = await res.text()
+  } catch (err) {
+    return { error: `Search failed: ${err.message}` }
+  }
+  const results = []
+  const linkRe = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g
+  const snipRe = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g
+  const strip = (x) => x.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+  const snippets = []
+  let m
+  while ((m = snipRe.exec(html)) !== null) snippets.push(strip(m[1]))
+  let i = 0
+  while ((m = linkRe.exec(html)) !== null && results.length < 5) {
+    let url = m[1]
+    // DDG wraps result hrefs: //duckduckgo.com/l/?uddg=<encoded>&rut=…
+    const uddg = /[?&]uddg=([^&]+)/.exec(url)
+    if (uddg) { try { url = decodeURIComponent(uddg[1]) } catch {} }
+    results.push({ title: strip(m[2]), url, snippet: snippets[i] || '' })
+    i++
+  }
+  if (!results.length) return { results: [], note: 'No results parsed — try a different query.' }
+  return { results }
+}
+
+// v0.8 cycle 36 — SSRF-safe fetch. `redirect: 'follow'` (the old default)
+// re-checked nothing after the first hop, so a public page could 30x-redirect
+// to http://localhost/… or a private IP and bypass _blockedUrl entirely.
+// We follow redirects MANUALLY, re-validating each Location, and cap the body
+// read so a multi-GB response can't OOM the worker.
+const FETCH_MAX_BYTES = 3 * 1024 * 1024  // 3 MB hard cap on the response body
+async function safeFetch(rawUrl, maxHops = 4) {
+  let url = rawUrl
+  for (let hop = 0; hop <= maxHops; hop++) {
+    const blocked = _blockedUrl(url)
+    if (blocked) throw new Error(blocked)
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' },
+      redirect: 'manual',
+    })
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      url = new URL(res.headers.get('location'), url).href  // re-validated next loop
+      continue
+    }
+    return res
+  }
+  throw new Error('too many redirects')
+}
+async function readCapped(res) {
+  const len = Number(res.headers.get('content-length') || 0)
+  if (len && len > FETCH_MAX_BYTES) throw new Error(`response too large (${Math.round(len / 1e6)}MB)`)
+  if (!res.body) return await res.text()
+  const reader = res.body.getReader()
+  const chunks = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.length
+    if (total > FETCH_MAX_BYTES) { try { reader.cancel() } catch {}; break }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf8')
+}
+
+async function runFetchPage(rawUrl) {
+  const blocked = _blockedUrl(rawUrl)
+  if (blocked) return { error: `Blocked: ${blocked}` }
+  let res, html
+  try {
+    res = await safeFetch(rawUrl)
+    if (!res.ok) return { error: `Fetch failed: HTTP ${res.status}` }
+    html = await readCapped(res)
+  } catch (err) {
+    return { error: `Fetch failed: ${err.message}` }
+  }
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ').trim()
+  return { url: rawUrl, text: text.slice(0, 20000), truncated: text.length > 20000 }
 }
 
 // ── Image generation ──────────────────────────────────────────────────────
@@ -970,6 +1019,8 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   }
   // v0.8: folder skills — load a SKILL.md body on demand. Read-only, global
   // (no workspace required), so it stays outside the approval gate.
+  if (name === 'web_search') return await runWebSearch(args?.query)
+  if (name === 'fetch_page') return await runFetchPage(args?.url)
   if (name === 'use_skill') {
     const skill = folderSkills.get(String(args?.slug || '').trim())
     if (!skill) {
@@ -1254,6 +1305,8 @@ function summarizeArgs(name, args) {
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
   if (name === 'score_phq9' || name === 'score_gad7') return name.toUpperCase()
   if (name === 'spawn_subagent') return String(args.description || 'task').slice(0, 80)
+  if (name === 'web_search') return String(args.query || '').slice(0, 80)
+  if (name === 'fetch_page') return String(args.url || '').slice(0, 80)
   return ''
 }
 
@@ -1261,6 +1314,31 @@ function summarizeArgs(name, args) {
 // renderer requests plan mode. Tells the model to write a plan only and
 // NOT to execute. We also strip the workspace tools below so the model
 // physically cannot call write_file / run_command even if it tried.
+// v0.8 cycle 21 — Deep Research mode. Appended when the renderer sends
+// researchMode: the model runs a multi-search, cross-checked, fully cited
+// investigation using web_search/fetch_page inside its normal tool loop.
+const RESEARCH_PROMPT_ADDITION = `
+
+## DEEP RESEARCH MODE — follow this protocol exactly
+
+The user wants a researched, cited answer — not what you remember.
+
+1. PLAN: break the question into 2-4 sub-questions.
+2. SEARCH: run web_search for each (differently-angled queries, not
+   rephrasings). Batch tool calls where possible.
+3. READ: fetch_page the 2-4 most authoritative results — primary sources
+   over aggregators, recent over stale.
+4. CROSS-CHECK: where sources disagree, say so explicitly.
+5. DELIVER:
+   - **TL;DR** — 2-3 sentences.
+   - **Findings** — with inline [1][2] citations on every load-bearing claim.
+   - **Sources** — numbered list with URLs and publication dates if known.
+   - **Caveats** — what could not be verified, what is contested, how fresh
+     the data is.
+
+Never invent citations. A claim without a source goes in Caveats, labeled
+as your prior knowledge.`
+
 const PLAN_MODE_PROMPT_ADDITION = `
 
 ## PLAN MODE — read this before responding
@@ -1364,7 +1442,7 @@ The user will review the plan, then either approve it (which lands you
 back in normal mode with a "Proceed with the plan above" message) or
 ask for changes. Stay in plan mode until they explicitly approve.`
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode }) {
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode, researchMode, signal }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -1412,13 +1490,17 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     sysPrompt += PLAN_MODE_PROMPT_ADDITION
     process.stderr.write(`[worker] plan mode active for messageId=${messageId}\n`)
   }
+  if (researchMode) {
+    sysPrompt += RESEARCH_PROMPT_ADDITION
+    process.stderr.write(`[worker] deep-research mode active for messageId=${messageId}\n`)
+  }
 
   // Wrap every activity event with the renderer messageId so the renderer can
   // route tokens to the right lane in council / multi-model mode.
   const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode })
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode, signal })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
@@ -1431,14 +1513,14 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     // endpoint because OpenAI-compat silently drops chat_template_kwargs.
     // Measured: "hi" reply dropped from 48s → 0.7s by switching endpoints.
     if (isThinkingLocalModel(normalised)) {
-      return await chatOllamaNative(messages, normalised, workspacePath, sysPrompt, { skipTools, onActivity, mode })
+      return await chatOllamaNative(messages, normalised, workspacePath, sysPrompt, { skipTools, onActivity, mode, signal })
     }
-    return await chatOpenAI(messages, normalised, provider, workspacePath, sysPrompt, { skipTools, onActivity, mode })
+    return await chatOpenAI(messages, normalised, provider, workspacePath, sysPrompt, { skipTools, onActivity, mode, signal })
   } else {
     // v0.7.61: strip any routing-hint prefix (e.g. `kimi-intl/`) so the
     // SDK sees the raw upstream model id. Case is preserved — MiniMax
     // and other case-sensitive providers need `MiniMax-M2.7` unchanged.
-    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode })
+    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode, signal })
   }
 }
 
@@ -1506,7 +1588,7 @@ async function runImageGen(args) {
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0 } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0, signal = null } = opts
   // v0.7.72: route image-gen activity events to this turn's onActivity.
   setImageActivity(onActivity)
   const OpenAI = require('openai').default || require('openai')
@@ -1551,6 +1633,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // for tasks that don't need it.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const offerImage = !skipTools && userWantsImageIntent(msgs)
+  const offerScreen = !skipTools && userWantsScreenIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     // Sub-agents only at the top level + when a workspace is open. A spawned
@@ -1558,8 +1641,9 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
-    ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
+    ...SEARCH_TOOLS,      // v0.8: web search for every model
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1582,8 +1666,13 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     // tool_calls arrive as deltas too and are accumulated by index so the final
     // assembled message matches the non-streaming shape.
     let msg = null
+    // v0.8: user pressed Stop — return what we have instead of starting
+    // another provider round.
+    if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
+    // Hoisted so the Stop path below can salvage tokens that streamed in
+    // before the abort landed.
+    let iterContent = ''
     try {
-      let iterContent = ''
       // v0.7.65: DeepSeek's thinking-mode responses stream a separate
       // `delta.reasoning_content` channel. We aggregate it here and
       // carry it forward in the multi-turn history — DeepSeek's API
@@ -1603,7 +1692,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
           stream: true,
           tools: useTools,
           suppressThinking,
-        }))
+        }), signal ? { signal } : undefined)
         for await (const chunk of stream) {
           const choice = chunk.choices?.[0]
           if (choice?.finish_reason) lastFinishReason = choice.finish_reason
@@ -1676,6 +1765,11 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         ...(iterReasoning ? { reasoning_content: iterReasoning } : {}),
       }
     } catch (streamErr) {
+      // v0.8: user pressed Stop — salvage whatever streamed in, no fallback.
+      if (signal?.aborted) {
+        fullText += iterContent + '\n\n⏹ Stopped.'
+        break
+      }
       // Streaming not supported or failed — fall back to non-streaming on this iteration only
       process.stderr.write(`[worker] streaming failed (${streamErr.message}) — falling back to non-streaming\n`)
       const res = await withProviderWaitHeartbeat(provider, model, onActivity, () => client.chat.completions.create(buildChatCompletionParams({
@@ -1742,6 +1836,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     break
   }
   // Screen response for health red flags
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const responseText = (fullText + toolLog) || '(Done)'
   const { screenForRedFlags, formatRedFlagAlert } = require(_path.join(healthDir, 'triage-engine.js'))
   // Screen both last user message and AI response
@@ -1813,7 +1908,7 @@ async function runSubAgent(args, ctx) {
  * one. We implement the same tool-loop as chatOpenAI with up to 10 rounds.
  */
 async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', signal = null } = opts
   setImageActivity(onActivity)
   const baseURL = 'http://localhost:11434'
   // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
@@ -1829,12 +1924,14 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   // v0.7.72: same browser-intent gating as chatOpenAI above.
   const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
   const offerImage = !skipTools && userWantsImageIntent(msgs)
+  const offerScreen = !skipTools && userWantsScreenIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
-    ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(offerScreen ? SCREEN_TOOLS : []),  // v0.8: gated on screen intent
     ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
+    ...SEARCH_TOOLS,      // v0.8: web search for every model
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1878,8 +1975,11 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
       })
     } catch (netErr) {
+      // v0.8: user pressed Stop.
+      if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
       throw new Error(`Ollama /api/chat network error: ${netErr.message}`)
     }
     if (!res.ok) {
@@ -1895,8 +1995,15 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     const reader = res.body.getReader()
     const dec = new TextDecoder()
     let buf = ''
+    let _stopped = false
     while (true) {
-      const { done, value } = await reader.read()
+      let done, value
+      try { ({ done, value } = await reader.read()) }
+      catch (e) {
+        // v0.8: abort mid-stream — keep what we have.
+        if (signal?.aborted) { _stopped = true; break }
+        throw e
+      }
       if (done) break
       buf += dec.decode(value, { stream: true })
       let newlineIdx
@@ -1931,6 +2038,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     if (partialTools.length) assistantMsg.tool_calls = partialTools
     chatMsgs.push(assistantMsg)
     if (assistantMsg.content) fullText += assistantMsg.content
+    if (_stopped) { fullText += '\n\n⏹ Stopped.'; break }
     if (!assistantMsg.tool_calls?.length) break
 
     // Tool-use round: execute each call and feed results back.
@@ -1954,11 +2062,12 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
       chatMsgs.push({ role: 'tool', tool_name: tc.function.name, content: JSON.stringify(result).slice(0, 50000) })
     }
   }
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   return fullText || '(no response)'
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0 } = opts
+  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0, signal = null } = opts
   setImageActivity(onActivity)
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
@@ -1980,8 +2089,9 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   // v0.7.72: gate browser tools by user intent (same heuristic as the
   // OpenAI/Ollama paths). Plan mode already strips everything anyway.
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
+  const offerScreen = !planMode && userWantsScreenIntent(msgs)
   const offerImage = !planMode && userWantsImageIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...(offerScreen ? SCREEN_TOOLS : []), ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...SEARCH_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -2012,19 +2122,25 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     // Stream tokens live via the Anthropic SDK's stream helper, then pull the
     // assembled final message at the end — same shape as non-streaming create().
     // Fall back to non-streaming on any failure.
+    // v0.8: user pressed Stop — don't start another provider round.
+    if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
     let res
+    let _anthPartial = ''
     try {
       const stream = client.messages.stream({
         model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs,
         ...(anthTools ? { tools: anthTools } : {}),
-      })
+      }, signal ? { signal } : undefined)
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          _anthPartial += event.delta.text
           onActivity({ phase: 'token', text: event.delta.text })
         }
       }
       res = await stream.finalMessage()
     } catch (streamErr) {
+      // v0.8: abort mid-stream — salvage tokens that already arrived.
+      if (signal?.aborted) { fullText += _anthPartial + '\n\n⏹ Stopped.'; break }
       process.stderr.write(`[worker] anthropic streaming failed (${streamErr.message}) — falling back\n`)
       res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
     }
@@ -2082,6 +2198,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     }
     break
   }
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const anthrResponseText = (fullText + toolLog) || '(Done)'
   const triage = require(_path.join(healthDir, 'triage-engine.js'))
   const lastUser = msgs[msgs.length - 1]?.content || ''
@@ -2140,14 +2257,25 @@ process.stdin.on('data', (chunk) => {
         if (resolver) { _pendingApprovals.delete(req.id); resolver({ verdict: req.verdict, message: req.message }) }
         continue
       }
+      // v0.8: stop generation. Abort the in-flight provider stream for this
+      // chat id — the chat then resolves normally with the partial text.
+      if (req.type === 'chat-cancel') {
+        const ac = _activeAborts.get(req.id)
+        if (ac) { try { ac.abort() } catch {} }
+        continue
+      }
       _inFlightRequest = { id: req.id }
-      handleChat(req)
+      const _ac = new AbortController()
+      _activeAborts.set(req.id, _ac)
+      handleChat({ ...req, signal: _ac.signal })
         .then(result => {
           _inFlightRequest = null
+          _activeAborts.delete(req.id)
           process.stdout.write(JSON.stringify({ id: req.id, result }) + '\n')
         })
         .catch(err => {
           _inFlightRequest = null
+          _activeAborts.delete(req.id)
           process.stdout.write(JSON.stringify({ id: req.id, error: formatErrorForUser(err) }) + '\n')
         })
     } catch (err) {

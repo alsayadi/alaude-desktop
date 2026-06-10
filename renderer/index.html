@@ -4022,6 +4022,35 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
+    #routine-nudge {
+      position: fixed; bottom: 86px; left: 50%; transform: translateX(-50%) translateY(6px);
+      display: flex; align-items: center; gap: 10px; z-index: 800;
+      background: var(--bg-input); border: 1px solid var(--green); border-radius: 12px;
+      padding: 10px 14px; font-size: 12.5px; color: var(--text); opacity: 0;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.22); transition: opacity 0.3s, transform 0.3s; max-width: 90vw;
+    }
+    #routine-nudge.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #routine-nudge .nudge-yes {
+      background: var(--green); color: #fff; border: none; border-radius: 7px;
+      padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
+    }
+    #routine-nudge .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    #cmdk-hint {
+      position: fixed; bottom: 86px; right: 18px; z-index: 800;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 10px; padding: 9px 12px; font-size: 12.5px;
+      color: var(--text-dim); cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+      opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s;
+    }
+    #cmdk-hint.show { opacity: 1; transform: none; }
+    #cmdk-hint kbd {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      padding: 2px 7px; font-size: 11.5px; color: var(--text);
+    }
+    .cmdk-hint-close { color: var(--text-faint); margin-left: 2px; font-size: 14px; }
+    .send-btn.stopping { background: #c0392b; }
+    .send-btn.stopping:hover { opacity: 0.85; }
     .send-btn:not(:disabled):hover { opacity: 0.85; }
     .send-btn svg { width: 16px; height: 16px; }
     .send-btn { color: #fff; }
@@ -6011,7 +6040,7 @@
     <div class="login-card">
       <img class="login-logo" src="logo.jpg" alt="Labaik" />
       <h1 class="login-title" data-i18n="login.title">Welcome to Labaik</h1>
-      <p class="login-sub" data-i18n="login.sub">Connect a provider — you can always add more later.</p>
+      <p class="login-sub" data-i18n="login.sub">Every frontier AI on your Mac — your keys, private, no subscription.</p>
 
       <div class="login-paths">
         <!-- Path 1 (primary) — BYO API key, form expanded by default -->
@@ -6023,6 +6052,7 @@
             <div class="login-key-form" id="login-key-form" style="display:flex">
               <!-- Provider names stay literal — proper nouns / brand names. -->
               <select class="login-provider-select" id="login-provider-select">
+                <option value="auto" selected>✨ Auto-detect</option>
                 <option value="openai">OpenAI (GPT)</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="google">Google (Gemini)</option>
@@ -6243,8 +6273,6 @@
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.routines" onclick="runTopbarAction('routines', event)">⏰ Routines</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.keys" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.localModels" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
-            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.thinkingMap" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
-            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.uxInsights" onclick="runTopbarAction('insights', event)">📊 UX insights</button>
           </div>
         </div>
       </div>
@@ -6271,7 +6299,7 @@
         <button class="plan-mode-banner-btn" data-i18n="plan.banner.off" data-i18n-attr="title:plan.banner.off.title" onclick="togglePlanMode()" title="Turn off plan mode">Turn off</button>
       </span>
     </div>
-    <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+    <div class="messages" id="messages">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title" data-i18n="welcome.title">What can I help you with?</div>
@@ -6366,7 +6394,7 @@
             <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
-        <textarea class="input-field" id="input" rows="1" data-i18n-attr="placeholder:input.placeholder" placeholder="Message Labaik..." autofocus></textarea>
+        <textarea class="input-field" id="input" rows="1" data-i18n-attr="placeholder:input.placeholder" placeholder="Message Labaik...  ( / snippets · @ files )" autofocus></textarea>
         <!-- v0.6.0 Screen Vision: snap a region, attach to composer, send to vision model. ⌘⇧V.
              v0.7.43: hidden — another composer icon trimmed for clarity.
              Still callable via ⌘⇧V shortcut if ever needed. -->
@@ -6393,7 +6421,7 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </button>
-        <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+        <button class="send-btn" id="send-btn" onclick="composerPrimaryAction()" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
           </svg>
@@ -6433,7 +6461,7 @@
   <div class="modal-overlay" id="profile-onboard-modal">
     <div class="modal" style="max-width:540px;width:92vw">
       <h2 style="margin-bottom:4px" data-i18n="onboard.title">👋 Teach Labaik about you</h2>
-      <div data-i18n="onboard.intro" style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.</div>
+      <div data-i18n="onboard.intro" style="font-size:12.5px;color:var(--text-faint);margin-bottom:16px;line-height:1.5">A few facts go a long way. These ship with every conversation, so Labaik stops re-asking who you are, what you work on, and how you like answers. Skippable — you can add or edit anything later in Memory Lens.</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <!-- v0.7.71: each label wraps the input, but data-i18n on the
              <label> would clobber the <input> child. So we use a
@@ -6441,14 +6469,14 @@
         <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q1">👤 What should Labaik call you?</span>
           <input id="onb-name" type="text" placeholder="Ahmed" maxlength="100" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q2">🛠️ Main stack / languages / frameworks?</span>
-          <input id="onb-tools" type="text" placeholder="Electron, JavaScript, Python" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q2">🛠️ What do you work on or care about?</span>
+          <input id="onb-tools" type="text" placeholder="Marketing at a startup — or: Electron, JavaScript" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
-        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q3">💡 A coding preference or two?</span>
-          <input id="onb-prefs" type="text" data-i18n-attr="placeholder:onboard.q3.placeholder" placeholder="Prefer async/await, avoid classes when possible" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+        <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q3">💡 How do you like your answers?</span>
+          <input id="onb-prefs" type="text" data-i18n-attr="placeholder:onboard.q3.placeholder" placeholder="Short and direct. Examples over theory." maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
         </label>
         <label style="font-size:12px;color:var(--text)"><span data-i18n="onboard.q4">📌 Anything else I should always know?</span>
-          <textarea id="onb-context" data-i18n-attr="placeholder:onboard.q4.placeholder" placeholder="I'm building a desktop AI app. Timezone UTC+3." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
+          <textarea id="onb-context" data-i18n-attr="placeholder:onboard.q4.placeholder" placeholder="Teacher, two kids, timezone UTC+3. Learning Spanish." rows="2" maxlength="200" style="display:block;width:100%;margin-top:4px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;resize:vertical"></textarea>
         </label>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
@@ -6770,6 +6798,20 @@
   </div>
 
   <!-- What's in Labaik — feature tour / changelog -->
+  <!-- v0.8 cycle 25: Your data — the private wedge made visible -->
+  <div class="modal-overlay" id="yourdata-modal">
+    <div class="modal" style="max-width:560px;width:92vw">
+      <h2><span data-i18n="data.title">🔒 Your data</span>
+        <button class="modal-close" onclick="toggleYourDataModal()">&times;</button></h2>
+      <div data-i18n="data.intro" style="font-size:12.5px;color:var(--text-dim);margin-bottom:12px;line-height:1.5">Everything Labaik knows lives on this Mac — no cloud account, no server. Here's exactly what's stored.</div>
+      <div id="yourdata-list" style="font-size:13px"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="msg-action-btn" onclick="revealDataFolder()" data-i18n="data.reveal">📂 Reveal in Finder</button>
+        <button class="msg-action-btn" onclick="closeYourDataModal(); openBackupFromData()" data-i18n="data.backup">💾 Back up…</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="whats-in-modal">
     <div class="modal ux-modal" style="max-width:720px;width:94vw">
       <h2>
@@ -6842,12 +6884,17 @@
 
         <div style="display:flex;gap:8px;align-items:center">
           <select id="routine-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-dim);cursor:pointer;white-space:nowrap" data-i18n-attr="title:routines.notify.title" title="Show a desktop notification each run">
+            <input type="checkbox" id="routine-notify" checked /> <span data-i18n="routines.notify">🔔 Notify</span>
+          </label>
           <button class="key-save-btn" data-i18n="routines.add" onclick="addRoutine()">Add</button>
         </div>
       </div>
 
       <div data-i18n="routines.your" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
       <div id="routines-list"></div>
+      <div data-i18n="routines.recentRuns" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px">Recent runs</div>
+      <div id="routines-history" style="font-size:12px;color:var(--text-dim)"></div>
     </div>
   </div>
 
@@ -7411,6 +7458,51 @@
     function newMessageId() {
       return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
     }
+    // v0.8 market-fit: local-only activation funnel. Three marks tell us
+    // whether a fresh install reaches its first reply inside 60 seconds:
+    // funnel_install (first boot) → funnel_key_saved → funnel_first_reply.
+    // Events land in the existing OODA log (~/.labaik/events.ndjson) —
+    // nothing leaves the machine.
+    // v0.8 cycle 27: activation→retention bridge. Routines are the reason
+    // Labaik opens tomorrow, but an engaged new user is never pointed at
+    // their first one. After a few replies, if they have ZERO routines,
+    // show ONE dismissible nudge — then never again.
+    let _replyCountThisRun = 0
+    async function maybeNudgeFirstRoutine() {
+      try {
+        _replyCountThisRun++
+        if (_replyCountThisRun < 3) return
+        if (localStorage.getItem('alaude:routine-nudge:v1')) return
+        const routines = await window.alaude.routinesList().catch(() => [])
+        if (Array.isArray(routines) && routines.length > 0) {
+          localStorage.setItem('alaude:routine-nudge:v1', 'has-routine'); return
+        }
+        localStorage.setItem('alaude:routine-nudge:v1', 'shown')
+        if (document.getElementById('routine-nudge')) return
+        const el = document.createElement('div')
+        el.id = 'routine-nudge'
+        el.innerHTML = `<span>${escapeHtml(t('nudge.routine'))}</span>
+          <button class="nudge-yes">${escapeHtml(t('nudge.routine.yes'))}</button>
+          <span class="nudge-close">×</span>`
+        el.querySelector('.nudge-yes').onclick = () => { el.remove(); toggleRoutinesModal() }
+        el.querySelector('.nudge-close').onclick = () => el.remove()
+        document.body.appendChild(el)
+        requestAnimationFrame(() => el.classList.add('show'))
+        setTimeout(() => el.classList.contains('show') && el.classList.remove('show'), 18000)
+      } catch {}
+    }
+
+    function funnelMark(kind) {
+      try {
+        const KEY = 'alaude:funnel:' + kind
+        if (localStorage.getItem(KEY)) return  // each mark fires once per install
+        localStorage.setItem(KEY, String(Date.now()))
+        const t0 = Number(localStorage.getItem('alaude:funnel:install') || Date.now())
+        logUx({ kind: 'funnel_' + kind, sinceInstallMs: kind === 'install' ? 0 : Date.now() - t0 })
+      } catch {}
+    }
+    funnelMark('install')
+
     async function logUx(event) {
       try { await window.alaude.logUxEvent({ ...event }) } catch {}
     }
@@ -7442,9 +7534,32 @@
     // ── Input ────────────────────────────────────────────────────────────
     const input = document.getElementById('input')
     const sendBtn = document.getElementById('send-btn')
+    // v0.8 — while streaming, the send button becomes a Stop button.
+    const SEND_BTN_SVG = sendBtn.innerHTML
+    const STOP_BTN_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+    function updateSendBtnMode() {
+      if (isStreaming) {
+        sendBtn.innerHTML = STOP_BTN_SVG
+        sendBtn.disabled = false
+        sendBtn.title = 'Stop generating (Esc)'
+        sendBtn.classList.add('stopping')
+      } else {
+        sendBtn.innerHTML = SEND_BTN_SVG
+        sendBtn.title = ''
+        sendBtn.classList.remove('stopping')
+        sendBtn.disabled = !input.value.trim()
+      }
+    }
+    function composerPrimaryAction() {
+      if (isStreaming) stopGeneration()
+      else sendMessage()
+    }
+    async function stopGeneration() {
+      try { await window.alaude.chatCancelAll() } catch (e) { console.warn('[stop] cancel failed:', e?.message) }
+    }
 
     input.addEventListener('input', () => {
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       // Auto-resize
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
@@ -7546,23 +7661,49 @@
     const LS_SNIPPETS = 'alaude:snippets:v1'
     const DEFAULT_SNIPPETS = [
       { id: 'review',   trigger: '/review',   icon: '🧐', name: 'Code review', desc: 'Reviews code and flags bugs, perf issues, smells', body: 'Review this code and flag bugs, performance issues, and code smells. Be specific about line numbers.\n\n```{{language}}\n{{code}}\n```' },
-      { id: 'explain',  trigger: '/explain',  icon: '💡', name: 'Explain',     desc: 'Explain code, concept, or error clearly',        body: 'Explain the following like I\'m an experienced developer new to this area. Focus on the non-obvious parts:\n\n{{content}}' },
+      { id: 'explain',  trigger: '/explain',  icon: '💡', name: 'Explain',     desc: 'Explain anything clearly — concept, document, error, jargon', body: 'Explain the following clearly. Assume I\'m smart but completely new to this topic — define terms on first use, use one concrete example or analogy, and focus on the non-obvious parts:\n\n{{content}}' },
       { id: 'debug',    trigger: '/debug',    icon: '🐛', name: 'Debug',       desc: 'Help root-cause a bug',                           body: 'I\'m seeing this error/behavior:\n\n{{symptom}}\n\nHere\'s the relevant code:\n\n```\n{{code}}\n```\n\nHelp me root-cause it. List the top 3 most likely causes in order of probability, and how to verify each.' },
       { id: 'refactor', trigger: '/refactor', icon: '♻️', name: 'Refactor',    desc: 'Suggest a cleaner version',                       body: 'Refactor this code for readability and maintainability, without changing its behavior. Point out trade-offs.\n\n```{{language}}\n{{code}}\n```' },
       { id: 'test',     trigger: '/test',     icon: '🧪', name: 'Write tests', desc: 'Generate test cases',                             body: 'Write tests for the following code. Cover: happy path, edge cases, and one adversarial input. Use {{framework}}.\n\n```\n{{code}}\n```' },
       { id: 'summary',  trigger: '/summary',  icon: '📝', name: 'Summarize',   desc: 'TL;DR of something long',                         body: 'Summarize the following in 3 bullet points, then a single-sentence takeaway:\n\n{{content}}' },
       { id: 'translate',trigger: '/translate',icon: '🌍', name: 'Translate',   desc: 'Translate text to another language',              body: 'Translate the following into {{target_language}}. Preserve tone and any technical terms.\n\n{{text}}' },
       { id: 'diff',     trigger: '/diff',     icon: '📊', name: 'Compare',     desc: 'Compare two options side-by-side',                body: 'Compare these two options in a pros/cons table, then give a clear recommendation with reasoning.\n\nOption A: {{a}}\n\nOption B: {{b}}' },
+      // v0.8 general-use additions — the original eight skewed heavily
+      // toward coding; these cover the everyday non-developer asks.
+      { id: 'email',    trigger: '/email',    icon: '✉️', name: 'Draft email',  desc: 'Write or polish an email in the right tone',     body: 'Draft an email.\n\nTo: {{who}}\nGoal: {{what_you_want}}\nTone: {{formal_or_friendly}}\n\nKeep it short — no filler phrases, clear ask, subject line included.' },
+      { id: 'brainstorm',trigger: '/brainstorm',icon: '🌪️', name: 'Brainstorm', desc: '10 distinct ideas, then the top 3 developed',    body: 'Brainstorm 10 genuinely different ideas for: {{topic}}\n\nOne line each. Then pick the 3 strongest and develop each in a short paragraph (why it works, first step to try it).' },
+      { id: 'rewrite',  trigger: '/rewrite',  icon: '✍️', name: 'Rewrite',     desc: 'Same content, different tone or length',         body: 'Rewrite the following as: {{tone_or_format}} (e.g. "friendlier", "half the length", "for a 10-year-old", "as bullet points"). Keep the meaning intact.\n\n{{text}}' },
+      { id: 'plan',     trigger: '/plan',     icon: '🗓️', name: 'Plan it',     desc: 'Turn a goal into a concrete plan',               body: 'Help me plan: {{goal}}\n\nConstraints: {{time_money_other}}\n\nGive me a concrete step-by-step plan with rough time estimates, the single most likely failure point, and what to do this week.' },
+      { id: 'decide',   trigger: '/decide',   icon: '⚖️', name: 'Decide',      desc: 'Think through a decision properly',              body: "I'm deciding: {{decision}}\n\nAsk me the 2-3 questions that matter most, then give a recommendation with the strongest argument for AND against it." },
     ]
+    // Tracks which default snippet ids this install has already offered, so
+    // NEW defaults added in an update reach existing users exactly once —
+    // without resurrecting defaults the user deliberately deleted.
+    const LS_SNIPPETS_SEEN = 'alaude:snippets:seen:v1'
     let snippets = loadSnippets()
     function loadSnippets() {
+      const markAllSeen = () => {
+        try { localStorage.setItem(LS_SNIPPETS_SEEN, JSON.stringify(DEFAULT_SNIPPETS.map(d => d.id))) } catch {}
+      }
       try {
         const raw = localStorage.getItem(LS_SNIPPETS)
-        if (!raw) return [...DEFAULT_SNIPPETS]
+        if (!raw) { markAllSeen(); return [...DEFAULT_SNIPPETS] }
         const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed) || !parsed.length) return [...DEFAULT_SNIPPETS]
-        return parsed
-      } catch { return [...DEFAULT_SNIPPETS] }
+        if (!Array.isArray(parsed) || !parsed.length) { markAllSeen(); return [...DEFAULT_SNIPPETS] }
+        // Merge in defaults this install has never seen (added by an update).
+        let seen = []
+        try { seen = JSON.parse(localStorage.getItem(LS_SNIPPETS_SEEN) || '[]') } catch {}
+        const have = new Set(parsed.map(s => s.id))
+        const seenSet = new Set(Array.isArray(seen) ? seen : [])
+        const fresh = DEFAULT_SNIPPETS.filter(d => !have.has(d.id) && !seenSet.has(d.id))
+        const merged = fresh.length ? [...parsed, ...fresh] : parsed
+        if (fresh.length) {
+          try { localStorage.setItem(LS_SNIPPETS, JSON.stringify(merged)) } catch {}
+          console.log('[snippets] merged', fresh.length, 'new default snippet(s):', fresh.map(f => f.trigger).join(', '))
+        }
+        markAllSeen()
+        return merged
+      } catch { markAllSeen(); return [...DEFAULT_SNIPPETS] }
     }
     function saveSnippets() {
       try { localStorage.setItem(LS_SNIPPETS, JSON.stringify(snippets)) } catch {}
@@ -7649,7 +7790,7 @@
         closeSlashMenu()
         input.style.height = 'auto'
         input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-        sendBtn.disabled = !input.value.trim() || isStreaming
+        updateSendBtnMode()
         input.focus()
         const pos = input.value.length
         input.setSelectionRange(pos, pos)
@@ -7660,7 +7801,7 @@
       // Resize + focus + jump to first placeholder
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       input.focus()
       jumpToNextPlaceholder()
     }
@@ -7794,7 +7935,7 @@
       closeAtMenu()
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       input.focus()
       input.setSelectionRange(caret, caret)
     }
@@ -8674,6 +8815,15 @@ SUMMARY:`
         prompt: 'Check the status page at https://status.mysite.com. If anything is not "operational", tell me with a short reason.' },
       { icon: '✍️', name: 'Writing prompt', cron: '0 7 * * *',
         prompt: 'Give me one interesting writing prompt for today. Vary the genre (essay, short story, journal, reflection).' },
+      // v0.8 general-use additions — everyday-life routines, not just work.
+      { icon: '💊', name: 'Medication reminder', cron: '0 9 * * *',
+        prompt: 'Remind me to take my morning medication. One line, friendly. If I told you the names earlier in my profile or memory, list them; otherwise just the reminder.' },
+      { icon: '🗣️', name: 'Language practice', cron: '0 19 * * *',
+        prompt: "Give me today's 5-minute language practice: 5 useful phrases with pronunciation hints, 1 mini dialogue using them, and quiz me on yesterday's phrases if you remember them. Use the language from my profile; if none is set, ask once." },
+      { icon: '💳', name: 'Bills & renewals check', cron: '0 10 * * 1',
+        prompt: 'Weekly money check-in: remind me to glance at upcoming bills, subscriptions, and renewals this week. List the recurring ones I have mentioned before (from memory), and ask if anything new should be tracked.' },
+      { icon: '🥗', name: 'Weekly meal plan', cron: '0 17 * * 0',
+        prompt: 'Plan 5 dinners for the coming week: variety of cuisines, under 45 minutes each, with a single combined grocery list grouped by store section. Respect any dietary preferences or allergies from my profile/memory.' },
     ]
     function renderRoutineTemplates() {
       const container = document.getElementById('routines-templates')
@@ -8832,12 +8982,93 @@ SUMMARY:`
       onRoutineFreqChange()
     }
 
+    // v0.8 adoption: ChatGPT history import — shared by the ⌘K action and
+    // the wedge tour's Try button.
+    async function importChatGPTFlow() {
+      showRewindToast?.('📥 Pick conversations.json from your ChatGPT export…', false)
+      let r
+      try { r = await window.alaude.importChatGPT() } catch (e) { r = { ok: false, reason: e?.message } }
+      if (!r?.ok) {
+        if (r?.reason !== 'cancelled') showRewindToast?.('Import failed: ' + (r?.reason || 'unknown'), true)
+        return
+      }
+      // v0.8 cycle 37 fix: ids must not collide with existing sessions. The
+      // old `Date.now() + i` could equal a session created in the same time
+      // window (two sessions sharing an id breaks switchSession/persist).
+      // `Date.now() * 1000 + i` sits ~1000× above any real Date.now() id, so
+      // it can't collide now or in future; a Set guard catches any leftover.
+      const existingIds = new Set(sessions.map(s => s.id))
+      // v0.8 cycle 39: dedup re-imports. The converter stamps each session
+      // with a content fingerprint (fp); skip any whose fp already exists so
+      // importing the same export twice doesn't double every conversation.
+      const existingFps = new Set(sessions.map(s => s.fp).filter(Boolean))
+      const base = Date.now() * 1000
+      let dupes = 0
+      const imported = []
+      r.sessions.forEach((c, i) => {
+        if (c.fp && existingFps.has(c.fp)) { dupes++; return }
+        if (c.fp) existingFps.add(c.fp)
+        let id = base + i
+        while (existingIds.has(id)) id++
+        existingIds.add(id)
+        imported.push({
+          id,
+          fp: c.fp,
+          title: '📥 ' + c.title,
+          messages: c.messages.map(m => ({ role: m.role, content: m.content, ...(m.ts ? { ts: m.ts } : {}) })),
+        })
+      })
+      sessions.unshift(...imported)
+      persistSessions()
+      renderSessions()
+      const extra = [r.skipped ? `${r.skipped} empty` : '', dupes ? `${dupes} already imported` : ''].filter(Boolean).join(', ')
+      showRewindToast?.(`📥 Imported ${imported.length} conversation${imported.length === 1 ? '' : 's'}${extra ? ` (${extra} skipped)` : ''}`, false)
+    }
+
+    // v0.8 retention: promote a good one-off prompt into a scheduled
+    // routine in two clicks — ⌘K → "Turn last prompt into a routine".
+    function routineFromLastPrompt() {
+      const lastUser = [...messages].reverse().find(m => m.role === 'user')
+      const text = lastUser
+        ? (Array.isArray(lastUser.content)
+            ? lastUser.content.filter(p => p?.type === 'text').map(p => p.text).join('\n')
+            : String(lastUser.content || ''))
+        : ''
+      if (!text.trim()) { showRewindToast?.('No prompt in this session yet', true); return }
+      const m = document.getElementById('routines-modal')
+      if (!m.classList.contains('show')) toggleRoutinesModal()
+      document.getElementById('routine-name').value = generateSessionTitle(text).slice(0, 60)
+      document.getElementById('routine-prompt').value = text
+      _loadCronIntoPicker('0 8 * * *')  // sensible default: daily 8am
+      document.getElementById('routine-name').focus()
+      document.getElementById('routine-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+
+    async function refreshRoutinesHistory() {
+      const el = document.getElementById('routines-history')
+      if (!el) return
+      let runs = []
+      try { runs = await window.alaude.routinesHistory(20) || [] } catch {}
+      if (!runs.length) { el.innerHTML = `<div style="color:var(--text-faint)">${escapeHtml(t('routines.noRuns'))}</div>`; return }
+      el.innerHTML = runs.map(r => {
+        const icon = r.status === 'ok' ? '✅' : (r.status === 'timeout' ? '⏱️' : '❌')
+        const when = r.ts ? new Date(r.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+        const preview = (r.resultPreview || '').replace(/\s+/g, ' ').slice(0, 110)
+        return `<div style="display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span>${icon}</span>
+          <span style="color:var(--text);font-weight:600;white-space:nowrap">${escapeHtml(r.name || '')}</span>
+          <span style="color:var(--text-faint);font-size:10.5px;white-space:nowrap">${escapeHtml(when)}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(preview)}</span>
+        </div>`
+      }).join('')
+    }
     function toggleRoutinesModal() {
       const m = document.getElementById('routines-modal')
       const opening = !m.classList.contains('show')
       if (opening) {
         renderRoutineTemplates()
         refreshRoutinesList()
+        refreshRoutinesHistory()
         populateRoutineModelSelect()
         // Initialise the friendly schedule picker (shows/hides the time
         // input + custom-cron field based on the default selection) and
@@ -8875,12 +9106,13 @@ SUMMARY:`
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">${escapeHtml(s.name)}</div>
-                <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
+                <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''} · <span title="${s.notify === false ? 'Notifications off' : 'Notifications on'}" style="cursor:pointer" onclick="toggleRoutineNotify('${s.id}', ${s.notify === false})">${s.notify === false ? '🔕' : '🔔'}</span></div>
               </div>
               <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
                 <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleRoutineEnabled('${s.id}', this.checked)" />
                 ${s.enabled ? 'On' : 'Off'}
               </label>
+              <button class="msg-action-btn" onclick="runRoutineNow('${s.id}')" data-i18n-attr="title:routines.runNow" title="Run now">▶</button>
               <button class="msg-action-btn" onclick="deleteRoutine('${s.id}')" style="color:#e07070">×</button>
             </div>
             <div style="font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.4;white-space:pre-wrap;max-height:60px;overflow:hidden">${escapeHtml(s.prompt.slice(0, 200))}${s.prompt.length > 200 ? '…' : ''}</div>
@@ -8904,19 +9136,35 @@ SUMMARY:`
         showRewindToast?.('Fill name, prompt, and schedule', true)
         return
       }
-      await window.alaude.routinesUpsert({ name, prompt, cron, model })
+      const notify = document.getElementById('routine-notify')?.checked !== false
+      await window.alaude.routinesUpsert({ name, prompt, cron, model, notify })
       document.getElementById('routine-name').value = ''
       document.getElementById('routine-prompt').value = ''
       document.getElementById('routine-cron-custom').value = ''
       document.getElementById('routine-freq').value = 'daily'
       document.getElementById('routine-time').value = '08:00'
       document.getElementById('routine-model').value = ''
+      const _rn = document.getElementById('routine-notify'); if (_rn) _rn.checked = true
       onRoutineFreqChange()
       await refreshRoutinesList()
       showRewindToast?.(`⏰ Routine "${name}" scheduled`, false)
     }
     async function toggleRoutineEnabled(id, enabled) {
       await window.alaude.routinesSetEnabled(id, enabled)
+      refreshRoutinesList()
+    }
+    async function runRoutineNow(id) {
+      try {
+        const ok = await window.alaude.routinesRunNow(id)
+        showRewindToast?.(ok ? t('routines.running') : 'Routine not found', !ok)
+        // The routine-ran event refreshes the list; history follows shortly.
+        setTimeout(() => refreshRoutinesHistory(), 4000)
+      } catch (e) { showRewindToast?.('Run failed: ' + (e?.message || e), true) }
+    }
+    async function toggleRoutineNotify(id, turnOn) {
+      const r = (await window.alaude.routinesList() || []).find(x => x.id === id)
+      if (!r) return
+      await window.alaude.routinesUpsert({ ...r, notify: !!turnOn })
       refreshRoutinesList()
     }
     async function deleteRoutine(id) {
@@ -8926,12 +9174,35 @@ SUMMARY:`
     }
     // Surface routine runs as toasts so the user knows something fired.
     try {
+      // v0.8 cycle 18: notification click → jump straight to the full result.
+      window.alaude.onOpenRoutinesLog?.(() => {
+        const logSession = sessions.find(x => x.routinesLog)
+        if (logSession) switchSession(logSession.id)
+      })
       window.alaude.onRoutineRan?.((payload) => {
         if (!payload) return
         const name = payload.routine?.name || 'routine'
         if (payload.success) {
           const preview = typeof payload.result === 'string' ? payload.result.slice(0, 120) : ''
           showRewindToast?.(`⏰ ${name} — ${preview}`, false)
+          // v0.8 cycle 17: the FULL result used to evaporate with the toast
+          // (only a 400-char preview survived in run history). Append every
+          // successful run to a pinned "⏰ Routine runs" session so the
+          // morning digest is actually readable in the evening.
+          if (typeof payload.result === 'string' && payload.result.trim()) {
+            let logSession = sessions.find(x => x.routinesLog)
+            if (!logSession) {
+              logSession = { id: Date.now(), title: '⏰ Routine runs', routinesLog: true, starred: true, messages: [] }
+              sessions.unshift(logSession)
+            }
+            logSession.messages.push(
+              { role: 'user', content: `⏰ **${name}** · ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, ts: Date.now() },
+              { role: 'assistant', content: payload.result, model: payload.routine?.model || '', ts: Date.now() },
+            )
+            persistSessions()
+            renderSessions()
+            if (currentSessionId === logSession.id) renderMessages()
+          }
         } else {
           showRewindToast?.(`⏰ ${name} — failed: ${(payload.error || 'unknown').slice(0, 80)}`, true)
         }
@@ -9925,102 +10196,6 @@ JSON:`
     // Writes ALL local state to a single JSON file: sessions (with branches,
     // tags, message history), memories, prompt snippets, and metadata.
     // Can be re-imported later to restore or migrate between machines.
-    function exportFullBackup() {
-      // Snapshot current session's messages into its session entry first
-      const current = sessions.find(s => s.id === currentSessionId)
-      if (current) current.messages = messages
-      const backup = {
-        schema: 'alaude-backup-v1',
-        exportedAt: new Date().toISOString(),
-        appVersion: (window.alaude?.version) || 'dev',
-        sessions: sessions,
-        memories: memories,
-        snippets: snippets,
-        // Feature flags + preferences
-        prefs: {
-          focusMode: localStorage.getItem('alaude:focus:v1') === '1',
-          theme: document.documentElement.getAttribute('data-theme') || 'dark',
-          activeSessionId: currentSessionId,
-        },
-      }
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const date = new Date().toISOString().slice(0, 10)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `alaude-backup-${date}.json`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      const stats = `${sessions.length} sessions · ${memories.length} memories · ${snippets.length} snippets`
-      showRewindToast?.(`📦 Backup exported (${stats})`, false)
-    }
-
-    async function importFullBackup() {
-      // Use a native file picker via a hidden <input type=file> since we
-      // don't have an IPC handler for JSON reads.
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'application/json,.json'
-      input.onchange = async () => {
-        const file = input.files?.[0]
-        if (!file) return
-        try {
-          const text = await file.text()
-          const data = JSON.parse(text)
-          if (!data || typeof data !== 'object') throw new Error('Invalid JSON shape')
-          if (data.schema && !String(data.schema).startsWith('alaude-backup')) {
-            if (!confirm(`This looks like a non-Labaik file (schema: ${data.schema}). Try anyway?`)) return
-          }
-          // Merge sessions: new ones added, existing ones keep their local
-          // version unless the imported one has strictly more messages.
-          const before = { sessions: sessions.length, memories: memories.length, snippets: snippets.length }
-          if (Array.isArray(data.sessions)) {
-            const byId = new Map(sessions.map(s => [s.id, s]))
-            for (const imp of data.sessions) {
-              if (!imp?.id) continue
-              const existing = byId.get(imp.id)
-              if (!existing) {
-                sessions.push(imp)
-              } else if ((imp.messages || []).length > (existing.messages || []).length) {
-                // Imported version is more complete — replace
-                const idx = sessions.findIndex(s => s.id === imp.id)
-                if (idx >= 0) sessions[idx] = imp
-              }
-              // else: keep local (more or equal messages)
-            }
-          }
-          if (Array.isArray(data.memories)) {
-            const byId = new Set(memories.map(m => m.id))
-            for (const m of data.memories) {
-              if (!m?.id || byId.has(m.id)) continue
-              memories.push(m)
-            }
-            saveMemories()
-          }
-          if (Array.isArray(data.snippets)) {
-            const byId = new Set(snippets.map(s => s.id))
-            for (const s of data.snippets) {
-              if (!s?.id || byId.has(s.id)) continue
-              snippets.push(s)
-            }
-            saveSnippets()
-          }
-          persistSessions()
-          renderSessions()
-          renderMessages()
-          const added = {
-            sessions: sessions.length - before.sessions,
-            memories: memories.length - before.memories,
-            snippets: snippets.length - before.snippets,
-          }
-          showRewindToast?.(`📥 Imported +${added.sessions} sessions · +${added.memories} memories · +${added.snippets} snippets`, false)
-        } catch (err) {
-          alert('Import failed: ' + (err?.message || String(err)))
-        }
-      }
-      input.click()
-    }
-
     // ── Export current session as Markdown ──────────────────────────────
     // Emits a self-contained markdown transcript. Branches are enumerated
     // as a separate "Branches" section at the top with links to their
@@ -10290,7 +10465,28 @@ footer a { color: var(--accent); text-decoration: none; }
       }
     }
 
+    // v0.8 ease-of-use: one-time coach mark for the command palette. The
+    // palette is the app's hub but nothing on screen reveals it exists.
+    const LS_CK_HINT = 'alaude:ck-hint-done:v1'
+    function maybeShowCmdkHint() {
+      try { if (localStorage.getItem(LS_CK_HINT)) return } catch {}
+      if (document.getElementById('cmdk-hint')) return
+      const el = document.createElement('div')
+      el.id = 'cmdk-hint'
+      el.innerHTML = `<span>${escapeHtml(t('cmdk.hint'))}</span><kbd>${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl+'}K</kbd><span class="cmdk-hint-close">×</span>`
+      el.onclick = () => dismissCmdkHint()
+      document.body.appendChild(el)
+      requestAnimationFrame(() => el.classList.add('show'))
+    }
+    function dismissCmdkHint() {
+      try { localStorage.setItem(LS_CK_HINT, '1') } catch {}
+      const el = document.getElementById('cmdk-hint')
+      if (el) { el.classList.remove('show'); setTimeout(() => el.remove(), 300) }
+    }
+    setTimeout(maybeShowCmdkHint, 8000)
+
     function openCmdPalette() {
+      dismissCmdkHint()
       const overlay = document.getElementById('cmd-palette-overlay')
       const input = document.getElementById('cmd-palette-input')
       input.value = ''
@@ -10372,14 +10568,65 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
+        // v0.8 general-use: one-click install of three bundled starter skills
+        // (meeting notes, trip planner, weekly review). Idempotent — existing
+        // folders are never overwritten.
+        { kind: 'action', icon: '🔒', label: 'Your data — what Labaik stores on this Mac', search: 'your data privacy local storage what stored disk reveal folder size', action: () => { closeCmdPalette(); toggleYourDataModal() } },
+        { kind: 'action', icon: '💾', label: 'Back up Labaik (sessions, memory, routines, skills — no keys)', search: 'backup export save everything bundle portable migrate device', action: async () => {
+          closeCmdPalette()
+          // Snippets + templates live in renderer localStorage — ride along.
+          let extras = null
+          try { extras = {
+            snippets: JSON.parse(localStorage.getItem('alaude:snippets:v1') || 'null'),
+            templates: JSON.parse(localStorage.getItem('alaude:templates:v1') || 'null'),
+            prefs: { focusMode: localStorage.getItem('alaude:focus:v1') === '1', theme: document.documentElement.getAttribute('data-theme') || 'dark' },
+          } } catch {}
+          let r
+          try { r = await window.alaude.backupExport(extras) } catch (e) { r = { ok: false, reason: e?.message } }
+          if (r?.ok) showRewindToast?.(`💾 Backed up ${r.files} stores + ${r.skills} skills → ${r.path.split('/').pop()}`, false)
+          else if (r?.reason !== 'cancelled') showRewindToast?.('Backup failed: ' + (r?.reason || 'unknown'), true)
+        } },
+        { kind: 'action', icon: '♻️', label: 'Restore from a Labaik backup…', search: 'restore import backup bundle migrate device recover', action: async () => {
+          closeCmdPalette()
+          let r
+          try { r = await window.alaude.backupImport() } catch (e) { r = { ok: false, reason: e?.message } }
+          if (!r?.ok) {
+            if (r?.reason !== 'cancelled') showRewindToast?.('Restore failed: ' + (r?.reason || 'unknown'), true)
+            return
+          }
+          try {
+            if (r.renderer?.snippets) localStorage.setItem('alaude:snippets:v1', JSON.stringify(r.renderer.snippets))
+            if (r.renderer?.templates) localStorage.setItem('alaude:templates:v1', JSON.stringify(r.renderer.templates))
+            if (r.renderer?.prefs?.focusMode != null) localStorage.setItem('alaude:focus:v1', r.renderer.prefs.focusMode ? '1' : '0')
+          } catch {}
+          showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills${r.mergedSessions ? ` · +${r.mergedSessions} merged sessions` : ''} — reloading…`, false)
+          setTimeout(() => location.reload(), 1200)
+        } },
+        { kind: 'action', icon: '🔍', label: 'Deep research (send composer question with sources)', search: 'deep research investigate cited sources web search report verify', action: () => {
+          closeCmdPalette()
+          if (!input.value.trim()) { showRewindToast?.('🔍 Type your research question in the composer first', true); return }
+          window._researchModeNext = true
+          showRewindToast?.('🔍 Deep research — searching, reading, citing…', false)
+          sendMessage()
+        } },
+        { kind: 'action', icon: '📥', label: 'Import ChatGPT history (conversations.json)', search: 'import chatgpt openai history migrate switch export conversations json', action: () => { closeCmdPalette(); importChatGPTFlow() } },
+        { kind: 'action', icon: '⏰', label: 'Turn last prompt into a routine', search: 'routine from prompt schedule repeat daily automate this recurring', action: () => { closeCmdPalette(); routineFromLastPrompt() } },
+        { kind: 'action', icon: '🛸', label: 'Future Console (experimental)', search: 'future console experimental cockpit neural agent', action: () => { closeCmdPalette(); window.alaude.openFutureConsole?.() } },
+        { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
+          closeCmdPalette()
+          try {
+            const r = await window.alaude.folderSkillsInstallStarters()
+            const n = r?.installed?.length || 0
+            showRewindToast?.(n ? `🧩 Installed ${n} starter skill${n === 1 ? '' : 's'} — type / to use them` : '🧩 Starter skills already installed', false)
+            _refreshFolderSkills()
+          } catch (e) { showRewindToast?.('Starter skills install failed: ' + (e?.message || e), true) }
+        } },
         { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
         { kind: 'action', icon: '🌐', label: 'Export session as HTML (share-ready)', search: 'export html share webpage browser standalone', action: () => { closeCmdPalette(); exportSessionHtml() } },
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
         { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
         { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
-        { kind: 'action', icon: '📦', label: 'Export full backup (JSON)', search: 'backup export all json sessions memories snippets', action: () => { closeCmdPalette(); exportFullBackup() } },
-        { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
         { kind: 'action', icon: '✓', label: 'Task Board (all sessions)', search: 'task board todos all cross session combined plate work queue', action: () => { closeCmdPalette(); toggleTaskBoard() } },
@@ -11242,7 +11489,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.idea.name': 'Idea + critique',
         'template.idea.desc': '5 niche product ideas, then which one actually wins',
         'template.idea.starter': 'Pick a specific niche (e.g. "tools for solo restaurant owners", "side projects for tired parents", "AI for high-school teachers"). Generate 5 product ideas in that niche. For each: who it is for, the wedge that makes it work, and why now. Then crown the strongest one and tell me what would have to be true for it to ship in 90 days.',
-        'input.placeholder': 'Message Labaik...',
+        'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
         'plan.approve.msg': '📋 Read the plan above. Ready to execute it?',
@@ -11300,13 +11547,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.off.title': 'Turn off plan mode',
         // Onboarding modal
         'onboard.title': '👋 Teach Labaik about you',
-        'onboard.intro': "A few facts go a long way. These ship with every conversation, so Labaik stops re-asking what you code in, what you prefer, or what you're building. Skippable — you can add or edit anything later in Memory Lens.",
+        'onboard.intro': "A few facts go a long way. These ship with every conversation, so Labaik stops re-asking who you are, what you work on, and how you like answers. Skippable — you can add or edit anything later in Memory Lens.",
         'onboard.q1': '👤 What should Labaik call you?',
-        'onboard.q2': '🛠️ Main stack / languages / frameworks?',
-        'onboard.q3': '💡 A coding preference or two?',
-        'onboard.q3.placeholder': 'Prefer async/await, avoid classes when possible',
+        'onboard.q2': '🛠️ What do you work on or care about?',
+        'onboard.q3': '💡 How do you like your answers?',
+        'onboard.q3.placeholder': 'Short and direct. Examples over theory.',
         'onboard.q4': '📌 Anything else I should always know?',
-        'onboard.q4.placeholder': "I'm building a desktop AI app. Timezone UTC+3.",
+        'onboard.q4.placeholder': 'Teacher, two kids, timezone UTC+3. Learning Spanish.',
         'onboard.skip': 'Skip',
         'onboard.save': 'Save & continue',
         // Memory Lens
@@ -11354,6 +11601,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.new': '+ New snippet',
         // Slash-menu (rendered dynamically — looked up via t())
         'slash.header': 'Snippets & skills',
+        'cmdk.hint': 'Everything is one shortcut away —',
+        'routines.recentRuns': 'Recent runs',
+        'routines.notify': '🔔 Notify',
+        'data.title': '🔒 Your data',
+        'data.intro': "Everything Labaik knows lives on this Mac — no cloud account, no server. Here's exactly what's stored.",
+        'data.reveal': '📂 Reveal in Finder',
+        'data.backup': '💾 Back up…',
+        'data.total': 'Total on disk',
+        'data.clear': 'Clear this',
+        'nudge.routine': '💡 Liked that? Labaik can do it on a schedule.',
+        'nudge.routine.yes': 'Set up a Routine',
+        'data.clearConfirm': 'Clear {label}? It will be moved aside (recoverable from the data folder) and the app will reload.',
+        'data.loading': 'Reading local files…',
+        'data.failed': "Couldn't read the data folder.",
+        'routines.notify.title': 'Show a desktop notification each run',
+        'routines.runNow': 'Run now',
+        'routines.running': '▶ Running — result lands in Recent runs below.',
+        'routines.noRuns': 'No runs yet — routines report here after they fire.',
+        'login.detecting': 'Detecting provider from your key…',
+        'login.detectFailed': "Couldn't identify this key — pick the provider from the list and try again.",
+        'login.saving': 'saving…',
+        'model.rec.group': '✨ Recommended',
+        'model.rec.best': 'best overall',
+        'model.rec.fast': 'fastest',
+        'model.rec.local': 'private (runs on this Mac)',
+        'err.key': "🔑 Your API key was rejected by the provider. Open the Keys modal (⌘⇧K) and check it — it may have expired or been pasted with a typo.",
+        'err.credits': '💳 The provider says your account is out of credits or quota. Top up your account, or switch to another model from the picker.',
+        'err.rate': '⏳ The provider is rate-limiting you. Wait a moment and try again, or switch models.',
+        'err.context': '📜 This conversation is too long for the model. Start a new session (⌘N) or switch to a model with a bigger context window.',
+        'err.network': '🌐 Could not reach the provider — looks like a network problem. Check your connection (or VPN) and try again.',
+        'err.timeout': '⏱️ The provider took too long to answer. Try again — or switch models if it keeps happening.',
+        'err.provider': '🛠️ The provider is having trouble right now (server error). Try again in a minute, or switch models.',
         'slash.skillDesc': 'Skill (SKILL.md)',
         'slash.match': 'match',
         'slash.matches': 'matches',
@@ -11374,7 +11653,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'ux.title': 'UX Insights',
         // Login screen
         'login.title': 'Welcome to Labaik',
-        'login.sub': 'Connect a provider — you can always add more later.',
+        'login.sub': 'Every frontier AI on your Mac — your keys, private, no subscription.',
         'login.byok.title': 'Connect with your API key',
         'login.byok.badge': 'Recommended',
         'login.byok.desc': 'Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.',
@@ -11505,7 +11784,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.idea.name': '想法 + 评估',
         'template.idea.desc': '5 个细分领域的产品点子，再判断哪个真能跑出来',
         'template.idea.starter': '选一个具体的细分领域（例如「单店餐厅老板的工具」、「疲惫父母的副业」、「高中老师的 AI 工具」）。给出 5 个产品点子。每个点子说明：目标用户、独特切入点、为什么是现在。然后选出最强的一个，告诉我要让它在 90 天内上线，哪些前提必须成立。',
-        'input.placeholder': '和 Labaik 聊聊...',
+        'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
         'plan.approve.msg': '📋 看完上面的方案了吗？可以执行了吗？',
@@ -11558,13 +11837,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.body': 'Labaik 将先写出方案 —— 不调用工具、不改文件。发送请求开始。',
         'plan.banner.off.title': '关闭方案模式',
         'onboard.title': '👋 让 Labaik 认识你',
-        'onboard.intro': '几条事实就够了。这些信息会随每次对话发送，让 Labaik 不再反复询问你的技术栈、偏好或正在做的事。可跳过 —— 之后随时在「记忆」里添加或修改。',
+        'onboard.intro': '几条事实就够了。这些信息会随每次对话发送，让 Labaik 不再反复询问你是谁、在做什么、喜欢怎样的回答。可跳过 —— 之后随时在「记忆」里添加或修改。',
         'onboard.q1': '👤 Labaik 该怎么称呼你？',
-        'onboard.q2': '🛠️ 主要技术栈 / 语言 / 框架？',
-        'onboard.q3': '💡 一两条编码偏好？',
-        'onboard.q3.placeholder': '偏好 async/await，尽量避免使用 class',
+        'onboard.q2': '🛠️ 你的工作或关注的领域？',
+        'onboard.q3': '💡 你喜欢什么样的回答？',
+        'onboard.q3.placeholder': '简短直接，多举例子少讲理论',
         'onboard.q4': '📌 还有什么希望我始终记住的？',
-        'onboard.q4.placeholder': '我在做一个桌面 AI 应用。时区 UTC+3。',
+        'onboard.q4.placeholder': '教师，两个孩子，时区 UTC+3，正在学西班牙语。',
         'onboard.skip': '跳过',
         'onboard.save': '保存并继续',
         'memory.title': '🧠 记忆视图',
@@ -11608,6 +11887,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults.title': '恢复内置片段',
         'snippet.new': '+ 新建片段',
         'slash.header': '片段与技能',
+        'cmdk.hint': '一切功能尽在一个快捷键 —',
+        'routines.recentRuns': '近期运行',
+        'routines.notify': '🔔 通知',
+        'data.title': '🔒 你的数据',
+        'data.intro': 'Labaik 所知的一切都存在这台 Mac 上——没有云账户，没有服务器。以下是确切的存储内容。',
+        'data.reveal': '📂 在访达中显示',
+        'data.backup': '💾 备份…',
+        'data.total': '磁盘占用合计',
+        'data.clear': '清除此项',
+        'nudge.routine': '💡 喜欢这个？Labaik 可以定时自动完成。',
+        'nudge.routine.yes': '设置例行任务',
+        'data.clearConfirm': '清除{label}？它将被移到一旁（可从数据文件夹恢复），应用会重新加载。',
+        'data.loading': '正在读取本地文件…',
+        'data.failed': '无法读取数据文件夹。',
+        'routines.notify.title': '每次运行显示桌面通知',
+        'routines.runNow': '立即运行',
+        'routines.running': '▶ 正在运行——结果稍后显示在下方「近期运行」。',
+        'routines.noRuns': '还没有运行记录——例行任务触发后会在这里汇报。',
+        'login.detecting': '正在根据密钥识别服务商…',
+        'login.detectFailed': '无法识别此密钥——请从列表中选择服务商后重试。',
+        'login.saving': '保存中…',
+        'model.rec.group': '✨ 推荐',
+        'model.rec.best': '综合最佳',
+        'model.rec.fast': '最快',
+        'model.rec.local': '本地私密运行',
+        'err.key': '🔑 服务商拒绝了你的 API 密钥。打开密钥窗口（⌘⇧K）检查一下——可能已过期或粘贴有误。',
+        'err.credits': '💳 服务商提示账户余额或配额不足。请充值，或在模型选择器中换一个模型。',
+        'err.rate': '⏳ 服务商正在限流。稍等片刻再试，或换一个模型。',
+        'err.context': '📜 对话对该模型来说太长了。开个新会话（⌘N），或换用上下文窗口更大的模型。',
+        'err.network': '🌐 无法连接服务商——像是网络问题。检查网络（或 VPN）后重试。',
+        'err.timeout': '⏱️ 服务商响应超时。请重试——若持续出现请换模型。',
+        'err.provider': '🛠️ 服务商当前出现故障（服务器错误）。请稍后重试，或换一个模型。',
         'slash.skillDesc': '技能（SKILL.md）',
         'slash.match': '条匹配',
         'slash.matches': '条匹配',
@@ -11625,7 +11936,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.close': '关闭',
         'ux.title': '体验洞察',
         'login.title': '欢迎使用 Labaik',
-        'login.sub': '连接一个服务商 —— 之后随时可以添加更多。',
+        'login.sub': '所有前沿 AI 尽在你的 Mac —— 你的密钥，私密，无订阅。',
         'login.byok.title': '使用你的 API 密钥连接',
         'login.byok.badge': '推荐',
         'login.byok.desc': 'Claude、GPT、Gemini、Grok、Kimi、Qwen、GLM、MiniMax、混元 —— 你的密钥，你的选择。',
@@ -11744,7 +12055,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.idea.name': 'فكرة + نقد',
         'template.idea.desc': '5 أفكار منتجات في مجال محدّد، ثم أيها الفائز فعلًا',
         'template.idea.starter': 'اختر مجالًا محدّدًا (مثلًا «أدوات لأصحاب المطاعم الفردية»، «مشاريع جانبية للآباء المنهكين»، «الذكاء الاصطناعي لمعلّمي الثانوية»). ولّد 5 أفكار منتجات في ذلك المجال. لكل فكرة: لمن هي، الزاوية المميِّزة التي تجعلها تنجح، ولماذا الآن. ثم توّج الأقوى وأخبرني ما الذي يجب أن يكون صحيحًا حتى تُطلق خلال 90 يومًا.',
-        'input.placeholder': 'تحدّث إلى لبيك...',
+        'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
         'plan.approve.msg': '📋 اطّلع على الخطة أعلاه. جاهز لتنفيذها؟',
@@ -11797,13 +12108,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'plan.banner.body': 'سيكتب لبيك خطة — دون استدعاء أدوات أو تعديل ملفات. أرسل طلبًا للبدء.',
         'plan.banner.off.title': 'إيقاف وضع التخطيط',
         'onboard.title': '👋 عرِّف لبيك بنفسك',
-        'onboard.intro': 'بضع حقائق تكفي. تُرسَل مع كل محادثة كي لا يُعيد لبيك سؤالك عن لغتك المفضّلة أو ما الذي تبنيه. يمكنك تخطّيها وإضافتها لاحقًا في «عدسة الذاكرة».',
+        'onboard.intro': 'بضع حقائق تكفي. تُرسَل مع كل محادثة كي لا يُعيد لبيك سؤالك مَن أنت وماذا تعمل وكيف تحب الإجابات. يمكنك تخطّيها وإضافتها لاحقًا في «عدسة الذاكرة».',
         'onboard.q1': '👤 بماذا يناديك لبيك؟',
-        'onboard.q2': '🛠️ التقنيات / اللغات / الإطارات الرئيسية؟',
-        'onboard.q3': '💡 تفضيل أو اثنان في البرمجة؟',
-        'onboard.q3.placeholder': 'أفضّل async/await، وأتجنّب classes إن أمكن',
+        'onboard.q2': '🛠️ ما الذي تعمل عليه أو يهمّك؟',
+        'onboard.q3': '💡 كيف تحب أن تكون الإجابات؟',
+        'onboard.q3.placeholder': 'قصيرة ومباشرة، أمثلة أكثر من النظريات',
         'onboard.q4': '📌 شيء آخر يجب أن أعرفه دائمًا؟',
-        'onboard.q4.placeholder': 'أبني تطبيق ذكاء اصطناعي للسطح. المنطقة الزمنية UTC+3.',
+        'onboard.q4.placeholder': 'معلّم، طفلان، المنطقة الزمنية UTC+3، أتعلّم الإسبانية.',
         'onboard.skip': 'تخطّي',
         'onboard.save': 'حفظ ومتابعة',
         'memory.title': '🧠 عدسة الذاكرة',
@@ -11847,6 +12158,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults.title': 'استعادة المقاطع المضمَّنة',
         'snippet.new': '+ مقطع جديد',
         'slash.header': 'مقاطع ومهارات',
+        'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
+        'routines.recentRuns': 'عمليات التشغيل الأخيرة',
+        'routines.notify': '🔔 إشعار',
+        'data.title': '🔒 بياناتك',
+        'data.intro': 'كل ما يعرفه لبيك موجود على هذا الجهاز — دون حساب سحابي ولا خادم. هذا ما يُخزَّن بالضبط.',
+        'data.reveal': '📂 إظهار في فايندر',
+        'data.backup': '💾 نسخة احتياطية…',
+        'data.total': 'الإجمالي على القرص',
+        'data.clear': 'مسح هذا',
+        'nudge.routine': '💡 أعجبك ذلك؟ يمكن للبيك تنفيذه وفق جدول.',
+        'nudge.routine.yes': 'إعداد مهمة',
+        'data.clearConfirm': 'مسح {label}؟ سيُنقل جانبًا (قابل للاسترجاع من مجلد البيانات) وسيُعاد تحميل التطبيق.',
+        'data.loading': 'جارٍ قراءة الملفات المحلية…',
+        'data.failed': 'تعذّر قراءة مجلد البيانات.',
+        'routines.notify.title': 'إظهار إشعار سطح المكتب عند كل تشغيل',
+        'routines.runNow': 'تشغيل الآن',
+        'routines.running': '▶ قيد التشغيل — ستظهر النتيجة أدناه في «عمليات التشغيل الأخيرة».',
+        'routines.noRuns': 'لا سجلّ بعد — تظهر نتائج المهام هنا بعد تشغيلها.',
+        'login.detecting': 'جارٍ التعرّف على المزوّد من المفتاح…',
+        'login.detectFailed': 'تعذّر التعرّف على هذا المفتاح — اختر المزوّد من القائمة وأعد المحاولة.',
+        'login.saving': 'جارٍ الحفظ…',
+        'model.rec.group': '✨ مُوصى به',
+        'model.rec.best': 'الأفضل عمومًا',
+        'model.rec.fast': 'الأسرع',
+        'model.rec.local': 'خاص (يعمل على جهازك)',
+        'err.key': '🔑 رفض المزوّد مفتاح الـ API. افتح نافذة المفاتيح (⌘⇧K) وتحقّق منه — ربما انتهت صلاحيته أو نُسخ بخطأ.',
+        'err.credits': '💳 يقول المزوّد إن رصيدك أو حصّتك نفدت. اشحن حسابك أو بدّل إلى نموذج آخر.',
+        'err.rate': '⏳ المزوّد يحدّ من معدل الطلبات. انتظر لحظة وأعد المحاولة، أو بدّل النموذج.',
+        'err.context': '📜 المحادثة أطول من سعة النموذج. ابدأ جلسة جديدة (⌘N) أو بدّل إلى نموذج بسياق أكبر.',
+        'err.network': '🌐 تعذّر الوصول إلى المزوّد — تبدو مشكلة شبكة. تحقّق من الاتصال (أو الـ VPN) وأعد المحاولة.',
+        'err.timeout': '⏱️ تأخّر المزوّد في الرد. أعد المحاولة — وإن تكرر بدّل النموذج.',
+        'err.provider': '🛠️ المزوّد يواجه عطلًا حاليًا (خطأ خادم). أعد المحاولة بعد قليل أو بدّل النموذج.',
         'slash.skillDesc': 'مهارة (SKILL.md)',
         'slash.match': 'مطابقة',
         'slash.matches': 'مطابقات',
@@ -11864,7 +12207,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'gsearch.foot.close': 'إغلاق',
         'ux.title': 'تحليلات الاستخدام',
         'login.title': 'مرحبًا بك في لبيك',
-        'login.sub': 'اربط مزوّدًا — يمكنك إضافة المزيد لاحقًا.',
+        'login.sub': 'كل نماذج الذكاء الاصطناعي على جهازك — بمفاتيحك، بخصوصية، دون اشتراك.',
         'login.byok.title': 'الاتصال بمفتاح API الخاص بك',
         'login.byok.badge': 'موصى به',
         'login.byok.desc': 'Claude، GPT، Gemini، Grok، Kimi، Qwen، GLM، MiniMax، Hunyuan — مفاتيحك، اختيارك.',
@@ -12361,8 +12704,6 @@ footer a { color: var(--accent); text-decoration: none; }
         routines:      () => (typeof toggleRoutinesModal === 'function') && toggleRoutinesModal(),
         keys:        () => (typeof toggleKeysModal === 'function') && toggleKeysModal(),
         localModels: () => (typeof toggleLocalModelsModal === 'function') && toggleLocalModelsModal(),
-        map:         () => (typeof toggleThinkingGraph === 'function') && toggleThinkingGraph(),
-        insights:    () => (typeof toggleUxInsightsModal === 'function') && toggleUxInsightsModal(),
       }
       const fn = targets[which]
       if (!fn) { console.warn('[topbar-menu] unknown action:', which); return }
@@ -12397,6 +12738,10 @@ footer a { color: var(--accent); text-decoration: none; }
             if (el.style && (el.style.display === 'flex' || el.style.display === 'block')) el.style.display = 'none'
           })
           e.preventDefault()
+        } else if (isStreaming) {
+          // v0.8: nothing to close → Esc stops the in-flight generation.
+          e.preventDefault()
+          stopGeneration()
         }
         return
       }
@@ -12470,10 +12815,13 @@ footer a { color: var(--accent); text-decoration: none; }
         e.preventDefault()
         exportSessionMarkdown()
       }
-      // Cmd/Ctrl+Shift+E → export FULL backup (all sessions + memories + snippets)
+      // Cmd/Ctrl+Shift+E → unified backup (sessions + memory + routines +
+      // skills + prefs; keys excluded). v0.8 cycle 28: was a separate,
+      // renderer-only backup; now routes to the one true Back up flow.
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
-        exportFullBackup()
+        try { buildCmdItems().find(x => /Back up Labaik/.test(x.label))?.action?.() } catch {}
+        return
       }
       // Cmd/Ctrl+Shift+S → generate/refresh session summary card
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
@@ -12570,7 +12918,8 @@ footer a { color: var(--accent); text-decoration: none; }
         }
       } catch {}
       isStreaming = false
-      try { sendBtn.disabled = !input.value.trim() } catch {}
+      updateSendBtnMode()
+      try { updateSendBtnMode() } catch {}
       try { persistSessions() } catch {}
       try { renderMessages() } catch {}
       try { console.log('[abort] in-flight turn aborted, reason:', reason) } catch {}
@@ -12578,8 +12927,11 @@ footer a { color: var(--accent); text-decoration: none; }
 
     function sendMessage() {
       let text = input.value.trim()
-      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) return
-      if (isStreaming) return
+      // v0.8 cycle 23: clear one-shot mode flags on any early return so a
+      // research/plan trigger that hits a guard can't leak into the NEXT
+      // ordinary message.
+      if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { window._researchModeNext = false; return }
+      if (isStreaming) { window._researchModeNext = false; return }
       // v0.7.67 — if the user is sending a message while an ask-popup is
       // open AND the message wasn't built by the popup itself, treat it as
       // the user bypassing the popup. Append a "use defaults for the rest"
@@ -12659,8 +13011,8 @@ footer a { color: var(--accent); text-decoration: none; }
 
       input.value = ''
       input.style.height = 'auto'
-      sendBtn.disabled = true
       isStreaming = true
+      updateSendBtnMode()
 
       // Update session title from first message
       const session = sessions.find(s => s.id === currentSessionId)
@@ -12698,7 +13050,10 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.7.67 — pass plan-mode flag so the worker can swap in the
         // plan-only system prompt and skip workspace tool offers.
         planMode: !!planMode,
+        // v0.8 cycle 21 — one-shot deep-research protocol for this send.
+        researchMode: !!window._researchModeNext,
       }
+      window._researchModeNext = false
       // Reset for next send
       ux.pendingEntry = 'freeform'
       ux.pendingAction = null
@@ -12795,7 +13150,7 @@ footer a { color: var(--accent); text-decoration: none; }
           const response = await window.alaude.chat(msgs, laneModels[i], workspacePath, currentSpaceId, { ...uxMeta, messageId: lanes[i].uxMessageId })
           lanes[i].content = (typeof response === 'string') ? response : (JSON.stringify(response) || '(no response)')
         } catch (err) {
-          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].content = humanizeChatError(err.message || String(err))
           lanes[i].error = true
         }
         lanes[i].streaming = false
@@ -12814,7 +13169,7 @@ footer a { color: var(--accent); text-decoration: none; }
         if (idx >= 0) councilSynthesize(idx)
       }
       isStreaming = false
-      sendBtn.disabled = !input.value.trim()
+      updateSendBtnMode()
     }
 
     // Fire N parallel chat requests, one per council model, each with a
@@ -12879,7 +13234,7 @@ footer a { color: var(--accent); text-decoration: none; }
           lanes[i].elapsed = Date.now() - lanes[i].startedAt
           return { i, ok: true }
         } catch (err) {
-          lanes[i].content = `Error: ${err.message || String(err)}`
+          lanes[i].content = humanizeChatError(err.message || String(err))
           lanes[i].streaming = false
           lanes[i].error = true
           lanes[i].elapsed = Date.now() - lanes[i].startedAt
@@ -12890,7 +13245,7 @@ footer a { color: var(--accent); text-decoration: none; }
       clearInterval(elapsedTimer)
       councilMessage.streaming = false
       isStreaming = false
-      sendBtn.disabled = !input.value.trim()
+      updateSendBtnMode()
       renderMessages()
       persistSessions()
     }
@@ -12946,7 +13301,7 @@ footer a { color: var(--accent); text-decoration: none; }
         const response = await window.alaude.chat(synthMsgs, synthModel, workspacePath, currentSpaceId, synthMeta)
         msg.synthLane.content = response || '(no response)'
       } catch (err) {
-        msg.synthLane.content = `Error: ${err.message}`
+        msg.synthLane.content = humanizeChatError(err.message)
         msg.synthLane.error = true
       }
       msg.synthLane.streaming = false
@@ -13017,7 +13372,47 @@ footer a { color: var(--accent); text-decoration: none; }
           out.push({ role, content })
         }
       }
-      return out
+      return _capHistory(out)
+    }
+
+    // v0.8 cycle 33: history budget. The whole conversation was re-sent on
+    // every turn with no ceiling — the dominant token cost on long sessions
+    // (and a cause of provider context-limit errors). Keep the most recent
+    // turns within a generous char budget (~60k tokens); if older turns are
+    // dropped, lead with a one-line note so the model knows context was
+    // trimmed. Normal sessions are untouched.
+    // Delegates to renderer/js/history-budget.js (loaded as a module below and
+    // attached to window.capHistoryFn). Falls back to identity if a chat fires
+    // before the module loads — safe (uncapped, same as pre-cycle-33).
+    function _capHistory(msgs) {
+      return (typeof window.capHistoryFn === 'function') ? window.capHistoryFn(msgs) : msgs
+    }
+
+
+    // v0.8 ease-of-use: translate raw provider errors into plain language
+    // with the next step. The raw message stays underneath in small print —
+    // useful for bug reports without being the headline.
+    function humanizeChatError(raw) {
+      const r = String(raw || '')
+      const low = r.toLowerCase()
+      let friendly = null
+      if (/401|unauthorized|invalid[_ ]api[_ ]key|incorrect api key|authentication/.test(low)) {
+        friendly = t('err.key')
+      } else if (/insufficient[_ ]quota|exceeded your current quota|payment|402|billing/.test(low)) {
+        friendly = t('err.credits')
+      } else if (/429|rate[_ ]limit|too many requests/.test(low)) {
+        friendly = t('err.rate')
+      } else if (/context[_ ]length|maximum context|too long|prompt is too long|context window/.test(low)) {
+        friendly = t('err.context')
+      } else if (/enotfound|econnrefused|econnreset|network|fetch failed|dns|socket|etimedout/.test(low)) {
+        friendly = t('err.network')
+      } else if (/timed? ?out|timeout/.test(low)) {
+        friendly = t('err.timeout')
+      } else if (/5\d\d|overloaded|server error|unavailable|bad gateway/.test(low)) {
+        friendly = t('err.provider')
+      }
+      if (!friendly) return 'Error: ' + r
+      return friendly + '\n\n<small>' + r.slice(0, 300) + '</small>'
     }
 
     async function callAI(userText, uxMeta) {
@@ -13152,6 +13547,8 @@ footer a { color: var(--accent); text-decoration: none; }
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
+        funnelMark('first_reply')  // activation metric: install → first reply
+        maybeNudgeFirstRoutine()    // activation → retention bridge (cycle 27)
         const prev = target[target.length - 1]
         if (prev) finalizeStats(prev)
         target[target.length - 1] = {
@@ -13169,7 +13566,7 @@ footer a { color: var(--accent); text-decoration: none; }
         const prev = target[target.length - 1]
         target[target.length - 1] = {
           role: 'assistant',
-          content: `Error: ${err.message || String(err)}`,
+          content: humanizeChatError(err.message || String(err)),
           model,
           ts: Date.now(),
           fileEdits: prev?.fileEdits,
@@ -13184,7 +13581,7 @@ footer a { color: var(--accent); text-decoration: none; }
       // would be wrong. persistSessions() always runs so the reply is saved.
       if (currentSessionId === targetSessionId) {
         isStreaming = false
-        sendBtn.disabled = !input.value.trim()
+        updateSendBtnMode()
         renderMessages()
         // Voice conversation mode: read the reply + auto-listen for next turn.
         maybeAutoSpeakReply?.()
@@ -13845,8 +14242,8 @@ Title:`
       // Remove the assistant message and retry from the preceding user turn.
       messages.pop()
       renderMessages()
-      sendBtn.disabled = true
       isStreaming = true
+      updateSendBtnMode()
       messages.push({ role: 'assistant', content: '', streaming: true })
       renderMessages()
 
@@ -16306,6 +16703,7 @@ Title:`
       // streaming flag still lives on its own last message (streaming:true)
       // and re-derives on switch-back.
       isStreaming = false
+      updateSendBtnMode()
       currentSessionId = Date.now()
       sessions.unshift({ id: currentSessionId, title: 'New session', messages: [] })
       // Hard cap total sessions to avoid unbounded growth
@@ -16435,7 +16833,7 @@ Title:`
       // Restore the new session's draft (or clear).
       input.value = session?.inputDraft || ''
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      sendBtn.disabled = isStreaming || !input.value.trim()
+      updateSendBtnMode()
       ux.sessionId = 'sess_' + id
       ux.lastPromptHash = null
       ux.lastMessageId = null
@@ -16516,8 +16914,18 @@ Title:`
     let _lastModelForUx = null
     function changeModel(model) {
       const select = document.getElementById('model-select')
-      const label = select.options[select.selectedIndex].text
-      document.getElementById('topbar-model').textContent = label
+      const opt = select.options[select.selectedIndex]
+      const label = opt.text
+      // v0.8 cycle 40: prefix the always-visible model chip with its cost tier
+      // (🟢/🟡/🔴) so the user sees what they're spending at every glance —
+      // not just inside the ✨ Recommended group. Strip any ⚡/🔒/tier already
+      // baked into the option text first.
+      const isLocal = opt.parentElement?.id === 'model-select-local'
+      const tier = modelCostTier(model, isLocal)
+      const cleanLabel = label.replace(/^[⚡🔒🟢🟡🔴]\s+/, '').replace(/^[🟢🟡🔴]\s+/, '')
+      const chip = document.getElementById('topbar-model')
+      chip.textContent = `${tier.dots} ${cleanLabel}`
+      chip.title = `Current model · ${tier.label}`
       // UX: model_switched event (only if actually changed)
       if (_lastModelForUx !== null && _lastModelForUx !== model) {
         logUx({ kind: 'model_switched', sessionId: ux.sessionId, fromModel: _lastModelForUx, toModel: model })
@@ -16537,6 +16945,20 @@ Title:`
     // round-trips for zero UX gain. If the registry changes, update
     // both. Order matters — `kimi-intl/` must come BEFORE `kimi-` so the
     // global (kimi.ai) option doesn't fall through to moonshot (CN).
+    // v0.8 cycle 35: coarse per-message cost tier for the picker. Exact $/token
+    // goes stale fast, so we bucket by family into 🟢 cheap / 🟡 mid / 🔴
+    // premium — robust at the tier level and enough to stop a user burning a
+    // flagship on a one-liner. Local models are free.
+    function modelCostTier(modelId, isLocal) {
+      if (isLocal) return { dots: '🟢', label: 'free · local' }
+      const m = (modelId || '').toLowerCase()
+      // Premium flagships
+      if (/claude-opus|gpt-5(\.5)?-pro|gpt-5(\.5)?($|[^-])|grok-.*reasoning|gemini-3\.?1?-pro|^o[13]/.test(m)) return { dots: '🔴', label: 'premium' }
+      // Cheap / mini / flash / distilled
+      if (/haiku|flash|mini|-air|deepseek-chat|qwen.*(flash|turbo)|gpt-5(\.5)?-mini|nano/.test(m)) return { dots: '🟢', label: 'cheap' }
+      // Everything else (sonnet, deepseek-v4, glm-5, kimi, minimax, hunyuan…)
+      return { dots: '🟡', label: 'mid' }
+    }
     function providerOf(modelId) {
       const m = (modelId || '').toLowerCase()
       if (m.startsWith('ollama/') || m.includes(':')) return 'ollama'
@@ -16573,6 +16995,48 @@ Title:`
           opt.text = (connected ? '⚡ ' : '🔒 ') + rawLabel
           opt.dataset.connected = connected ? '1' : '0'
         }
+        // v0.8 ease-of-use: maintain a "✨ Recommended" optgroup at the top
+        // with up to three CONNECTED picks: best overall, fastest, private
+        // (local). Duplicate values are fine — select.value matches the
+        // first occurrence, so picking a recommendation just works.
+        try {
+          // Capture the selection first: if the user picked a Recommended
+          // entry, removing the group would silently fall back to option 0.
+          const _selBefore = select.value
+          select.querySelector('#model-select-recommended')?.remove()
+          const connectedOpts = Array.from(select.options).filter(o => o.dataset.connected === '1' && o.value)
+          const byPrefix = (prefixes) => {
+            for (const p of prefixes) {
+              const hit = connectedOpts.find(o => o.value.toLowerCase().startsWith(p))
+              if (hit) return hit
+            }
+            return null
+          }
+          const best = byPrefix(['claude-opus', 'gpt-5', 'claude-sonnet', 'deepseek-v4', 'gemini-3', 'grok-', 'kimi-', 'glm-', 'qwen'])
+          const fast = byPrefix(['claude-haiku', 'gemini-3-flash', 'gemini-3.1-flash', 'deepseek-chat', 'gpt-5-mini', 'glm-5-air'])
+          const local = connectedOpts.find(o => o.parentElement?.id === 'model-select-local')
+          const recs = []
+          if (best) recs.push([best, t('model.rec.best')])
+          if (fast && fast !== best) recs.push([fast, t('model.rec.fast')])
+          if (local && local !== best && local !== fast) recs.push([local, t('model.rec.local')])
+          if (recs.length >= 2) {
+            const grp = document.createElement('optgroup')
+            grp.id = 'model-select-recommended'
+            grp.label = t('model.rec.group')
+            for (const [opt, tag] of recs) {
+              const o = document.createElement('option')
+              o.value = opt.value
+              const tier = modelCostTier(opt.value, opt.parentElement?.id === 'model-select-local')
+              o.text = `${tier.dots} ${opt.text.replace(/^[⚡🔒]\s+/, '')} — ${tag}`
+              o.dataset.connected = '1'
+              grp.appendChild(o)
+            }
+            select.insertBefore(grp, select.firstElementChild)
+          }
+          // Restore the pre-rebuild selection (value duplicates resolve to
+          // the first occurrence, which is fine — same model id).
+          if (_selBefore && select.value !== _selBefore) select.value = _selBefore
+        } catch (e) { console.warn('[model-rec] failed:', e?.message) }
         // Auto-switch only when the CURRENT selection looks like a dead-on-boot
         // default the user never intentionally picked — i.e. the HTML-marked
         // `selected` default OR the very first option, and its provider is
@@ -16930,8 +17394,9 @@ Title:`
       }
     }
 
+    const PROVIDER_DISPLAY = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)', google: 'Google (Gemini)', xai: 'xAI (Grok)', kimi: 'Kimi (Global)', moonshot: 'Kimi (CN)', dashscope: 'Qwen (DashScope)', zhipu: 'GLM (Zhipu)', minimax: 'MiniMax', hunyuan: 'Tencent Hunyuan', deepseek: 'DeepSeek' }
     async function submitLoginKey() {
-      const provider = document.getElementById('login-provider-select').value
+      let provider = document.getElementById('login-provider-select').value
       const key = document.getElementById('login-key-input').value.trim()
       const status = document.getElementById('login-status')
 
@@ -16941,8 +17406,28 @@ Title:`
         return
       }
 
-      status.textContent = 'Saving…'
-      status.className = 'login-status'
+      // v0.8 market-fit: paste-any-key. On auto, patterns identify the
+      // unambiguous formats instantly; sk-… keys are verified against the
+      // candidate providers' /models endpoints in parallel (~1-2s).
+      if (provider === 'auto') {
+        status.textContent = t('login.detecting')
+        status.className = 'login-status'
+        let det = null
+        try { det = await window.alaude.loginDetectKey(key) } catch {}
+        if (!det?.provider) {
+          status.textContent = t('login.detectFailed')
+          status.className = 'login-status error'
+          return
+        }
+        provider = det.provider
+        const sel = document.getElementById('login-provider-select')
+        if (sel) sel.value = provider
+        status.textContent = `✓ ${PROVIDER_DISPLAY[provider] || provider} — ${t('login.saving')}`
+        status.className = 'login-status success'
+      } else {
+        status.textContent = 'Saving…'
+        status.className = 'login-status'
+      }
       let ok
       try {
         ok = await window.alaude.setKey(provider, key)
@@ -16953,6 +17438,16 @@ Title:`
         return
       }
       if (ok) {
+        funnelMark('key_saved')
+        // v0.8 first-run: the one moment a brand-new user is guaranteed to
+        // exist — right after their first key saves. Open the wedge tour
+        // ("Start here — five things…") exactly once, ever.
+        try {
+          if (!localStorage.getItem('alaude:tour-shown:v1')) {
+            localStorage.setItem('alaude:tour-shown:v1', '1')
+            setTimeout(() => { try { toggleWhatsInLabaik() } catch {} }, 1200)
+          }
+        } catch {}
         status.textContent = '✓ Key saved — loading app…'
         status.className = 'login-status success'
         // Don't wait — dismiss the login screen immediately, then re-verify
@@ -17488,17 +17983,24 @@ Title:`
     }
 
     // ── Drag & Drop ──────────────────────────────────────────────────────
-    function handleDragOver(e) {
+    // v0.8 general-use: the whole window is the drop target, not just the
+    // message list — people naturally drop onto the composer or sidebar.
+    // A depth counter handles the enter/leave noise from child elements.
+    let _dragDepth = 0
+    document.addEventListener('dragenter', (e) => {
       e.preventDefault()
-      e.stopPropagation()
-      document.getElementById('drop-overlay').classList.add('show')
-    }
-
-    function handleDragLeave(e) {
+      _dragDepth++
+      document.getElementById('drop-overlay')?.classList.add('show')
+    })
+    document.addEventListener('dragover', (e) => { e.preventDefault() })
+    document.addEventListener('dragleave', (e) => {
       e.preventDefault()
-      e.stopPropagation()
-      document.getElementById('drop-overlay').classList.remove('show')
-    }
+      if (--_dragDepth <= 0) {
+        _dragDepth = 0
+        document.getElementById('drop-overlay')?.classList.remove('show')
+      }
+    })
+    document.addEventListener('drop', (e) => { _dragDepth = 0; handleDrop(e) })
 
     async function handleDrop(e) {
       e.preventDefault()
@@ -18666,7 +19168,7 @@ Title:`
       { v: '0.2.16', icon: '📚', name: 'Shortcuts overlay + whatsnew',   desc: 'Refreshed ? overlay + toast on version change.' },
       { v: '0.2.17', icon: '🏷️', name: 'Session Tags (#hashtags)',       desc: 'Tag sessions, filter the sidebar by chip.' },
       { v: '0.2.18', icon: '☁️', name: 'Opus 4.6 + 4.7',                 desc: 'Added the latest Claude Opus variants to the model selector.' },
-      { v: '0.2.19', icon: '📦', name: 'Full Backup export/import',      desc: 'One JSON file with sessions + memories + snippets + prefs.', try: () => exportFullBackup?.() },
+      { v: '0.2.19', icon: '📦', name: 'Full Backup export/import',      desc: 'One portable file — sessions, memory, routines, skills, prefs. Keys excluded.', try: () => { try { buildCmdItems().find(x => /Back up Labaik/.test(x.label))?.action?.() } catch {} } },
       { v: '0.2.20', icon: '📝', name: 'Session Summary Card',           desc: 'Model-generated recap of the current session (⌘⇧S).', try: () => generateSummary?.() },
       { v: '0.2.21', icon: '↑↓', name: 'Prompt History',                desc: '↑/↓ in empty input recalls past user prompts.' },
       { v: '0.2.22', icon: '✨', name: 'Save as Snippet',                desc: '"Save as snippet" button on any user message.' },
@@ -18699,6 +19201,55 @@ Title:`
       { v: '0.2.49', icon: '🎨', name: 'Session accent colors',          desc: '8-color palette per session; a dot before the sidebar title.' },
       { v: '0.2.50', icon: '🎉', name: 'What\'s in Labaik',              desc: 'This feature tour. Every capability shipped in the v0.2 line.' },
     ]
+    let _yourDataBaseDir = ''
+    function fmtBytes(n) {
+      if (!n) return '—'
+      if (n < 1024) return n + ' B'
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+      return (n / 1024 / 1024).toFixed(1) + ' MB'
+    }
+    async function toggleYourDataModal() {
+      const m = document.getElementById('yourdata-modal')
+      if (m.classList.contains('show')) { m.classList.remove('show'); return }
+      const list = document.getElementById('yourdata-list')
+      list.innerHTML = `<div style="color:var(--text-faint)">${escapeHtml(t('data.loading'))}</div>`
+      m.classList.add('show')
+      let inv
+      try { inv = await window.alaude.dataInventory() } catch { inv = null }
+      if (!inv) { list.innerHTML = `<div style="color:#e07070">${escapeHtml(t('data.failed'))}</div>`; return }
+      _yourDataBaseDir = inv.baseDir
+      const total = inv.items.reduce((a, b) => a + (b.bytes || 0), 0)
+      const CLEARABLE = new Set(['sessions.json','memory.json','profile.json','routines.json','routine-history.ndjson','spaces.json','events.ndjson','images','skills'])
+      list.innerHTML = inv.items.map(it => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--text);flex:1">${escapeHtml(it.label)}</span>
+          <span style="color:var(--text-faint);font-variant-numeric:tabular-nums">${it.exists ? fmtBytes(it.bytes) : '—'}</span>
+          ${(it.exists && it.bytes > 0 && CLEARABLE.has(it.key)) ? `<button class="msg-action-btn" title="${escapeHtml(t('data.clear'))}" onclick="clearDataStore('${it.key}', '${escapeHtml(it.label)}')" style="color:#e07070;padding:1px 7px">×</button>` : '<span style="width:22px"></span>'}
+        </div>`).join('') +
+        `<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:600">
+          <span style="color:var(--text)">${escapeHtml(t('data.total'))}</span>
+          <span style="color:var(--text)">${fmtBytes(total)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-family:var(--mono,monospace)">${escapeHtml(inv.baseDir)}</div>`
+    }
+    function closeYourDataModal() { document.getElementById('yourdata-modal')?.classList.remove('show') }
+    async function clearDataStore(key, label) {
+      const isKeys = false  // credentials are not in the clearable set
+      if (!confirm(t('data.clearConfirm').replace('{label}', label))) return
+      let r
+      try { r = await window.alaude.dataClear(key) } catch (e) { r = { ok: false, reason: e?.message } }
+      if (!r?.ok) { showRewindToast?.('Clear failed: ' + (r?.reason || 'unknown'), true); return }
+      showRewindToast?.(`🧹 Cleared ${label} — recoverable from the data folder until you empty it`, false)
+      // Sessions/spaces/etc are also held in memory + localStorage; a reload
+      // re-reads from the (now-cleared) files so the UI matches disk.
+      setTimeout(() => location.reload(), 900)
+    }
+    function revealDataFolder() { if (_yourDataBaseDir) window.alaude.showInFolder?.(_yourDataBaseDir) }
+    function openBackupFromData() {
+      // Reuse the palette's backup flow.
+      const ev = buildCmdItems?.().find?.(x => /Back up Labaik/.test(x.label))
+      if (ev?.action) ev.action()
+    }
     function toggleWhatsInLabaik() {
       const modal = document.getElementById('whats-in-modal')
       if (!modal) return
@@ -18710,6 +19261,17 @@ Title:`
         modal.classList.remove('show')
       }
     }
+    // v0.8 market-fit: the five wedge moments, surfaced BEFORE the full
+    // timeline. A new user should leave this modal having felt the wedge —
+    // not having scrolled a changelog. (FEATURE_TIMELINE stays below as
+    // "everything else".)
+    const WEDGE_MOMENTS = [
+      { icon: '⚡', name: 'Any model, one dropdown', desc: 'Claude, GPT, Gemini, Grok, DeepSeek, local — switch mid-conversation. Start with ✨ Recommended.', try: () => { document.getElementById('model-select')?.focus() } },
+      { icon: '⏰', name: 'Routines — AI on a schedule', desc: 'A morning digest, standup prep, weekly review. Set once, runs forever; ▶ tests it instantly.', try: () => toggleRoutinesModal() },
+      { icon: '🧩', name: 'Skills — reusable instructions', desc: 'Install three starters (meeting notes, trip planner, weekly review), then type /meeting-notes.', try: async () => { try { await window.alaude.folderSkillsInstallStarters() } catch {}; showRewindToast?.('🧩 Type / in the composer to use a skill', false) } },
+      { icon: '📎', name: 'Drop any file, anywhere', desc: 'PDFs, spreadsheets, images — drop them on the window and ask. Or type @ to reference workspace files.', try: () => { document.getElementById('input')?.focus(); showRewindToast?.('📎 Drop a file anywhere in this window', false) } },
+      { icon: '📥', name: 'Bring your ChatGPT history', desc: 'Import conversations.json from your ChatGPT export — your chats come with you.', try: () => importChatGPTFlow() },
+    ]
     function renderWhatsInLabaik() {
       const body = document.getElementById('whats-in-body')
       if (!body) return
@@ -18733,10 +19295,19 @@ Title:`
             <div>${tryBtn}</div>
           </div>`
       }).join('')
+      const wedgeRows = WEDGE_MOMENTS.map((m, i) => `
+        <div style="display:flex;gap:12px;padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;align-items:center;background:var(--bg-input)">
+          <span style="font-size:20px">${m.icon}</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(m.name)}</div>
+            <div style="color:var(--text-dim);font-size:11.5px;line-height:1.45">${escapeHtml(m.desc)}</div>
+          </div>
+          <button class="msg-action-btn" onclick="closeWhatsInModal(); WEDGE_MOMENTS[${i}].try()">${escapeHtml(t('whatsin.tryit.btn'))}</button>
+        </div>`).join('')
       body.innerHTML = `
-        <div style="font-size:12px;color:var(--text-faint);margin-bottom:8px">
-          <strong style="color:var(--text)">${FEATURE_TIMELINE.length}</strong> features across <strong style="color:var(--text)">${FEATURE_TIMELINE.length}</strong> releases.
-        </div>
+        <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Start here — five things Labaik does that your browser tab can't</div>
+        ${wedgeRows}
+        <div style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 4px">Everything else (${FEATURE_TIMELINE.length} features)</div>
         ${rows}`
     }
     function closeWhatsInModal() {
@@ -19307,6 +19878,12 @@ Title:`
     loadVoiceMode()
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
+    // Boot beacon — the LAST statement of the main script. scripts/test-boot.mjs
+    // launches the real app and waits for this line on stderr; if any
+    // statement above throws, the beacon never fires and the smoke test
+    // fails. Added after two silent boot-crash regressions (TDZ call +
+    // infinite recursion) sat invisible to the unit suites.
+    console.warn('[boot] main script completed ✓')
   </script>
 
   <!-- v0.7.1 refactor: memory + profile subsystems live in renderer/js/*.
@@ -19315,6 +19892,11 @@ Title:`
        scripts are deferred by default, so this runs after the inline script
        parses — any app-init functions declared above are available via
        globals at the time bootMemorySystem() resolves. -->
+  <script type="module">
+    import { capHistory } from './js/history-budget.js'
+    window.capHistoryFn = capHistory
+  </script>
+
   <script type="module">
     import { bootMemorySystem } from './js/bootstrap.js'
     try {

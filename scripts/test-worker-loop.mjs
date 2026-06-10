@@ -81,6 +81,19 @@ function decideReply(body) {
     // recorded request; the model just answers.
     return contentChunks('MENTION-DONE')
   }
+  if (userText.startsWith('Plain question with research mode')) {
+    return contentChunks('RESEARCH-ACK')
+  }
+  if (userText.startsWith('Fetch the redirect')) {
+    if (!toolMsgs.length) return toolCallChunks('fetch_page', { url: process.env.LABAIK_SEARCH_BASE + '/redirect-to-localhost' })
+    const got = String(toolMsgs[0].content || '')
+    return contentChunks(/blocked|local addresses/i.test(got) ? 'SSRF-BLOCKED' : `SSRF-LEAK: ${got.slice(0,120)}`)
+  }
+  if (userText.startsWith('Search the web')) {
+    if (!toolMsgs.length) return toolCallChunks('web_search', { query: 'labaik news' })
+    const got = String(toolMsgs[0].content || '')
+    return contentChunks(got.includes('example.com/labaik-news') ? 'SEARCH-OK' : `SEARCH-MISSING: ${got.slice(0, 200)}`)
+  }
   if (userText.startsWith('/greeting')) {
     if (!toolMsgs.length) return toolCallChunks('use_skill', { slug: 'greeting' })
     const got = String(toolMsgs[0].content || '')
@@ -106,7 +119,25 @@ const server = http.createServer((req, res) => {
     let body = {}
     try { body = JSON.parse(raw) } catch {}
     requests.push({ url: req.url, body })
+    if (req.url.startsWith('/redirect-to-localhost')) {
+      res.writeHead(302, { Location: 'http://localhost:9/secret' }); res.end(); return
+    }
+    if (req.url.startsWith('/html/')) {
+      // DDG-style search results page for the web_search tool
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.end('<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Flabaik-news">Labaik ships v0.8</a>' +
+              '<a class="result__snippet" href="#">Labaik adds web search for every model</a>')
+      return
+    }
     if (!req.url.includes('/chat/completions')) { res.writeHead(404); res.end('{}'); return }
+    // Scenario 4 (stop generation): stream one token, then HANG — the
+    // connection only closes when the worker aborts it client-side.
+    const userText = String((body.messages || []).find(m => m.role === 'user')?.content || '')
+    if (userText.startsWith('HANG')) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.write(`data: ${JSON.stringify(chunk({ content: 'partial-before-stop ' }))}\n\n`)
+      return // no [DONE], no end — hangs until aborted
+    }
     sse(res, decideReply(body))
   })
 })
@@ -120,6 +151,7 @@ const worker = spawn('node', [path.join(ROOT, 'electron', 'api-worker.js')], {
     LABAIK_HOME: labaikHome,
     OPENAI_API_KEY: 'test-key',
     OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    LABAIK_SEARCH_BASE: `http://127.0.0.1:${port}`,
   },
   stdio: ['pipe', 'pipe', 'pipe'],
 })
@@ -152,10 +184,10 @@ worker.stdout.on('data', (d) => {
   }
 })
 
-function chat(id, content) {
+function chat(id, content, extra = {}) {
   worker.stdin.write(JSON.stringify({
     id, messageId: `m${id}`, messages: [{ role: 'user', content }],
-    model: 'gpt-test-1', workspacePath: workspace, spacePrompt: '', mode: 'autopilot',
+    model: 'gpt-test-1', workspacePath: workspace, spacePrompt: '', mode: 'autopilot', ...extra,
   }) + '\n')
   return new Promise((resolve, reject) => {
     const t0 = Date.now()
@@ -206,6 +238,49 @@ try {
   check('path-escape mention NOT expanded', !userMsg.includes('### @../escape.txt'))
   const mSys = String(mReq?.body?.messages?.[0]?.content || '')
   check('git context injected (branch + commit)', mSys.includes('## Git status') && mSys.includes('fixture-branch') && mSys.includes('fixture commit'))
+
+  // Screen-control gating (v0.8): no chat in these scenarios mentioned the
+  // screen, so screen_* tools must never have been offered to the model.
+  const anyScreenTools = requests.some(r =>
+    (r.body?.tools || []).some(t => (t?.function?.name || '').startsWith('screen_')))
+  check('screen tools withheld without screen intent', !anyScreenTools)
+  // Cycle 32: the browser-restraint prompt block is gated on browser intent —
+  // none of these scenarios mentioned browsing, so it must be absent.
+  const anyBrowserBlock = requests.some(r =>
+    String(r.body?.messages?.[0]?.content || '').includes('## Browser tools'))
+  check('browser-restraint prompt block absent without intent', !anyBrowserBlock)
+
+  // ═══ Scenario 5: web search tool ═══
+  console.log('\n[5/7] web search — DDG parse + result round-trip')
+  const r5 = await chat(5, 'Search the web for labaik news please')
+  check('model received parsed search results', typeof r5.result === 'string' && r5.result.startsWith('SEARCH-OK'), JSON.stringify(r5).slice(0, 300))
+
+  // ═══ Scenario 6: deep research mode flag ═══
+  console.log('\n[6/7] deep research — protocol lands in the system prompt')
+  const r6 = await chat(6, 'Plain question with research mode on', { researchMode: true })
+  check('research chat completes', typeof r6.result === 'string')
+  const rReq = requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Plain question with research mode'))
+  const rSys = String(rReq?.body?.messages?.[0]?.content || '')
+  check('DEEP RESEARCH protocol in system prompt', rSys.includes('DEEP RESEARCH MODE'))
+  check('non-research chats do NOT carry the protocol',
+    !String(requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Search the web'))?.body?.messages?.[0]?.content || '').includes('DEEP RESEARCH MODE'))
+
+  // ═══ Scenario 7: SSRF — redirect to localhost must be blocked (cycle 36) ═══
+  console.log('\n[7/7] fetch_page — redirect to localhost is blocked')
+  const r7 = await chat(7, 'Fetch the redirect please')
+  check('redirect to a private address is blocked', typeof r7.result === 'string' && r7.result.startsWith('SSRF-BLOCKED'), JSON.stringify(r7).slice(0,200))
+
+  // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
+  console.log('\n[4/5] stop generation — chat-cancel mid-stream')
+  const cancelPromise = chat(4, 'HANG forever please')
+  setTimeout(() => {
+    worker.stdin.write(JSON.stringify({ type: 'chat-cancel', id: 4 }) + '\n')
+  }, 800)
+  const r4 = await cancelPromise
+  check('cancelled chat resolves (not error/timeout)', typeof r4.result === 'string', JSON.stringify(r4).slice(0, 200))
+  check('partial tokens salvaged + Stopped marker',
+    String(r4.result || '').includes('partial-before-stop') && String(r4.result || '').includes('⏹ Stopped'),
+    JSON.stringify(r4.result).slice(0, 200))
 } catch (err) {
   check('fixture ran to completion', false, err.message)
 } finally {

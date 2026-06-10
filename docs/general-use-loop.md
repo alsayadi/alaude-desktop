@@ -1,0 +1,114 @@
+# General-Use Loop — make Labaik useful beyond coding, and easier to use
+
+Working log for the improvement loop. One cycle = one audit-pick-implement-
+test-commit pass on branch `feature/general-use`.
+
+**Target (set 2026-06-10): 100 cycles**, run back-to-back. Expanded scope:
+general use + ease of use. Quality floor: a cycle must ship a real
+improvement — if the well runs dry, the loop reports that instead of padding.
+Ship checkpoint suggested every ~10 cycles. Progress: see cycle log below.
+
+## Audit (cycle 1, 2026-06-10)
+
+Where Labaik is already general:
+- Welcome screen: Build / Office / Ideate chips + balanced quick-starts (v0.7.68)
+- Routine templates: news, standup, inbox triage, writing prompt — mostly general
+- Health space: lab analysis, drug interactions, calculators, PHQ-9/GAD-7
+- i18n: EN/中文/العربية with RTL
+- System prompt: lean general opener; coding guidance only added when a workspace is open
+
+Coding bias found (backlog, highest leverage first):
+1. ~~Slash snippets: 5 of 8 defaults are code tasks~~ → fixed cycle 1
+2. ~~Folder skills onboarding is dev-flavored — one-click starter skills~~ → fixed cycle 2
+3. ~~`/explain` snippet assumes a dev~~ → fixed cycle 2 (new installs only; body
+   edits don't propagate through the seen-merge, by design)
+4. ~~Routines modal templates: everyday-life additions~~ → fixed cycle 3
+   (meal plan still a candidate)
+5. ~~Spaces~~ — audit was WRONG: built-in Spaces are already fully general
+   (General, Health, Finance, Real Estate, Legal, Education, Marketing — there
+   is no coding space at all). Nothing to do.
+6. ~~Attachment ergonomics~~ → mostly already solid (picker, PDFs with page
+   counts, multimodal images); the real gap — drop target was only the message
+   list — fixed cycle 4 (window-wide drop).
+7. **Empty-workspace nudges**: composer placeholder and tips reference code tasks
+   in places — sweep for dev-jargon strings shown when no workspace is open.
+   (Onboarding done cycle 3; remaining: tips/hints/shortcut surfaces.)
+
+## Cycle log
+
+### Cycle 1 — slash snippets rebalanced (2026-06-10)
+- Added 5 general defaults: /email, /brainstorm, /rewrite, /plan, /decide.
+- Added one-time merge of NEW defaults into existing installs via
+  `alaude:snippets:seen:v1` — previously, default updates never reached
+  existing users; deliberate deletions stay deleted.
+
+### Cycle 2 — starter skills pack + /explain de-jargoned (2026-06-10)
+- 3 bundled general skills (meeting-notes, trip-planner, weekly-review) in
+  folder-skills.js; installable via command palette → "Install starter
+  skills". Idempotent — user-edited starters never overwritten.
+- /explain rewritten for any topic, not "experienced developer" framing.
+
+### Cycle 3 — onboarding de-jargoned + life routines (2026-06-10)
+- Memory onboarding no longer assumes a developer: "Main stack / languages /
+  frameworks?" → "What do you work on or care about?", coding-preference
+  placeholders → answer-style preferences. Updated in EN/中文/العربية (dicts +
+  inline HTML fallbacks).
+- 3 everyday-life routine templates: 💊 medication reminder, 🗣️ language
+  practice, 💳 weekly bills & renewals check.
+- Next candidates: non-coding Spaces (Writing, Learning/Tutor, Travel);
+  attachment ergonomics (PDF/doc without a workspace); meal-plan routine.
+
+### Cycle 4 — window-wide drag & drop (2026-06-10)
+- Audit correction: Spaces were already general (7 built-ins, none coding);
+  attachments already handle PDFs/images/docs well.
+- Real gap found and fixed: files could only be dropped on the message list.
+  Now the whole window accepts drops (composer, sidebar, anywhere) with a
+  drag-depth counter to stop overlay flicker.
+
+### Cycle 5 — final sweep + meal plan (2026-06-10) · LOOP CONCLUDED
+- Jargon sweep came back clean: quick-start templates are balanced
+  (build/office/ideate), smart-paste "stack trace" hints only fire on actual
+  stack-trace pastes (contextual, not bias), composer placeholder is neutral.
+- Added 🥗 weekly meal plan routine template (Sunday 5pm).
+- "Learning" space skipped — the Education space already covers tutor use.
+- General-use backlog exhausted; loop re-opened with 100-cycle ease-of-use target.
+
+### Cycle 6 — composer discoverability (2026-06-10)
+- Placeholder now hints the two hidden superpowers in all 3 locales:
+  "Message Labaik...  ( / snippets · @ files )". Previously / and @ were
+  invisible unless you already knew them.
+
+### Cycle 7 — Stop generation (2026-06-10)
+- There was NO way to stop a runaway generation (users waited out up to
+  15 min). Full cancel plumbing: send button morphs to a red ⏹ Stop while
+  streaming, Esc stops too; renderer → chat-cancel-all IPC → worker
+  AbortController per chat → provider stream abort in all three loops
+  (OpenAI-compat, Anthropic, Ollama native). Partial text is salvaged and
+  marked "⏹ Stopped." Fixture scenario 4 proves it against a hung stream.
+
+### Cycle 8 — ⌘K coach mark (2026-06-10)
+- One-time dismissible hint chip (bottom-right, 8s after boot) telling new
+  users the command palette exists. Gone forever after first ⌘K or click.
+  Localized in all 3 languages.
+
+### Cycle 9 — plain-language errors (2026-06-10)
+- humanizeChatError(): raw provider errors ("401 unauthorized…",
+  "ENOTFOUND…") become a friendly line with the next step ("🔑 Your API
+  key was rejected — open ⌘⇧K…"), raw detail kept in small print.
+  Covers key/credits/rate-limit/context/network/timeout/server classes,
+  wired into all four error render sites (single, council ×2, crew synth).
+  Localized EN/中文/العربية. Also deduped cycle-7's double
+  updateSendBtnMode() insertions.
+
+### Cycle 10 — ✨ Recommended models (2026-06-10) · SHIP CHECKPOINT
+- The model picker has 40+ options across 11 providers — paralyzing for a
+  non-expert. A "✨ Recommended" optgroup now pins up to three CONNECTED
+  picks at the top: best overall / fastest / private-local, rebuilt on
+  every key-status refresh. EN/中文/العربية.
+
+Ease-of-use backlog (next 90 cycles' raw material):
+- Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
+- Session organization: auto-title quality, archive old sessions
+- First-run flow: time-to-first-reply audit (login → key → first message)
+- Stop button for crew/council lanes individually
+- Subagent abort should propagate into nested loops mid-task

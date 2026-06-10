@@ -120,12 +120,17 @@ function isProtectedPath({ path, workspaceRoot, home, op = 'write' }) {
 // NOT offer an "Approve always" button for these (same as protected paths).
 const DANGEROUS_PATTERNS = [
   { re: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/,                 why: 'recursive force delete' },
-  { re: /(^|\s)sudo\b|(^|\s)su\s/,                                                 why: 'privilege escalation' },
-  { re: /\bchmod\s+-R\b|\bchown\b/,                                                why: 'broad permission change' },
+  { re: /(^|[\s;&|])sudo\b|(^|[\s;&|])su\s/,                                       why: 'privilege escalation' },
+  // v0.8 cycle 44: catch recursive chmod in any flag spelling within the
+  // chmod segment (-R, -fR, -Rf, --recursive) — not just a leading -R.
+  { re: /\bchmod\b[^;&|]*?(\s-[a-zA-Z]*R[a-zA-Z]*\b|\s--recursive\b)|\bchown\b/,    why: 'broad permission change' },
   { re: /\bdd\s+if=|\bmkfs\b|\bfdisk\b|\bparted\b/,                                why: 'block device write' },
   { re: /\bkill(all)?\s+-9\b|\bpkill\b/,                                           why: 'force-kill processes' },
   { re: /\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh|python3?|node|perl|ruby)\b/,        why: 'pipe to shell (curl|bash)' },
-  { re: /\bgit\s+push\s+(--force|-f)\b/,                                           why: 'force push' },
+  // v0.8 cycle 44: force-push detection no longer requires the flag to sit
+  // immediately after `push` — `git push origin main --force` (the common
+  // form) and refspec force `git push origin +main` were both bypassing.
+  { re: /\bgit\s+push\b[^;&|]*?(\s(--force(-with-lease)?|-f)\b|\s\+\S)/,           why: 'force push' },
   { re: /\bgit\s+reset\s+--hard\b/,                                                why: 'hard reset' },
   { re: /\bgit\s+clean\s+-[a-zA-Z]*f/,                                             why: 'force-clean untracked' },
   { re: /\b(npm|yarn|bun|pnpm)\s+publish\b/,                                       why: 'publish to registry' },
@@ -150,9 +155,33 @@ const SAFE_COMMAND_ALLOWLIST = [
  *  - 'safe'      — allow-listed, may auto-run in Flow.
  *  - 'unknown'   — not matched either way; Flow prompts, Autopilot auto.
  */
+// v0.8 cycle 43: precise `rm -rf` detection. The old single regex only
+// caught COMBINED flags (-rf/-fr), so `rm -r -f`, `rm -f -r`,
+// `rm --recursive --force`, and long/short mixes classified as "unknown" —
+// which Autopilot auto-runs without a prompt. We split the command on shell
+// separators and, for any segment whose program is `rm`, flag it dangerous
+// when it carries BOTH a recursive and a force indicator (any spelling).
+function isDangerousRm(cmd) {
+  for (const seg of String(cmd).split(/[;&|]+/)) {
+    const s = seg.trim()
+    // program is rm (optionally /bin/rm, env-prefixed). First word ends in 'rm'.
+    if (!/^(?:\S*\/)?rm(\s|$)/.test(s) && !/(^|\s)rm\s/.test(s)) continue
+    const m = /(^|\s)(?:\S*\/)?rm\s+([\s\S]*)$/.exec(s)
+    if (!m) continue
+    const args = m[2]
+    const recursive = /(^|\s)-[a-zA-Z]*r[a-zA-Z]*\b/i.test(args) || /(^|\s)--recursive\b/.test(args)
+    const force     = /(^|\s)-[a-zA-Z]*f[a-zA-Z]*\b/.test(args)     || /(^|\s)--force\b/.test(args)
+    if (recursive && force) return true
+  }
+  return false
+}
+
 function classifyCommand(command, { workspaceRoot = '', home = '' } = {}) {
   const cmd = String(command || '').trim()
   if (!cmd) return { class: 'unknown', match: null, why: null }
+
+  // rm -rf in any flag spelling (split / long / combined) — checked first.
+  if (isDangerousRm(cmd)) return { class: 'dangerous', match: 'rm-recursive-force', why: 'recursive force delete' }
 
   // Dangerous first (cheapest wins)
   for (const p of DANGEROUS_PATTERNS) {
@@ -177,8 +206,15 @@ function classifyCommand(command, { workspaceRoot = '', home = '' } = {}) {
     return { class: 'dangerous', match: 'out-of-workspace-path', why: 'references absolute path outside workspace' }
   }
 
-  for (const re of SAFE_COMMAND_ALLOWLIST) {
-    if (re.test(cmd)) return { class: 'safe', match: re.source, why: 'allow-listed safe command' }
+  // v0.8 cycle 45: 'safe' requires EVERY chained segment to be allow-listed.
+  // Previously the allowlist matched only the leading token, so
+  // `echo ok; sudo reboot` or `ls && curl x` returned 'safe' (and auto-ran
+  // under Flow) on the strength of the harmless first command. Split on
+  // shell separators; if all parts are allow-listed it's safe, otherwise
+  // unknown (which still prompts in Flow).
+  const segs = cmd.split(/[;&|]+/).map(s => s.trim()).filter(Boolean)
+  if (segs.length && segs.every(seg => SAFE_COMMAND_ALLOWLIST.some(re => re.test(seg)))) {
+    return { class: 'safe', match: 'allowlist', why: 'every command is allow-listed' }
   }
   return { class: 'unknown', match: null, why: null }
 }
@@ -294,6 +330,7 @@ module.exports = {
   nextMode,
   isProtectedPath,
   classifyCommand,
+  isDangerousRm,
   resolveGate,
   // Exported for tests / introspection
   PROTECTED_GLOBS,

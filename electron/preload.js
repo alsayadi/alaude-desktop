@@ -29,6 +29,19 @@ contextBridge.exposeInMainWorld('alaude', {
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),
+  // v0.8 — Stop generation: aborts every in-flight chat; each resolves with
+  // its partial text plus a "⏹ Stopped." marker.
+  chatCancelAll: () => ipcRenderer.invoke('chat-cancel-all'),
+  // v0.8 — paste-any-key: detect which provider a key belongs to.
+  loginDetectKey: (key) => ipcRenderer.invoke('login-detect-key', key),
+  // v0.8 — import conversations.json from a ChatGPT data export.
+  importChatGPT: () => ipcRenderer.invoke('import-chatgpt'),
+  // v0.8 — portable backup bundle (keys excluded by design).
+  backupExport: (extras) => ipcRenderer.invoke('backup-export', extras),
+  backupImport: () => ipcRenderer.invoke('backup-import'),
+  // v0.8 — read-only inventory of what's stored locally (the private wedge).
+  dataInventory: () => ipcRenderer.invoke('data-inventory'),
+  dataClear: (key) => ipcRenderer.invoke('data-clear', key),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),
@@ -119,6 +132,9 @@ contextBridge.exposeInMainWorld('alaude', {
   routinesUpsert: (routine) => ipcRenderer.invoke('routines-upsert', routine),
   routinesRemove: (id) => ipcRenderer.invoke('routines-remove', id),
   routinesSetEnabled: (id, enabled) => ipcRenderer.invoke('routines-set-enabled', id, enabled),
+  routinesHistory: (limit) => ipcRenderer.invoke('routines-history', limit),
+  routinesRunNow: (id) => ipcRenderer.invoke('routines-run-now', id),
+  onOpenRoutinesLog: (callback) => { ipcRenderer.on('open-routines-log', () => callback()) },
   onRoutineRan: (callback) => {
     const h = (_e, payload) => callback(payload)
     ipcRenderer.on('routine-ran', h)
@@ -129,6 +145,7 @@ contextBridge.exposeInMainWorld('alaude', {
   // ~/.labaik/skills/<slug>/SKILL.md. Surfaced in the command palette.
   folderSkillsList: () => ipcRenderer.invoke('folder-skills-list'),
   folderSkillsGet: (slug) => ipcRenderer.invoke('folder-skills-get', slug),
+  folderSkillsInstallStarters: () => ipcRenderer.invoke('folder-skills-install-starters'),
 
   // Permission mode (v0.4.0; Careful/Flow approval dialog added v0.4.1)
   permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),

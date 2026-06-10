@@ -73,6 +73,7 @@ function upsert(routine) {
     model: routine.model || '',
     cron: String(routine.cron || ''),  // e.g. "0 8 * * *" or "*/15 * * * *"
     enabled: routine.enabled !== false,
+    notify: routine.notify !== false,  // v0.8 cycle 24: per-routine desktop notifications
     lastRunAt: existing?.lastRunAt || null,
     lastStatus: existing?.lastStatus || null,
     lastResult: existing?.lastResult || null,
@@ -126,6 +127,21 @@ function recordRun(id, { status, resultPreview }) {
       resultPreview: (resultPreview || '').slice(0, 400),
     }) + '\n')
   } catch {}
+}
+
+/**
+ * Recent run history — newest first. Reads the tail of the ndjson log so a
+ * year of runs doesn't get parsed for a 30-row view.
+ */
+function history(limit = 30) {
+  try {
+    if (!fs.existsSync(HISTORY_FILE)) return []
+    const raw = fs.readFileSync(HISTORY_FILE, 'utf8')
+    const lines = raw.split('\n').filter(Boolean).slice(-limit)
+    const out = []
+    for (const l of lines) { try { out.push(JSON.parse(l)) } catch {} }
+    return out.reverse()
+  } catch { return [] }
 }
 
 // ── Tiny cron parser ───────────────────────────────────────────────────────
@@ -234,7 +250,7 @@ function stopScheduler() {
 }
 
 module.exports = {
-  list, upsert, remove, setEnabled, recordRun,
+  list, upsert, remove, setEnabled, recordRun, history,
   startScheduler, stopScheduler,
   _parseCron, _nextFire,  // exposed for tests
 }

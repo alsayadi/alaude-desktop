@@ -23,7 +23,9 @@
 
 ## What is Labaik
 
-Labaik is a macOS desktop app that talks to every AI provider worth using — **Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan** — plus fully-offline **local models via Ollama**. One app, your API keys, no middleman, no monthly fee. Open-source under MIT.
+**The fastest way to use any frontier AI on your Mac with your own keys — private, no subscription.**
+
+Labaik talks to every AI provider worth using — **Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan, DeepSeek** — plus fully-offline **local models via Ollama**. Paste any API key and Labaik detects the provider; switch models mid-conversation; schedule routines that run while you sleep; import your ChatGPT history and keep going. One app, your keys on your disk, no middleman, no monthly fee. Open-source under MIT.
 
 The name `labaik` is Arabic for *"here I am — at your service."* That's the idea: a quiet desktop client that's wherever you need it, for whichever AI you want today.
 
@@ -33,10 +35,11 @@ The name `labaik` is Arabic for *"here I am — at your service."* That's the id
 
 | | |
 |---|---|
-| **No subscription** | $0 app fee. You pay only the providers you already have keys for — or pay nothing when you run local models. |
-| **10 providers, one dropdown** | Anthropic · OpenAI · Google · xAI · Kimi (kimi.ai + kimi.com) · Alibaba Qwen · Zhipu GLM · MiniMax · Tencent Hunyuan · Ollama. |
+| **No subscription** | $0 app fee. You pay only the providers you already have keys for — or pay nothing when you run local models. The picker shows a 🟢/🟡/🔴 cost tier per model so you never overspend on a throwaway question. |
+| **11 providers, one dropdown** | Anthropic · OpenAI · Google · xAI · Kimi (kimi.ai + kimi.com) · Alibaba Qwen · Zhipu GLM · MiniMax · Tencent Hunyuan · DeepSeek · Ollama. Paste any key — Labaik detects the provider. Switch models mid-conversation. |
+| **Web search + Deep Research** | Every model can search the web and read pages (no extra key). Deep Research mode runs a multi-source, cross-checked, fully-cited investigation from one prompt. |
 | **Crew — multi-model in parallel** | Send one prompt to 2–4 models at once. Each replies in its own lane. Pick the best or have them debate. |
-| **Routines — cron for AI** | Schedule Labaik to do things on its own. *"Summarize HN at 8am." "Draft standup at 6pm." "Ping prod every 15 min."* Results stream to a dedicated session. |
+| **Routines — cron for AI** | Schedule Labaik to do things on its own. *"Summarize HN at 8am." "Draft standup at 6pm." "Ping prod every 15 min."* Results land in a pinned session and a desktop notification. |
 | **Skills — SKILL.md folders** | Drop a folder in `~/.labaik/skills/<slug>/` with a `SKILL.md` and it's live: listed to the model, loaded on demand via `use_skill`, invocable as `/<slug>` in the composer. |
 | **Agentic coding** | Subagents (`spawn_subagent`), `@file` mentions, git context injection, AGENTS.md/CLAUDE.md auto-load, plan mode, and four permission modes (Observe / Careful / Flow / Autopilot) with an approval dialog. |
 | **Built-in browser** | The agent can open URLs, read pages, fill forms, click buttons, take screenshots — all inside the app. |
@@ -44,7 +47,9 @@ The name `labaik` is Arabic for *"here I am — at your service."* That's the id
 | **Rich content display** | Real markdown, diffs, charts, Mermaid, SVG, file previews, artifacts. Whatever the model returns, the app renders it right. |
 | **Tool calling + MCP** | Workspace tools (`read_file`, `write_file`, `list_directory`, `run_command`, `open_in_browser`, `start_dev_server`), image generation (`generate_image`), screen control, plus full MCP server support. |
 | **3 languages** | English, 中文, and العربية — with full right-to-left layout. |
-| **Privacy by construction** | No Labaik backend. Keys at `~/.labaik/credentials.json` mode `0600`. Prompts go machine → provider directly. Zero telemetry. |
+| **Bring your history** | Import your ChatGPT export (`conversations.json`) — your chats come with you, deduped on re-import. |
+| **Backup & restore** | One portable file holds everything (sessions, memory, routines, skills) — **keys excluded by design**. Restore is non-destructive. |
+| **Privacy you can see** | No Labaik backend. Keys at `~/.labaik/credentials.json` mode `0600`. Prompts go machine → provider directly. Zero telemetry. The **"Your data"** panel shows exactly what's stored locally, with sizes, and lets you clear any of it. |
 | **Source-available, MIT** | Fork it, inspect it, ship your own build. |
 
 ---

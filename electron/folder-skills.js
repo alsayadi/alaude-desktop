@@ -182,10 +182,73 @@ the folder is ignored. One bad skill never poisons the others.
   } catch { /* permission errors etc — not fatal */ }
 }
 
+// ── Starter skills (v0.8 general-use) ──────────────────────────────────────
+// Three ready-made general-purpose skills a non-developer can install with
+// one click (command palette → "Install starter skills"). Written as normal
+// folders under SKILLS_ROOT so they're editable/deletable like any skill.
+const STARTER_SKILLS = [
+  { slug: 'meeting-notes', name: 'Meeting notes', description: 'Turn raw meeting notes into a clean summary with action items',
+    body: `Turn the notes I give you into structured meeting minutes:
+
+1. **TL;DR** — 2 sentences max.
+2. **Decisions** — what was decided, by whom.
+3. **Action items** — table: owner / task / due date (mark unknowns with "?").
+4. **Open questions** — anything left unresolved.
+
+Keep names exactly as written. Don't invent decisions that aren't in the notes.
+If the notes are too thin to extract something, say so instead of padding.` },
+  { slug: 'trip-planner', name: 'Trip planner', description: 'Plan a trip: itinerary, budget, packing, bookings checklist',
+    body: `Help me plan a trip. First ask (in ONE question block): destination & dates,
+budget range, travel style (relaxed / packed / mixed), and who's coming.
+
+Then produce:
+1. **Day-by-day itinerary** — morning / afternoon / evening, realistic pacing,
+   one backup option per day for bad weather.
+2. **Budget estimate** — table by category (stay, food, transport, activities).
+3. **Bookings checklist** — what to book now vs. on arrival.
+4. **Packing list** — climate-appropriate, carry-on minded.
+
+Use local names for places. Flag anything that needs advance reservation.` },
+  { slug: 'weekly-review', name: 'Weekly review', description: 'Reflect on the week and set up the next one',
+    body: `Guide me through a weekly review. Ask me (in ONE question block):
+what went well, what didn't, what's unfinished, and my top priority next week.
+
+Then give me back:
+1. **Wins** — reflected back, concrete.
+2. **Friction** — patterns you notice in what didn't work (be honest, not soothing).
+3. **Carry-overs** — unfinished items, each with: do / delegate / drop recommendation.
+4. **Next week** — my top 3, each with the first concrete step.
+
+Keep it under a page. End with one sentence I can keep in mind for the week.` },
+]
+
+/**
+ * Install the bundled starter skills. Idempotent: existing folders (by slug)
+ * are never overwritten — a user-edited starter stays theirs. Returns
+ * { installed: [slugs], skipped: [slugs] }.
+ */
+function installStarters() {
+  ensureRoot()
+  const installed = [], skipped = []
+  for (const sk of STARTER_SKILLS) {
+    const dir = path.join(SKILLS_ROOT, sk.slug)
+    try {
+      if (fs.existsSync(path.join(dir, 'SKILL.md'))) { skipped.push(sk.slug); continue }
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
+      fs.writeFileSync(path.join(dir, 'SKILL.md'),
+        `---\nname: ${sk.name}\ndescription: ${sk.description}\n---\n\n${sk.body}\n`, 'utf8')
+      installed.push(sk.slug)
+    } catch { skipped.push(sk.slug) }
+  }
+  return { installed, skipped }
+}
+
 module.exports = {
   discover,
   get,
   getRoot,
   ensureRoot,
+  installStarters,
+  STARTER_SKILLS,
   _parseFrontmatter,  // exposed for tests
 }
