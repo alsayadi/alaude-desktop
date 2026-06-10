@@ -236,6 +236,11 @@ try {
   const anyScreenTools = requests.some(r =>
     (r.body?.tools || []).some(t => (t?.function?.name || '').startsWith('screen_')))
   check('screen tools withheld without screen intent', !anyScreenTools)
+  // Cycle 32: the browser-restraint prompt block is gated on browser intent —
+  // none of these scenarios mentioned browsing, so it must be absent.
+  const anyBrowserBlock = requests.some(r =>
+    String(r.body?.messages?.[0]?.content || '').includes('## Browser tools'))
+  check('browser-restraint prompt block absent without intent', !anyBrowserBlock)
 
   // ═══ Scenario 5: web search tool ═══
   console.log('\n[5/6] web search — DDG parse + result round-trip')

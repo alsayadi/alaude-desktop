@@ -313,3 +313,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   chat. On the cost-conscious "pay per use" wedge that's real money + lower
   latency, with no behavior change. Session delete + share-HTML export were
   already present (honest skips).
+
+### Cycle 32 — gate the browser-restraint block on intent (2026-06-10)
+- The ~230-token "browser tools are opt-in" block was always-on, but since
+  cycle 6 browser_* tools are only OFFERED when the user signals browser
+  intent — so on every other message the warning guarded tools that don't
+  exist. Now gated on the same intent regex over userText (and trimmed to
+  ~80 tokens when it does appear). Fixture asserts it's absent without
+  intent. Cumulative with cycle 31: always-on prompt ~1,380 → ~540 tokens
+  per message (~60% off), no behavior change.

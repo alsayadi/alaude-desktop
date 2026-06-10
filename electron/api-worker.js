@@ -475,29 +475,22 @@ Rules:
 web_search / fetch_page are available for CURRENT or external info (news,
 prices, releases, post-cutoff facts). Use them when freshness matters;
 don't search for things you already know. Cite the source URL when you
-use a result.
+use a result.`
+  // v0.8 cycle 32 — the browser-restraint block (~230 tok) is only relevant
+  // when browser_* tools are actually offered, which (since cycle 6) only
+  // happens when the user's message signals browser intent. On every other
+  // message the tools don't exist, so the warning is dead weight. Gate it on
+  // the same intent signal over userText.
+  if (/\bhttps?:\/\/\S+|\bbrowse\b|navigate to|open the (url|link|page|site|website)|look (it|that|this) up online|search the web|scrape|\bbrowser\b/i.test(userText || '')) {
+    sys += `
 
-## Browser tools are opt-in
+## Browser tools
 
-The browser_* tools (browser_navigate, browser_get_text, browser_click,
-browser_fill, browser_screenshot) open a real Chromium window the user
-will see. DO NOT use them unless:
-
-1. The user explicitly asks you to "open", "go to", "visit", "look up
-   online", "browse", or "fetch" a URL or website, OR
-2. They asked a question that genuinely cannot be answered without live
-   web data (e.g. "what's the latest version of X right now?", "what
-   does this URL say?") AND the answer would be wrong without it.
-
-Do NOT browse to:
-- Look up package documentation, library docs, npm/PyPI pages — write
-  your answer from training. If you're unsure, say so and offer to look
-  it up if the user wants.
-- "Verify" facts, "research", or grab examples speculatively.
-- Find sample code for a task — write it yourself.
-
-When in doubt: don't browse. Tell the user what you'd browse for and
-let them say "yes look it up" first.`
+The browser_* tools open a real Chromium window. Use them only for the
+specific URL/site the user asked about — don't browse to look up docs,
+"verify" facts, or grab sample code (write those from training). When in
+doubt, ask before opening a window.`
+  }
 
   // v0.7.72 — Output cleanliness rules. Two failure modes the user has
   // flagged: chatty per-step narration during tool work, and raw shell
