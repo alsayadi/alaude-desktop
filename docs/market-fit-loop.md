@@ -392,3 +392,9 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   distinguishes "N empty" vs "N already imported". 4 fingerprint unit tests
   (stamped, stable across re-convert, distinct by title, distinct by count).
   104 checks.
+
+### Cycle 40 — cost tier on the active model chip (2026-06-10) · CHECKPOINT 5
+- Extended cycle 35: the always-visible topbar model chip now leads with its
+  🟢/🟡/🔴 cost tier (+tooltip), so users see their spend tier at every
+  glance, not only inside the ✨ Recommended group. Cycles 31-40 pushed; PR
+  #2 body refreshed.

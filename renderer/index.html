@@ -16914,8 +16914,18 @@ Title:`
     let _lastModelForUx = null
     function changeModel(model) {
       const select = document.getElementById('model-select')
-      const label = select.options[select.selectedIndex].text
-      document.getElementById('topbar-model').textContent = label
+      const opt = select.options[select.selectedIndex]
+      const label = opt.text
+      // v0.8 cycle 40: prefix the always-visible model chip with its cost tier
+      // (🟢/🟡/🔴) so the user sees what they're spending at every glance —
+      // not just inside the ✨ Recommended group. Strip any ⚡/🔒/tier already
+      // baked into the option text first.
+      const isLocal = opt.parentElement?.id === 'model-select-local'
+      const tier = modelCostTier(model, isLocal)
+      const cleanLabel = label.replace(/^[⚡🔒🟢🟡🔴]\s+/, '').replace(/^[🟢🟡🔴]\s+/, '')
+      const chip = document.getElementById('topbar-model')
+      chip.textContent = `${tier.dots} ${cleanLabel}`
+      chip.title = `Current model · ${tier.label}`
       // UX: model_switched event (only if actually changed)
       if (_lastModelForUx !== null && _lastModelForUx !== model) {
         logUx({ kind: 'model_switched', sessionId: ux.sessionId, fromModel: _lastModelForUx, toModel: model })
