@@ -405,3 +405,14 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   "Your data" privacy panel; folded cost-tier + paste-any-key + switch-
   mid-conversation into existing rows; corrected 10→11 providers (DeepSeek).
   The repo's first impression now matches what shipped.
+
+### Cycle 42 — audit + harden the MCP subsystem (2026-06-10)
+- Audited electron/mcp.js (untested, flagged "lean" in cycle 1). Three real
+  issues: (1) the 30s per-call timeout was never cleared on success —
+  leaked a timer + closure per request; now stored on the pending entry and
+  cleared on response/exit. (2) _buf grew unbounded — a server streaming a
+  newline-less blob could OOM main; capped at 16MB (same DoS class as cycle
+  36). (3) the tool-name parser was a fragile dual-regex; replaced with a
+  deterministic parseMcpToolName (strip prefix, split on first __) that
+  correctly handles underscores in server/tool names — 7 unit tests. 111
+  checks.
