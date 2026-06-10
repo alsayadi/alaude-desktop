@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('alaude', {
   version: appVersion,
   homepage: appHomepage,
   releasesUrl: appHomepage.replace(/\/$/, '') + '/releases',
+  openFutureConsole: () => ipcRenderer.invoke('open-future-console'),
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),
@@ -46,6 +47,8 @@ contextBridge.exposeInMainWorld('alaude', {
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   listFiles: (path) => ipcRenderer.invoke('list-files', path),
   workspaceList: (path) => ipcRenderer.invoke('workspace-list', path),
+  // v0.4.4 — recursive file index for @-mention autocomplete.
+  workspaceFiles: (path) => ipcRenderer.invoke('workspace-files', path),
 
   // v0.7.31 Task Scope — create a subfolder inside the picked workspace for
   // the current session, keeping generated files out of the workspace root.
@@ -100,7 +103,7 @@ contextBridge.exposeInMainWorld('alaude', {
   },
 
   // Durable JSON store (v0.7.59) — localStorage-compatible semantics but
-  // writes go to ~/.alaude/{name}.json with atomic tmp+rename in the main
+  // writes go to ~/.labaik/{name}.json with atomic tmp+rename in the main
   // process, so they survive SIGTERM/crash windows that lose batched
   // LevelDB writes. Used by memory + profile stores. Sync on purpose:
   // small files, fast, and matches the existing call-site assumptions.
@@ -127,11 +130,22 @@ contextBridge.exposeInMainWorld('alaude', {
   folderSkillsList: () => ipcRenderer.invoke('folder-skills-list'),
   folderSkillsGet: (slug) => ipcRenderer.invoke('folder-skills-get', slug),
 
-  // Permission mode (v0.4.0 — Observe + Autopilot; Careful/Flow arrive later)
+  // Permission mode (v0.4.0; Careful/Flow approval dialog added v0.4.1)
   permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),
   permSetMode: (workspacePath, mode) => ipcRenderer.invoke('perm-set-mode', workspacePath, mode),
   permCycleMode: (workspacePath) => ipcRenderer.invoke('perm-cycle-mode', workspacePath),
   permGetState: () => ipcRenderer.invoke('perm-get-state'),
+
+  // Approval flow (v0.4.1) — main asks the user before a side-effecting tool
+  // runs when the mode (Careful/Flow) or a protected path/dangerous command
+  // requires it. onPermissionRequest fires with the request; permRespond
+  // sends back 'allow-once' | 'allow-always' | 'deny'.
+  onPermissionRequest: (callback) => {
+    const h = (_e, payload) => callback(payload)
+    ipcRenderer.on('permission-request', h)
+    return () => ipcRenderer.removeListener('permission-request', h)
+  },
+  permRespond: (approvalId, decision) => ipcRenderer.invoke('perm-respond', approvalId, decision),
 
   // Ollama local runtime
   ollamaAvailable: () => ipcRenderer.invoke('ollama-available'),

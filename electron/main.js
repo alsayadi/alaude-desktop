@@ -54,10 +54,13 @@ const paths = require('./paths')
 const { detectProvider, getBaseURL, PROVIDER_KEY_IDS } = require('./provider-registry')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
-// Stored in ~/.alaude/permissions.json so it survives reinstalls. This
-// release only exposes Observe + Autopilot to the UI; Careful/Flow arrive
-// in v0.4.1/0.4.2 once the approval dialog lands.
-const PERMISSIONS_FILE = path.join(os.homedir(), '.alaude', 'permissions.json')
+// Stored in ~/.labaik/permissions.json so it survives reinstalls. All four
+// modes (Observe/Careful/Flow/Autopilot) are live; Careful/Flow surface the
+// approval dialog via the worker→main→renderer gate (see handleApprovalRequest).
+const PERMISSIONS_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'permissions.json'),
+  [path.join(paths.LEGACY_ALAUDE_DIR, 'permissions.json')]
+)
 let permState = null  // { version, defaultMode, workspaces: { [path]: { mode, allow, deny } } }
 
 function loadPermissions() {
@@ -124,6 +127,7 @@ function classifyError(err) {
 
 let mainWindow = null
 let quickWindow = null
+let futureWindow = null
 let tray = null
 
 // ── Window ───────────────────────────────────────────────────────────────────
@@ -212,6 +216,77 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
+function createFutureWindow() {
+  if (futureWindow && !futureWindow.isDestroyed()) {
+    futureWindow.show()
+    futureWindow.focus()
+    return futureWindow
+  }
+
+  futureWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 620,
+    backgroundColor: '#050807',
+    title: 'Labaik Future Console',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: { x: 15, y: 15 },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      additionalArguments: [
+        `--alaude-version=${app.getVersion()}`,
+        `--alaude-homepage=${(() => { try { return require(path.join(__dirname, '..', 'package.json')).homepage || '' } catch { return '' } })()}`,
+      ],
+    },
+    icon: path.join(__dirname, '..', 'build', 'icons', 'icon.png'),
+  })
+
+  futureWindow.loadFile(path.join(__dirname, '..', 'renderer', 'future.html'))
+
+  if (process.env.ALAUDE_DEVTOOLS === '1') {
+    futureWindow.webContents.once('did-finish-load', () => {
+      futureWindow.webContents.openDevTools({ mode: 'detach' })
+    })
+  }
+
+  futureWindow.webContents.on('before-input-event', (_e, input) => {
+    const mac = process.platform === 'darwin'
+    const opensTools = input.type === 'keyDown' && input.key === 'i' &&
+      ((mac && input.meta && input.alt) || (!mac && input.control && input.shift))
+    if (opensTools) futureWindow.webContents.toggleDevTools()
+  })
+
+  futureWindow.webContents.on('console-message', (_e, level, message, line, source) => {
+    const lvl = ['log','warn','error'][level] || 'log'
+    if (lvl === 'error' || lvl === 'warn') {
+      try { process.stderr.write(`[future-renderer ${lvl}] ${message} (${source}:${line})\n`) } catch {}
+    }
+  })
+
+  futureWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('mailto:'))) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  futureWindow.webContents.on('will-navigate', (event, url) => {
+    const cur = futureWindow.webContents.getURL()
+    if (url !== cur) {
+      event.preventDefault()
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url)
+      }
+    }
+  })
+
+  futureWindow.on('closed', () => { futureWindow = null })
+  return futureWindow
+}
+
 // ── AI Chat backend ─────────────────────────────────────────────────────────
 
 /**
@@ -240,8 +315,8 @@ function getCredential(provider) {
   // first-save will copy them over to the new location.
   const credPaths = [
     paths.CREDENTIALS_FILE,
-    path.join(os.homedir(), '.claude', '.credentials.json'),
-    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
+    path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json'),
+    ...(paths.USING_CUSTOM_HOME ? [] : [path.join(os.homedir(), 'claude-local-src', '.credentials.json')]),
   ]
   for (const credPath of credPaths) {
     try {
@@ -400,7 +475,7 @@ function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
   // back to ~/.claude/.credentials.json until the user saves a key, at
   // which point the new file becomes authoritative.
   const credPath = paths.CREDENTIALS_FILE
-  const legacyCredPath = path.join(os.homedir(), '.claude', '.credentials.json')
+  const legacyCredPath = path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json')
 
   let data = {}
   try {
@@ -571,6 +646,14 @@ function getWorker() {
           })()
           continue
         }
+        // v0.4.1: approval request. The worker wants to run a side-effecting
+        // tool; main resolves the permission gate (it owns the rules) and,
+        // if the verdict is 'prompt', asks the user via the renderer dialog.
+        if (resp.type === 'approval') {
+          const pendingForApproval = pendingRequests.get(resp.chatId)
+          handleApprovalRequest(resp, pendingForApproval)
+          continue
+        }
         // v0.5.5: Browser Agent tool request from the worker. We run the
         // actual Electron BrowserWindow API here in main (the worker can't
         // touch BrowserWindow) and write the result back to its stdin.
@@ -737,6 +820,10 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     const armIdle = () => {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => {
+        // Don't kill a request that's parked on a human approval dialog —
+        // re-arm and keep waiting (the 10-min worker-side cap + ABS_MS
+        // ceiling still bound the wait).
+        if (pendingRequests.get(id)?.awaitingApproval) { armIdle(); return }
         if (pendingRequests.has(id)) {
           pendingRequests.delete(id)
           clearTimeout(absTimer)
@@ -984,6 +1071,118 @@ ipcMain.handle('perm-get-state', () => {
   return permState
 })
 
+// ── Approval flow (v0.4.1) ──────────────────────────────────────────────────
+// The worker asks (via stdout) before running side-effecting tools. We resolve
+// the gate with the full rule set; an instant allow/deny replies immediately,
+// a 'prompt' verdict shows the renderer dialog and waits for the user.
+const pendingApprovals = new Map() // approvalId -> { workerId, workspacePath, tool, args, floor }
+
+function summarizeToolArgs(tool, args) {
+  const a = args || {}
+  if (tool === 'run_command' || tool === 'start_dev_server') return String(a.command || '').slice(0, 200)
+  if (tool === 'open_in_browser') return String(a.url || '').slice(0, 200)
+  if (tool === 'write_file' || tool === 'read_file') return String(a.path || '').slice(0, 200)
+  if (tool === 'list_directory') return String(a.path || '.').slice(0, 200)
+  return ''
+}
+
+function replyApprovalToWorker(workerId, verdict, message) {
+  try { apiWorker?.stdin.write(JSON.stringify({ type: 'approval-response', id: workerId, verdict, message }) + '\n') } catch {}
+}
+
+function handleApprovalRequest(resp, pendingChat) {
+  const workspacePath = resp.workspacePath || null
+  const mode = getCurrentMode(workspacePath)
+  if (!permState) permState = loadPermissions()
+  let gate
+  try {
+    gate = permissions.resolveGate({
+      tool: resp.tool,
+      args: resp.args || {},
+      mode,
+      workspaceRoot: workspacePath,
+      home: os.homedir(),
+      rules: permState,
+    })
+  } catch (err) {
+    console.warn('[approval] gate error, denying:', err.message)
+    return replyApprovalToWorker(resp.id, 'deny', 'Permission check failed.')
+  }
+
+  if (gate.verdict === 'allow') return replyApprovalToWorker(resp.id, 'allow')
+  if (gate.verdict === 'deny') return replyApprovalToWorker(resp.id, 'deny', gate.message || 'Blocked by permission policy.')
+
+  // verdict === 'prompt' — surface the dialog and wait for the user.
+  const target = (pendingChat?.sender && !pendingChat.sender.isDestroyed())
+    ? pendingChat.sender
+    : (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null)
+  if (!target) return replyApprovalToWorker(resp.id, 'deny', 'No window available to confirm the action.')
+
+  const approvalId = 'pa_' + (++requestId) + '_' + Date.now().toString(36)
+  pendingApprovals.set(approvalId, {
+    workerId: resp.id,
+    workspacePath,
+    tool: resp.tool,
+    args: resp.args || {},
+    floor: !!gate.floor,
+  })
+  // Keep the chat request alive while the user decides — otherwise the idle
+  // timer would reject it mid-dialog. Cleared on response (see perm-respond).
+  if (pendingChat) { pendingChat.awaitingApproval = true; pendingChat.onActivity?.() }
+
+  try {
+    target.send('permission-request', {
+      approvalId,
+      tool: resp.tool,
+      summary: resp.summary || summarizeToolArgs(resp.tool, resp.args),
+      reason: gate.reason || null,
+      why: gate.detail?.why || null,
+      floor: !!gate.floor, // protected paths / dangerous commands: no "always"
+      mode,
+    })
+  } catch (err) {
+    pendingApprovals.delete(approvalId)
+    if (pendingChat) pendingChat.awaitingApproval = false
+    replyApprovalToWorker(resp.id, 'deny', 'Could not show the approval dialog.')
+  }
+}
+
+function addAllowRule(workspacePath, tool, args) {
+  if (!workspacePath) return
+  if (!permState) permState = loadPermissions()
+  if (!permState.workspaces[workspacePath]) permState.workspaces[workspacePath] = {}
+  const ws = permState.workspaces[workspacePath]
+  if (!Array.isArray(ws.allow)) ws.allow = []
+  const esc = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let pattern
+  if (tool === 'run_command' || tool === 'start_dev_server') pattern = '^' + esc(args?.command) + '$'
+  else if (tool === 'open_in_browser') pattern = '^' + esc(args?.url) + '$'
+  else pattern = '^' + esc(args?.path) + '$'
+  if (!ws.allow.some(r => r.tool === tool && r.pattern === pattern)) {
+    ws.allow.push({ tool, pattern })
+    savePermissions(permState)
+  }
+}
+
+ipcMain.handle('perm-respond', (_e, approvalId, decision) => {
+  const pend = pendingApprovals.get(approvalId)
+  if (!pend) return false
+  pendingApprovals.delete(approvalId)
+  // Re-arm the chat's idle timer now that the human has answered.
+  const pendingChat = pendingRequests.get(pend.workerId)
+  if (pendingChat) { pendingChat.awaitingApproval = false; pendingChat.onActivity?.() }
+
+  if (decision === 'deny') {
+    replyApprovalToWorker(pend.workerId, 'deny', 'You denied this action.')
+    return true
+  }
+  if (decision === 'allow-always' && !pend.floor) {
+    addAllowRule(pend.workspacePath, pend.tool, pend.args)
+  }
+  replyApprovalToWorker(pend.workerId, 'allow')
+  return true
+})
+
 // ── IPC: Cron Skills (v0.5.4) ─────────────────────────────────────────────
 // Scheduled background chats. Read/write/list/toggle skills; the actual
 // firing happens inside the scheduler started at app-ready, which pipes
@@ -1008,7 +1207,7 @@ ipcMain.handle('folder-skills-get', (_e, slug) => folderSkills.get(slug))
 // Renderer-side stores (memory, profile, eventually sessions) used to live
 // in Chromium localStorage, which batches writes to LevelDB asynchronously
 // and can lose the most recent writes on SIGTERM/crash. These sync channels
-// write through to `~/.alaude/{name}.json` with an atomic tmp+rename so
+// write through to `~/.labaik/{name}.json` with an atomic tmp+rename so
 // data is durable by the time setItem returns. Small files, <5ms each —
 // the sync block is a fair price for not losing users' memories.
 ipcMain.on('fs-json-read-sync', (e, name) => {
@@ -1608,6 +1807,41 @@ ipcMain.handle('workspace-list', async (_, folderPath) => {
   }
 })
 
+// v0.4.4 — recursive workspace file index for @-mention autocomplete in the
+// composer. Returns workspace-relative file paths (files only, no dirs),
+// honoring WORKSPACE_IGNORE and a hard cap so a giant repo can't hang the
+// walk or flood IPC. Capped at ~4000 files / 8 dir levels — plenty for
+// fuzzy-matching, bounded enough to stay snappy.
+ipcMain.handle('workspace-files', async (_, folderPath) => {
+  const fs = require('fs')
+  const p = require('path')
+  if (!folderPath) return { error: 'no-folder' }
+  const MAX_FILES = 4000
+  const MAX_DEPTH = 8
+  const out = []
+  let truncated = false
+  const walk = (dir, depth) => {
+    if (truncated || depth > MAX_DEPTH) return
+    let entries
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (out.length >= MAX_FILES) { truncated = true; return }
+      if (e.name.startsWith('.') && e.name !== '.env.example') continue
+      if (WORKSPACE_IGNORE.has(e.name)) continue
+      const full = p.join(dir, e.name)
+      if (e.isDirectory()) walk(full, depth + 1)
+      else if (e.isFile()) out.push(p.relative(folderPath, full))
+    }
+  }
+  try {
+    walk(folderPath, 0)
+    out.sort((a, b) => a.localeCompare(b))
+    return { files: out, truncated }
+  } catch (err) {
+    return { error: err.message || 'walk-failed' }
+  }
+})
+
 ipcMain.handle('open-external', async (_, url) => {
   shell.openExternal(url)
 })
@@ -1698,6 +1932,7 @@ function createTray() {
         if (!mainWindow || mainWindow.isDestroyed()) createWindow()
         else mainWindow.show()
       }},
+      { label: 'Open Future Console', click: () => createFutureWindow() },
       { type: 'separator' },
       { label: 'Quit Labaik', click: () => app.quit() },
     ])
@@ -1711,6 +1946,10 @@ ipcMain.handle('quick-open-main', () => {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   else { mainWindow.show(); mainWindow.focus() }
   if (quickWindow) quickWindow.hide()
+})
+ipcMain.handle('open-future-console', () => {
+  createFutureWindow()
+  return true
 })
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
@@ -1735,6 +1974,7 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'New Session', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('new-session') },
+        { label: 'Future Console', accelerator: 'CmdOrCtrl+Shift+F', click: () => createFutureWindow() },
         { type: 'separator' },
         { role: 'close' },
       ],

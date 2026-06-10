@@ -70,10 +70,17 @@ function checkCommandScope(command, workspacePath) {
 // error promptly instead of waiting 30s for the parent-process's `exit`
 // handler to notice a dead worker.
 let _inFlightRequest = null  // { id, rejectOnCrash } — set when handleChat starts
+function formatErrorForUser(err) {
+  const base = err?.message || String(err)
+  const cause = err?.cause?.message || err?.cause?.code || err?.error?.message
+  if (cause && !base.includes(cause)) return `${base} (${cause})`
+  if (err?.status && !base.includes(String(err.status))) return `${base} (HTTP ${err.status})`
+  return base
+}
 process.on('uncaughtException', (err) => {
   try { process.stderr.write(`[worker] uncaughtException (recovered): ${err?.stack || err}\n`) } catch {}
   if (_inFlightRequest?.id != null) {
-    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: formatErrorForUser(err) }) + '\n') } catch {}
     _inFlightRequest = null
   }
   // Do NOT exit — the loop can accept new work.
@@ -81,7 +88,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   try { process.stderr.write(`[worker] unhandledRejection: ${err?.stack || err}\n`) } catch {}
   if (_inFlightRequest?.id != null) {
-    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: formatErrorForUser(err) }) + '\n') } catch {}
     _inFlightRequest = null
   }
 })
@@ -97,34 +104,48 @@ dns.lookup = function patchedLookup(hostname, options, callback) {
   if (typeof options === 'function') { callback = options; options = {} }
   if (typeof options === 'number') { options = { family: options } }
 
-  // Try system DNS first (preserves VPN routing)
-  const timeout = setTimeout(() => {
-    process.stderr.write(`[dns] system DNS timed out for ${hostname}, trying public DNS\n`)
+  let settled = false
+  let fallbackTried = false
+  const done = (...args) => {
+    if (settled) return
+    settled = true
+    clearTimeout(fallbackTimer)
+    clearTimeout(finalTimer)
+    callback(...args)
+  }
+  const usePublicDns = (reason, allowFailure) => {
+    if (fallbackTried || settled) return
+    fallbackTried = true
+    process.stderr.write(`[dns] ${reason}, trying public DNS\n`)
     publicResolver.resolve4(hostname, (err2, addresses) => {
+      if (settled) return
       if (!err2 && addresses?.length) {
         process.stderr.write(`[dns] public DNS resolved ${hostname} -> ${addresses[0]}\n`)
-        if (options.all) return callback(null, addresses.map(a => ({ address: a, family: 4 })))
-        return callback(null, addresses[0], 4)
+        if (options.all) return done(null, addresses.map(a => ({ address: a, family: 4 })))
+        return done(null, addresses[0], 4)
       }
-      callback(err2 || new Error(`DNS resolution failed for ${hostname}`))
+      process.stderr.write(`[dns] public DNS failed for ${hostname}: ${(err2 && err2.message) || 'no addresses'}\n`)
+      if (allowFailure) done(err2 || new Error(`DNS resolution failed for ${hostname}`))
     })
+  }
+
+  // Try system DNS first (preserves VPN routing). If it is merely slow, public
+  // DNS can win early, but public failure no longer kills the still-pending
+  // system lookup.
+  const fallbackTimer = setTimeout(() => {
+    usePublicDns(`system DNS timed out for ${hostname}`, false)
   }, 3000)
+  const finalTimer = setTimeout(() => {
+    done(new Error(`DNS resolution timed out for ${hostname}`))
+  }, 20000)
 
   _origLookup.call(dns, hostname, options, (err, ...args) => {
-    clearTimeout(timeout)
     if (!err) {
       process.stderr.write(`[dns] system DNS resolved ${hostname}\n`)
-      return callback(null, ...args)
+      return done(null, ...args)
     }
-    process.stderr.write(`[dns] system DNS failed for ${hostname}: ${err.message}, trying public DNS\n`)
-    publicResolver.resolve4(hostname, (err2, addresses) => {
-      if (!err2 && addresses?.length) {
-        process.stderr.write(`[dns] public DNS resolved ${hostname} -> ${addresses[0]}\n`)
-        if (options.all) return callback(null, addresses.map(a => ({ address: a, family: 4 })))
-        return callback(null, addresses[0], 4)
-      }
-      callback(err2 || err)
-    })
+    process.stderr.write(`[dns] system DNS failed for ${hostname}: ${err.message}\n`)
+    usePublicDns(`system DNS failed for ${hostname}: ${err.message}`, true)
   })
 }
 
@@ -271,6 +292,91 @@ function loadProjectInstructions(workspacePath) {
   return null
 }
 
+// v0.4.2 — git awareness. When the workspace is a git repo, inject a compact
+// snapshot (branch, short status, recent commits) so the model knows what
+// it's working on without having to spend tool calls on `git status` /
+// `git log`. Mirrors the gitStatus block Claude Code seeds. Read fresh each
+// turn — cheap (single-digit ms) and always current. Fails silently for
+// non-repos or if git isn't installed.
+function loadGitContext(workspacePath) {
+  if (!workspacePath) return null
+  const { execSync } = require('child_process')
+  const run = (cmd) => {
+    try {
+      return execSync(cmd, { cwd: workspacePath, timeout: 2000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch { return null }
+  }
+  const inside = run('git rev-parse --is-inside-work-tree')
+  if (inside !== 'true') return null
+  const branch = run('git rev-parse --abbrev-ref HEAD') || 'detached'
+  // Porcelain status, capped so a huge uncommitted tree doesn't flood context.
+  let status = run('git status --porcelain') || ''
+  const statusLines = status ? status.split('\n') : []
+  const STATUS_CAP = 30
+  let statusBlock = statusLines.slice(0, STATUS_CAP).join('\n')
+  if (statusLines.length > STATUS_CAP) statusBlock += `\n… and ${statusLines.length - STATUS_CAP} more changed file(s)`
+  if (!statusBlock) statusBlock = '(clean)'
+  const log = run('git log --oneline -5') || '(no commits yet)'
+  return { branch, statusBlock, log, dirty: statusLines.length > 0 }
+}
+
+// v0.4.4 — @-mention expansion. The composer lets the user type "@path/to/file"
+// to reference a workspace file (see updateAtMenu in the renderer). Here we
+// resolve those tokens in the latest user turn and inline the file contents so
+// the model sees them without spending a read_file tool call — Claude Code's
+// @-mention behavior. Path-escape guarded: a mention that resolves outside the
+// workspace, or to a missing/binary/huge file, is left as plain text.
+const MENTION_MAX_BYTES = 24 * 1024
+const MENTION_MAX_FILES = 10
+function expandFileMentions(messages, workspacePath) {
+  if (!workspacePath || !Array.isArray(messages)) return
+  // Operate on the latest user turn only.
+  let idx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'user') { idx = i; break }
+  }
+  if (idx === -1) return
+  const msg = messages[idx]
+  const text = typeof msg.content === 'string'
+    ? msg.content
+    : Array.isArray(msg.content)
+      ? msg.content.filter(p => p?.type === 'text').map(p => p.text || '').join('\n')
+      : ''
+  if (!text || text.indexOf('@') === -1) return
+  const root = path.resolve(workspacePath)
+  const seen = new Set()
+  const blocks = []
+  const re = /(^|\s)@([^\s@]+)/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    if (blocks.length >= MENTION_MAX_FILES) break
+    // Trim trailing punctuation that's likely sentence grammar, not the path.
+    let rel = m[2].replace(/[.,;:)\]]+$/, '')
+    if (!rel || seen.has(rel)) continue
+    seen.add(rel)
+    const fp = path.resolve(root, rel)
+    if (fp !== root && !fp.startsWith(root + path.sep)) continue   // escapes workspace
+    try {
+      const st = fs.statSync(fp)
+      if (!st.isFile()) continue
+      let body = fs.readFileSync(fp, 'utf8')
+      if (body.includes("\u0000")) continue  // null byte -> binary
+      const overBytes = Buffer.byteLength(body, 'utf8') > MENTION_MAX_BYTES
+      if (overBytes) body = body.slice(0, MENTION_MAX_BYTES) + `\n… [truncated — @${rel} is larger than ${MENTION_MAX_BYTES / 1024}KB]`
+      const ext = (rel.split('.').pop() || '').toLowerCase()
+      blocks.push(`### @${rel}\n\n\`\`\`${ext}\n${body}\n\`\`\``)
+    } catch { /* missing / unreadable — leave token as plain text */ }
+  }
+  if (!blocks.length) return
+  const attachment = `\n\n---\nReferenced files (auto-attached from @ mentions):\n\n${blocks.join('\n\n')}`
+  if (typeof msg.content === 'string') {
+    msg.content = msg.content + attachment
+  } else if (Array.isArray(msg.content)) {
+    msg.content = [...msg.content, { type: 'text', text: attachment }]
+  }
+  try { console.error(`[worker] Expanded ${blocks.length} @-mention(s) into context`) } catch {}
+}
+
 function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
   let sys = 'You are Labaik, a helpful AI assistant.'
   // v0.7.42 — ambiguity nudge. Without this, a one-word prompt like "test"
@@ -290,6 +396,8 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
     // installed by default. The model often reaches for `python` which
     // fails with ENOENT. Tell it up front.
     sys += ` When running Python, use \`python3\` (not \`python\`) — plain \`python\` is not installed on modern macOS.`
+    // v0.4.4 — tell the model that @-mentioned files are pre-attached.
+    sys += ` If the user references a file with @path (e.g. "@src/app.js"), its contents are auto-attached below under "Referenced files" — read from there instead of re-reading with a tool.`
   }
   // Local models: stay quiet unless the user clearly wants a rich block. Small
   // open-weight models process every token slowly, and they often ignore the
@@ -314,6 +422,41 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
     if (proj) {
       sys += `\n\n## Project instructions (from ${proj.name})\n\n${proj.text}`
       try { console.error(`[worker] Injected ${proj.name} (${proj.bytes} bytes) from ${workspacePath}`) } catch {}
+    }
+    // v0.4.2 — git snapshot so the model has repo context for free.
+    const git = loadGitContext(workspacePath)
+    if (git) {
+      sys += `\n\n## Git status\n\nBranch: ${git.branch}\n\nStatus${git.dirty ? '' : ' (clean)'}:\n${git.statusBlock}\n\nRecent commits:\n${git.log}\n\nUse this for context (don't re-run git status/log unless you need fresher data). Never commit, push, or change git history unless the user explicitly asks.`
+      try { console.error(`[worker] Injected git context (branch ${git.branch}, ${git.dirty ? 'dirty' : 'clean'})`) } catch {}
+    }
+    // v0.4.3 — live task list. For multi-step work, the model maintains a
+    // checklist the user can watch progress against. Skip for local models
+    // (extra tokens hurt small-model latency/quality).
+    if (provider !== 'ollama') {
+      sys += `
+
+## Task checklist (multi-step work)
+
+When a request needs 3+ distinct steps, maintain a live checklist so the
+user can see progress. Emit a fenced \`\`\`todos\`\`\` JSON block:
+
+\`\`\`todos
+{"items":[
+  {"title":"Short task description","status":"done"},
+  {"title":"The step you're on now","status":"in_progress"},
+  {"title":"A step not started yet","status":"todo"}
+]}
+\`\`\`
+
+Rules:
+- status is one of: "todo", "in_progress", "done".
+- Keep exactly ONE item "in_progress" at a time.
+- RE-EMIT the FULL updated list each time you report progress (after
+  finishing steps / between tool batches), flipping statuses as you go —
+  the UI shows the latest block as a live progress card.
+- Titles are short (3-8 words), user-facing, no file paths.
+- Skip the checklist for simple 1-2 step requests — it's only worth the
+  noise on genuinely multi-step tasks.`
     }
   }
   // v0.7.67 — Browser/web tools restraint. The browser_* tools are tempting
@@ -490,6 +633,29 @@ const TOOLS = [
   { type: 'function', function: { name: 'run_command', description: 'Run shell command in workspace', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } },
   { type: 'function', function: { name: 'open_in_browser', description: 'Open a URL or local file in the default browser (Chrome). Use for previewing HTML files, opening localhost dev servers, etc.', parameters: { type: 'object', properties: { url: { type: 'string', description: 'URL or file path to open (e.g. "http://localhost:3000" or "index.html")' } }, required: ['url'] } } },
   { type: 'function', function: { name: 'start_dev_server', description: 'Start a dev server in the background (npm run dev, python -m http.server, etc). Returns the process ID. The server keeps running.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'Command to start the server (e.g. "npm run dev")' }, port: { type: 'number', description: 'Expected port number (e.g. 3000)' } }, required: ['command'] } } },
+]
+
+// ── Sub-agents (v0.4.5) ────────────────────────────────────────────────────
+// A "spawn_subagent" tool that runs a focused, self-contained task in a NESTED
+// chat loop (same provider/model/workspace, fresh context, its own tool budget)
+// and returns a final report as the tool result — Claude Code's Task/sub-agent
+// pattern. Offered only at the top level (depth 0): a sub-agent never gets the
+// spawn tool itself, so recursion can't run away. Lets the parent agent fan a
+// big job into bounded pieces ("audit auth", "write the tests") without
+// drowning its own context in intermediate tool output.
+const SUBAGENT_TOOLS = [
+  { type: 'function', function: {
+    name: 'spawn_subagent',
+    description: 'Delegate a focused, self-contained sub-task to a fresh autonomous agent that has the same file/command tools scoped to this workspace. It works on its own (no user interaction) and returns a concise report. Use this to parallelize or isolate a chunk of a larger task (e.g. "investigate how routing works and summarize", "write unit tests for src/auth.js"). The sub-agent cannot spawn further sub-agents. Give it everything it needs in the prompt — it does NOT see this conversation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'A short 3-6 word label for the sub-task (shown to the user).' },
+        prompt: { type: 'string', description: 'The full, self-contained instruction for the sub-agent. Include all context, file paths, and what to return — it has no memory of this chat.' },
+      },
+      required: ['description', 'prompt'],
+    },
+  } },
 ]
 
 // ── Screen Control tools (v0.5.10) ────────────────────────────────────────
@@ -715,15 +881,28 @@ function formatHealthCard(toolName, args, result) {
 
 async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   const { execSync } = require('child_process')
-  // v0.4.0: Observe mode is read-only. The gate here lives alongside the
-  // existing containedPath guards so a wrong mode can't slip past. More
-  // granular gates (prompt / allow-list / rule resolution) arrive with the
-  // approval IPC in v0.4.1+.
+  // v0.4.0: Observe mode is read-only — a cheap inline backstop. The full
+  // gate (prompt / allow-list / rule resolution) runs in main via the
+  // approval bridge below (v0.4.1).
   const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server',
     'browser_navigate', 'browser_click', 'browser_fill',
     'screen_click', 'screen_type', 'screen_key', 'screen_move_mouse'])
   if (mode === 'observe' && WRITE_TOOLS.has(name)) {
     return { error: `Observe mode is read-only. Switch to Careful, Flow, or Autopilot (Shift+Tab) to enable ${name}.` }
+  }
+
+  // v0.4.1: approval gate. Side-effecting filesystem/command tools route
+  // through main, which owns the permission rules AND the window that can
+  // ask the user. Main runs permissions.resolveGate(); if the verdict is
+  // 'prompt' it shows the approval dialog and waits for the user. We only
+  // gate the write/exec/open tools here — reads stay on the fast path, and
+  // browser_/screen_/mcp_ tools have their own gating downstream.
+  const GATED_TOOLS = new Set(['write_file', 'run_command', 'start_dev_server', 'open_in_browser'])
+  if (GATED_TOOLS.has(name)) {
+    const gate = await requestApproval({ tool: name, args: args || {}, workspacePath, summary: summarizeArgs(name, args) })
+    if (gate && gate.verdict && gate.verdict !== 'allow') {
+      return { error: gate.message || `Blocked: "${name}" was not approved. Ask the user to allow it, or switch permission mode.` }
+    }
   }
 
   // v0.5.5: Browser Agent — tool runs in main via IPC. All browser_* tools
@@ -899,6 +1078,45 @@ function emitActivity(id, activity) {
   try { process.stdout.write(JSON.stringify({ id, activity }) + '\n') } catch {}
 }
 
+function shouldHeartbeatProviderWait(provider, model) {
+  return provider === 'deepseek' || /reasoner|thinking|^o[13]|^gpt-5.*think/i.test(model || '')
+}
+
+// Some reasoning providers accept a streaming request, then stay quiet before
+// the first SSE chunk. Tell main the worker is alive while the hard cap remains
+// responsible for truly wedged calls.
+async function withProviderWaitHeartbeat(provider, model, onActivity, fn) {
+  if (!shouldHeartbeatProviderWait(provider, model)) return await fn()
+
+  const ping = () => {
+    try { onActivity({ phase: 'provider_wait', provider, model }) } catch {}
+  }
+  ping()
+  const timer = setInterval(ping, 25 * 1000)
+  if (typeof timer.unref === 'function') timer.unref()
+
+  try {
+    return await fn()
+  } finally {
+    clearInterval(timer)
+  }
+}
+
+function buildChatCompletionParams({ provider, model, messages, stream, tools, suppressThinking }) {
+  const isDeepSeek = provider === 'deepseek'
+  const isDeepSeekV4 = isDeepSeek && /^deepseek-v4-/i.test(model || '')
+  const maxTokens = isDeepSeek ? 32768 : 4096
+  return {
+    model,
+    messages,
+    ...(isDeepSeek ? { max_tokens: maxTokens } : { max_completion_tokens: maxTokens }),
+    ...(stream ? { stream: true } : {}),
+    ...(tools ? { tools } : {}),
+    ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+    ...(isDeepSeekV4 ? { reasoning_effort: 'high', thinking: { type: 'enabled' } } : {}),
+  }
+}
+
 // v0.5.5/0.5.6: Bridges for tools that live in main (browser agent &
 // MCP servers). Worker writes a request line to stdout, main runs the
 // tool, writes response back to stdin. Each request has a unique id.
@@ -918,6 +1136,27 @@ function _bridge(map, type, extra = {}) {
         resolve({ error: `${type} timed out after 60s` })
       }
     }, 60000)
+  })
+}
+
+// v0.4.1: approval bridge. Unlike the other bridges this can block on a
+// HUMAN, so it gets its own long timeout (10 min, then auto-deny) and
+// carries the chat request id so main can keep that request alive while
+// the dialog is open instead of tripping the idle timer.
+const _pendingApprovals = new Map()
+function requestApproval(detail) {
+  const id = 'ap_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  const chatId = _inFlightRequest?.id ?? null
+  try { process.stdout.write(JSON.stringify({ type: 'approval', id, chatId, ...detail }) + '\n') } catch {}
+  return new Promise((resolve) => {
+    _pendingApprovals.set(id, resolve)
+    const t = setTimeout(() => {
+      if (_pendingApprovals.has(id)) {
+        _pendingApprovals.delete(id)
+        resolve({ verdict: 'deny', message: 'Approval timed out — no response after 10 minutes.' })
+      }
+    }, 10 * 60 * 1000)
+    if (typeof t.unref === 'function') t.unref()
   })
 }
 
@@ -962,6 +1201,7 @@ function summarizeArgs(name, args) {
   if (name === 'health_calculator') return String(args.calculator || '')
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
   if (name === 'score_phq9' || name === 'score_gad7') return name.toUpperCase()
+  if (name === 'spawn_subagent') return String(args.description || 'task').slice(0, 80)
   return ''
 }
 
@@ -1100,6 +1340,11 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     return ''
   })()
 
+  // v0.4.4 — inline any @-mentioned workspace files into the latest user turn
+  // so the model sees their contents (computed AFTER lastUserText so file
+  // bodies don't skew rich-intent detection).
+  try { expandFileMentions(messages, workspacePath) } catch (e) { try { console.error('[worker] mention expand failed:', e.message) } catch {} }
+
   let sysPrompt = buildSystemPrompt({
     provider,
     model,
@@ -1212,7 +1457,7 @@ async function runImageGen(args) {
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0 } = opts
   // v0.7.72: route image-gen activity events to this turn's onActivity.
   setImageActivity(onActivity)
   const OpenAI = require('openai').default || require('openai')
@@ -1259,6 +1504,9 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const offerImage = !skipTools && userWantsImageIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
+    // Sub-agents only at the top level + when a workspace is open. A spawned
+    // sub-agent (depth > 0) never sees this tool, so it can't recurse.
+    ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []),
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
@@ -1285,11 +1533,6 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     // assembled message matches the non-streaming shape.
     let msg = null
     try {
-      const stream = await client.chat.completions.create({
-        model, messages: chatMsgs, max_completion_tokens: 4096, stream: true,
-        ...(useTools ? { tools: useTools } : {}),
-        ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
-      })
       let iterContent = ''
       // v0.7.65: DeepSeek's thinking-mode responses stream a separate
       // `delta.reasoning_content` channel. We aggregate it here and
@@ -1302,32 +1545,42 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
       // only, so we overwrite on every non-null sighting.
       let lastFinishReason = null
       const partialTools = []
-      for await (const chunk of stream) {
-        const choice = chunk.choices?.[0]
-        if (choice?.finish_reason) lastFinishReason = choice.finish_reason
-        const delta = choice?.delta
-        if (!delta) continue
-        if (delta.reasoning_content) {
-          iterReasoning += delta.reasoning_content
-          // Surface the reasoning tokens to the renderer as a distinct
-          // activity phase — the UI can choose to hide them (default) or
-          // render a collapsible "thinking" panel.
-          onActivity({ phase: 'reasoning_token', text: delta.reasoning_content })
-        }
-        if (delta.content) {
-          iterContent += delta.content
-          onActivity({ phase: 'token', text: delta.content })
-        }
-        if (delta.tool_calls) {
-          for (const tcd of delta.tool_calls) {
-            const idx = tcd.index ?? 0
-            if (!partialTools[idx]) partialTools[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } }
-            if (tcd.id) partialTools[idx].id = tcd.id
-            if (tcd.function?.name) partialTools[idx].function.name += tcd.function.name
-            if (tcd.function?.arguments) partialTools[idx].function.arguments += tcd.function.arguments
+      await withProviderWaitHeartbeat(provider, model, onActivity, async () => {
+        const stream = await client.chat.completions.create(buildChatCompletionParams({
+          provider,
+          model,
+          messages: chatMsgs,
+          stream: true,
+          tools: useTools,
+          suppressThinking,
+        }))
+        for await (const chunk of stream) {
+          const choice = chunk.choices?.[0]
+          if (choice?.finish_reason) lastFinishReason = choice.finish_reason
+          const delta = choice?.delta
+          if (!delta) continue
+          if (delta.reasoning_content) {
+            iterReasoning += delta.reasoning_content
+            // Surface the reasoning tokens to the renderer as a distinct
+            // activity phase — the UI can choose to hide them (default) or
+            // render a collapsible "thinking" panel.
+            onActivity({ phase: 'reasoning_token', text: delta.reasoning_content })
+          }
+          if (delta.content) {
+            iterContent += delta.content
+            onActivity({ phase: 'token', text: delta.content })
+          }
+          if (delta.tool_calls) {
+            for (const tcd of delta.tool_calls) {
+              const idx = tcd.index ?? 0
+              if (!partialTools[idx]) partialTools[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } }
+              if (tcd.id) partialTools[idx].id = tcd.id
+              if (tcd.function?.name) partialTools[idx].function.name += tcd.function.name
+              if (tcd.function?.arguments) partialTools[idx].function.arguments += tcd.function.arguments
+            }
           }
         }
-      }
+      })
       // v0.7.67 streaming verification — post-stream sanity checks.
       // We do NOT throw on warnings; we surface them so the user understands
       // why a response looks short or empty, and we keep going.
@@ -1375,11 +1628,13 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     } catch (streamErr) {
       // Streaming not supported or failed — fall back to non-streaming on this iteration only
       process.stderr.write(`[worker] streaming failed (${streamErr.message}) — falling back to non-streaming\n`)
-      const res = await client.chat.completions.create({
-        model, messages: chatMsgs, max_completion_tokens: 4096,
-        ...(useTools ? { tools: useTools } : {}),
-        ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
-      })
+      const res = await withProviderWaitHeartbeat(provider, model, onActivity, () => client.chat.completions.create(buildChatCompletionParams({
+        provider,
+        model,
+        messages: chatMsgs,
+        tools: useTools,
+        suppressThinking,
+      })))
       msg = res.choices?.[0]?.message
     }
 
@@ -1400,7 +1655,14 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
           continue
         }
         onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
-        const result = await executeToolCall(tc.function.name, args, workspacePath, mode)
+        // v0.4.5 — sub-agent delegation runs a nested chatOpenAI loop instead
+        // of going through executeToolCall (it needs provider/model/depth).
+        let result
+        if (tc.function.name === 'spawn_subagent') {
+          result = await runSubAgent(args, { model, provider, workspacePath, mode, depth, onActivity })
+        } else {
+          result = await executeToolCall(tc.function.name, args, workspacePath, mode)
+        }
         onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
         // Emit a structured file_edit event with old/new content so the renderer
         // can show a live colored diff inline in the chat bubble.
@@ -1422,6 +1684,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         else if (tc.function.name === 'run_command') { toolLog += `\n⚡ Ran \`${args.command}\``; if (result.output) toolLog += `\n\`\`\`\n${result.output.slice(0, 500)}\n\`\`\`` }
         else if (tc.function.name === 'open_in_browser') { toolLog += `\n🌐 Opened \`${args.url}\`` }
         else if (tc.function.name === 'start_dev_server') { toolLog += `\n🚀 Started server: \`${args.command}\` (PID ${result.pid || '?'})` }
+        else if (tc.function.name === 'spawn_subagent') { toolLog += `\n🤖 Sub-agent: ${args.description || 'task'}` }
         chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
       }
       continue
@@ -1438,6 +1701,46 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     return responseText + '\n\n' + formatRedFlagAlert(triageResult)
   }
   return responseText
+}
+
+// v0.4.5 — run a delegated sub-task in a nested chatOpenAI loop and return a
+// report object the parent agent gets as the spawn_subagent tool result.
+//   - depth+1 so the sub-agent never gets the spawn tool (no runaway recursion).
+//   - same provider/model/workspace/mode → approvals & scope guards still apply.
+//   - fresh message array + a sub-agent system role; it does NOT see the parent
+//     conversation (the parent must put everything in `prompt`).
+//   - sub-agent token/reasoning streams are NOT forwarded to the renderer (they
+//     would interleave into the parent's bubble); tool_start/tool_end/file_edit
+//     ARE forwarded (tagged subagent:true) so progress chips still show.
+async function runSubAgent(args, ctx) {
+  const { model, provider, workspacePath, mode, depth = 0, onActivity = () => {} } = ctx || {}
+  const description = String(args?.description || 'sub-task').slice(0, 120)
+  const prompt = String(args?.prompt || '').trim()
+  if (!prompt) return { error: 'spawn_subagent requires a non-empty prompt.' }
+  if (depth >= 1) return { error: 'Sub-agents cannot spawn further sub-agents.' }
+
+  let sysPrompt = buildSystemPrompt({ provider, model, workspacePath, spacePrompt: '', userText: prompt })
+  sysPrompt += `\n\n## You are a sub-agent\n\nYou were delegated a focused, self-contained task by another agent. Work autonomously — you cannot ask the user questions and you do not see the parent conversation. Use your tools to complete the task fully, then end with a concise report of what you did, what you found, and any file paths or results the parent agent needs. Be thorough but do not pad the report.`
+
+  const subActivity = (a) => {
+    if (!a || a.phase === 'token' || a.phase === 'reasoning_token') return
+    try { onActivity({ ...a, subagent: true, subagentLabel: description }) } catch {}
+  }
+
+  process.stderr.write(`[worker] spawning sub-agent "${description}" (depth ${depth + 1}, provider ${provider})\n`)
+  const subMsgs = [{ role: 'user', content: prompt }]
+  const subOpts = { onActivity: subActivity, mode, depth: depth + 1 }
+  try {
+    // Run the sub-agent on the parent's provider so it inherits the same model
+    // behavior + credentials. Both paths honor `depth` to withhold the spawn
+    // tool from the child.
+    const text = provider === 'anthropic'
+      ? await chatAnthropic(subMsgs, model, workspacePath, sysPrompt, subOpts)
+      : await chatOpenAI(subMsgs, model, provider, workspacePath, sysPrompt, subOpts)
+    return { success: true, description, report: String(text || '').slice(0, 20000) }
+  } catch (e) {
+    return { error: `Sub-agent "${description}" failed: ${e.message || String(e)}` }
+  }
 }
 
 /**
@@ -1604,7 +1907,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {}, mode = 'autopilot', planMode = false } = opts
+  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0 } = opts
   setImageActivity(onActivity)
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
@@ -1627,7 +1930,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   // OpenAI/Ollama paths). Plan mode already strips everything anyway.
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
   const offerImage = !planMode && userWantsImageIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -1695,7 +1998,13 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
       const results = []
       for (const tu of tuBlocks) {
         onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
-        const result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
+        // v0.4.5 — sub-agent delegation runs a nested loop (see runSubAgent).
+        let result
+        if (tu.name === 'spawn_subagent') {
+          result = await runSubAgent(tu.input, { model, provider: 'anthropic', workspacePath, mode, depth, onActivity })
+        } else {
+          result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
+        }
         onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
         if (tu.name === 'write_file' && result?.success) {
           onActivity({
@@ -1714,6 +2023,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
         else if (tu.name === 'run_command') { toolLog += `\n⚡ Ran \`${tu.input.command}\``; if (result.output) toolLog += `\n\`\`\`\n${result.output.slice(0, 500)}\n\`\`\`` }
         else if (tu.name === 'open_in_browser') { toolLog += `\n🌐 Opened \`${tu.input.url}\`` }
         else if (tu.name === 'start_dev_server') { toolLog += `\n🚀 Started server: \`${tu.input.command}\` (PID ${result.pid || '?'})` }
+        else if (tu.name === 'spawn_subagent') { toolLog += `\n🤖 Sub-agent: ${tu.input.description || 'task'}` }
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) })
       }
       chatMsgs.push({ role: 'user', content: results })
@@ -1772,6 +2082,13 @@ process.stdin.on('data', (chunk) => {
         if (resolver) { _pendingMcpLists.delete(req.id); resolver({ tools: req.tools }) }
         continue
       }
+      // v0.4.1: approval verdict coming back from main (after the dialog or
+      // an instant allow/deny from resolveGate).
+      if (req.type === 'approval-response') {
+        const resolver = _pendingApprovals.get(req.id)
+        if (resolver) { _pendingApprovals.delete(req.id); resolver({ verdict: req.verdict, message: req.message }) }
+        continue
+      }
       _inFlightRequest = { id: req.id }
       handleChat(req)
         .then(result => {
@@ -1780,7 +2097,7 @@ process.stdin.on('data', (chunk) => {
         })
         .catch(err => {
           _inFlightRequest = null
-          process.stdout.write(JSON.stringify({ id: req.id, error: err.message || String(err) }) + '\n')
+          process.stdout.write(JSON.stringify({ id: req.id, error: formatErrorForUser(err) }) + '\n')
         })
     } catch (err) {
       process.stdout.write(JSON.stringify({ error: 'Invalid JSON: ' + err.message }) + '\n')

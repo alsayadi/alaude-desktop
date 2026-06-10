@@ -1,0 +1,1921 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Labaik Future Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050807;
+      --panel: rgba(8, 18, 16, 0.82);
+      --panel-strong: rgba(13, 28, 25, 0.95);
+      --ink: #effff8;
+      --muted: #8aa89f;
+      --faint: rgba(239, 255, 248, 0.46);
+      --line: rgba(106, 255, 205, 0.18);
+      --line-strong: rgba(54, 248, 168, 0.48);
+      --green: #36f8a8;
+      --blue: #55d8ff;
+      --violet: #b78cff;
+      --amber: #ffc857;
+      --rose: #ff5d8f;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        repeating-linear-gradient(90deg, rgba(85, 216, 255, 0.06) 0 1px, transparent 1px 54px),
+        repeating-linear-gradient(0deg, rgba(54, 248, 168, 0.05) 0 1px, transparent 1px 54px),
+        linear-gradient(135deg, #050807 0%, #071410 48%, #130f21 100%);
+      color: var(--ink);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, transparent 0%, rgba(85, 216, 255, 0.045) 48%, transparent 52%),
+        repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.032) 0 1px, transparent 1px 4px);
+      opacity: 0.55;
+      z-index: 0;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(105deg, transparent 0%, transparent 40%, rgba(54, 248, 168, 0.08) 48%, transparent 56%, transparent 100%);
+      transform: translateX(-44%);
+      animation: scan 7s linear infinite;
+      z-index: 0;
+    }
+
+    @keyframes scan { to { transform: translateX(44%); } }
+
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr) 360px;
+      overflow: hidden;
+    }
+
+    .rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 12px;
+      border-right: 1px solid var(--line);
+      background: rgba(3, 9, 8, 0.88);
+      box-shadow: inset -1px 0 rgba(85, 216, 255, 0.08);
+      -webkit-app-region: drag;
+    }
+
+    .mark {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(54, 248, 168, 0.55);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.22), rgba(85, 216, 255, 0.16)),
+        #07110f;
+      color: var(--green);
+      font-weight: 800;
+      text-shadow: 0 0 16px rgba(54, 248, 168, 0.75);
+      box-shadow: inset 0 0 20px rgba(54, 248, 168, 0.16), 0 0 28px rgba(54, 248, 168, 0.18);
+    }
+
+    .rail-group {
+      display: grid;
+      gap: 8px;
+      -webkit-app-region: no-drag;
+    }
+
+    .icon-button {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      color: rgba(239, 255, 248, 0.55);
+    }
+
+    .icon-button:hover,
+    .icon-button.is-active {
+      border-color: rgba(85, 216, 255, 0.38);
+      background: rgba(85, 216, 255, 0.08);
+      color: var(--blue);
+      box-shadow: inset 0 0 20px rgba(85, 216, 255, 0.08);
+    }
+
+    .icon-button svg,
+    .primary-button svg,
+    .ghost-button svg,
+    .send-button svg {
+      width: 19px;
+      height: 19px;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .rail-spacer { flex: 1; }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 14px;
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+      -webkit-app-region: drag;
+    }
+
+    .title-block { min-width: 0; }
+    .title-block p, .title-block h1 { margin: 0; }
+    .title-block p {
+      color: var(--blue);
+      font-size: 13px;
+    }
+    .title-block h1 {
+      margin-top: 4px;
+      font-size: 24px;
+      line-height: 1.15;
+      font-weight: 780;
+      text-shadow: 0 0 24px rgba(85, 216, 255, 0.16);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      -webkit-app-region: no-drag;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 1px solid rgba(54, 248, 168, 0.28);
+      border-radius: 999px;
+      background: rgba(54, 248, 168, 0.08);
+      color: #caffeb;
+      font-size: 13px;
+      white-space: nowrap;
+      box-shadow: inset 0 0 24px rgba(54, 248, 168, 0.08);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(54, 248, 168, 0.12), 0 0 18px rgba(54, 248, 168, 0.78);
+      animation: statusPulse 1.7s ease-in-out infinite;
+    }
+    @keyframes statusPulse { 50% { transform: scale(1.2); } }
+
+    .primary-button,
+    .ghost-button,
+    .send-button {
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: var(--radius);
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+
+    .primary-button,
+    .send-button {
+      border: 1px solid rgba(54, 248, 168, 0.42);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.24), rgba(85, 216, 255, 0.16)),
+        #06100e;
+      color: var(--ink);
+      box-shadow: inset 0 0 18px rgba(54, 248, 168, 0.15), 0 0 28px rgba(54, 248, 168, 0.16);
+    }
+
+    .ghost-button {
+      border: 1px solid rgba(85, 216, 255, 0.24);
+      background: rgba(85, 216, 255, 0.08);
+      color: #d9f7ff;
+    }
+
+    .board {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 304px minmax(0, 1fr);
+      gap: 14px;
+      overflow: hidden;
+    }
+
+    .surface,
+    .agent-card,
+    .artifact-list,
+    .trace-panel,
+    .timeline,
+    .composer {
+      position: relative;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 42%),
+        var(--panel);
+      backdrop-filter: blur(22px);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.05), var(--shadow);
+      overflow: hidden;
+    }
+
+    .surface::before,
+    .agent-card::before,
+    .artifact-list::before,
+    .trace-panel::before,
+    .timeline::before,
+    .composer::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 1px;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(54, 248, 168, 0.8), rgba(85, 216, 255, 0.5), transparent);
+      opacity: 0.65;
+    }
+
+    .left-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+    }
+
+    .panel-header {
+      padding: 16px;
+      border-bottom: 1px solid rgba(106, 255, 205, 0.13);
+      background:
+        linear-gradient(90deg, rgba(54, 248, 168, 0.08), rgba(85, 216, 255, 0.05), transparent),
+        rgba(9, 20, 18, 0.88);
+    }
+
+    .panel-header h2,
+    .panel-header p {
+      margin: 0;
+    }
+
+    .panel-header h2 {
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .panel-header p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .control-stack {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: 1px solid rgba(106, 255, 205, 0.13);
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field label {
+      color: var(--blue);
+      font-size: 11px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid rgba(85, 216, 255, 0.18);
+      border-radius: var(--radius);
+      background: rgba(2, 8, 8, 0.68);
+      color: var(--ink);
+      outline: none;
+    }
+
+    input,
+    select {
+      min-height: 36px;
+      padding: 0 10px;
+    }
+
+    textarea {
+      min-height: 56px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 10px;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: rgba(136, 166, 156, 0.86);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(54, 248, 168, 0.58);
+      box-shadow: 0 0 0 3px rgba(54, 248, 168, 0.12), 0 0 26px rgba(54, 248, 168, 0.12);
+    }
+
+    .inline-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .mission-list {
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      overflow: auto;
+      align-content: start;
+    }
+
+    .mission-row,
+    .metric,
+    .node,
+    .memory-item,
+    .permission,
+    .agent-stat,
+    .artifact,
+    .trace-item {
+      border: 1px solid rgba(106, 255, 205, 0.14);
+      border-radius: var(--radius);
+      background: rgba(7, 17, 15, 0.72);
+      color: var(--ink);
+      box-shadow: inset 0 0 18px rgba(85, 216, 255, 0.025);
+    }
+
+    .mission-row {
+      width: 100%;
+      min-height: 92px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 12px;
+      text-align: left;
+    }
+
+    .mission-row:hover,
+    .mission-row.is-selected {
+      border-color: rgba(54, 248, 168, 0.48);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.11), rgba(85, 216, 255, 0.05)),
+        rgba(8, 20, 18, 0.88);
+      box-shadow: inset 0 0 24px rgba(54, 248, 168, 0.06), 0 0 24px rgba(54, 248, 168, 0.08);
+    }
+
+    .mission-row h3,
+    .mission-row p {
+      margin: 0;
+    }
+
+    .mission-row h3 {
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .mission-row p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .status-chip {
+      align-self: start;
+      border: 1px solid rgba(54, 248, 168, 0.22);
+      border-radius: 999px;
+      padding: 4px 7px;
+      color: #bfffe4;
+      background: rgba(54, 248, 168, 0.13);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .status-chip.review {
+      border-color: rgba(255, 200, 87, 0.28);
+      color: #ffe7ad;
+      background: rgba(255, 200, 87, 0.15);
+    }
+
+    .status-chip.blocked {
+      border-color: rgba(255, 93, 143, 0.32);
+      color: #ffd0dd;
+      background: rgba(255, 93, 143, 0.15);
+    }
+
+    .progress {
+      grid-column: 1 / -1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(239, 255, 248, 0.08);
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--green), var(--blue), var(--violet));
+      box-shadow: 0 0 16px rgba(85, 216, 255, 0.34);
+    }
+
+    .main-stage {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .stage-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid rgba(106, 255, 205, 0.13);
+      background:
+        linear-gradient(90deg, rgba(54, 248, 168, 0.08), rgba(85, 216, 255, 0.05), transparent),
+        rgba(9, 20, 18, 0.88);
+    }
+
+    .stage-header h2,
+    .stage-header p {
+      margin: 0;
+    }
+
+    .stage-header h2 {
+      font-size: 18px;
+      line-height: 1.2;
+      text-shadow: 0 0 24px rgba(85, 216, 255, 0.16);
+    }
+
+    .stage-header p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .mode-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid rgba(106, 255, 205, 0.18);
+      border-radius: var(--radius);
+      background: rgba(239, 255, 248, 0.05);
+    }
+
+    .mode-grid button {
+      min-width: 70px;
+      min-height: 32px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mode-grid button.is-active {
+      background: rgba(85, 216, 255, 0.14);
+      color: var(--ink);
+      box-shadow: inset 0 0 18px rgba(85, 216, 255, 0.14), 0 0 18px rgba(85, 216, 255, 0.08);
+    }
+
+    .stage-grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+    }
+
+    .execution-map {
+      min-height: 0;
+      padding: 16px;
+      display: grid;
+      grid-template-rows: minmax(230px, 1fr) auto;
+      gap: 14px;
+      background:
+        linear-gradient(rgba(85, 216, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(54, 248, 168, 0.07) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(6, 15, 14, 0.96), rgba(10, 12, 24, 0.9));
+      background-size: 34px 34px, 34px 34px, auto;
+    }
+
+    .map-frame {
+      position: relative;
+      min-height: 230px;
+      border: 1px solid rgba(85, 216, 255, 0.22);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(85, 216, 255, 0.07), transparent 34%),
+        rgba(2, 7, 8, 0.48);
+      overflow: hidden;
+      box-shadow: inset 0 0 40px rgba(54, 248, 168, 0.05), inset 0 0 70px rgba(85, 216, 255, 0.05);
+    }
+
+    .map-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, transparent, rgba(54, 248, 168, 0.14), transparent),
+        repeating-linear-gradient(180deg, transparent 0 20px, rgba(255, 255, 255, 0.035) 20px 21px);
+      transform: translateY(-100%);
+      animation: mapSweep 5.2s linear infinite;
+      z-index: 1;
+    }
+    @keyframes mapSweep { to { transform: translateY(100%); } }
+
+    #agentField {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      min-height: 230px;
+      display: block;
+    }
+
+    .intent-card {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 3;
+      width: min(360px, calc(100% - 32px));
+      border: 1px solid rgba(54, 248, 168, 0.28);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.12), rgba(85, 216, 255, 0.07)),
+        rgba(4, 12, 11, 0.9);
+      box-shadow: inset 0 0 28px rgba(54, 248, 168, 0.08), 0 18px 44px rgba(0, 0, 0, 0.36), 0 0 34px rgba(54, 248, 168, 0.1);
+      padding: 14px;
+    }
+
+    .intent-card p,
+    .intent-card h3 {
+      margin: 0;
+    }
+
+    .intent-card p {
+      color: var(--blue);
+      font-size: 12px;
+    }
+
+    .intent-card h3 {
+      margin-top: 5px;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+
+    .metric-grid,
+    .agent-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .metric,
+    .agent-stat {
+      background: rgba(255, 255, 255, 0.045);
+      padding: 8px;
+    }
+
+    .metric b,
+    .metric span,
+    .agent-stat b,
+    .agent-stat span {
+      display: block;
+    }
+
+    .metric b,
+    .agent-stat b {
+      font-size: 14px;
+    }
+
+    .metric span,
+    .agent-stat span {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .node-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .node {
+      min-height: 74px;
+      padding: 10px;
+    }
+
+    .node.is-active {
+      border-color: rgba(54, 248, 168, 0.55);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.16), rgba(85, 216, 255, 0.08)),
+        rgba(8, 20, 18, 0.9);
+      box-shadow: inset 0 0 22px rgba(54, 248, 168, 0.09), 0 0 22px rgba(54, 248, 168, 0.1);
+    }
+
+    .node span {
+      display: inline-flex;
+      width: 22px;
+      height: 22px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(239, 255, 248, 0.08);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .node.is-active span {
+      color: #06100e;
+      background: var(--green);
+      box-shadow: 0 0 20px rgba(54, 248, 168, 0.55);
+    }
+
+    .node b,
+    .node small {
+      display: block;
+    }
+
+    .node b {
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .node small {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .context-column {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      border-left: 1px solid rgba(106, 255, 205, 0.16);
+      background: rgba(4, 12, 11, 0.72);
+      overflow: auto;
+    }
+
+    .context-block {
+      padding: 14px;
+      border-bottom: 1px solid rgba(106, 255, 205, 0.13);
+    }
+
+    .context-block h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .confidence-meter,
+    .memory-list,
+    .permission-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .meter-row {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) 36px;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .meter-track {
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(239, 255, 248, 0.08);
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .meter-track span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      box-shadow: 0 0 14px rgba(85, 216, 255, 0.28);
+    }
+
+    .memory-item,
+    .permission {
+      padding: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .memory-item b,
+    .permission b {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .permission {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .permission-state {
+      color: var(--green);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .command-deck {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 14px;
+    }
+
+    .timeline {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+    }
+
+    .pulse {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(54, 248, 168, 0.13);
+      color: var(--green);
+      box-shadow: inset 0 0 18px rgba(54, 248, 168, 0.14), 0 0 24px rgba(54, 248, 168, 0.12);
+      animation: beacon 2.4s ease-in-out infinite;
+    }
+    @keyframes beacon { 50% { box-shadow: inset 0 0 24px rgba(54, 248, 168, 0.2), 0 0 34px rgba(54, 248, 168, 0.24); } }
+
+    .pulse svg {
+      width: 19px;
+      height: 19px;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .timeline-text { min-width: 0; }
+    .timeline-text b,
+    .timeline-text p {
+      display: block;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .timeline-text b {
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .timeline-text p {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: end;
+      padding: 10px;
+    }
+
+    .composer label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--blue);
+      font-size: 12px;
+    }
+
+    .send-button {
+      width: 42px;
+      height: 38px;
+      padding: 0;
+    }
+
+    .detail-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 14px;
+      padding: 18px 18px 18px 0;
+      overflow: hidden;
+    }
+
+    .agent-card {
+      padding: 16px;
+    }
+
+    .agent-profile {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+    }
+
+    .agent-avatar {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(54, 248, 168, 0.55);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(135deg, rgba(54, 248, 168, 0.22), rgba(85, 216, 255, 0.16)),
+        #07110f;
+      color: var(--green);
+      font-weight: 800;
+      text-shadow: 0 0 16px rgba(54, 248, 168, 0.75);
+      box-shadow: inset 0 0 20px rgba(54, 248, 168, 0.16), 0 0 28px rgba(54, 248, 168, 0.18);
+    }
+
+    .agent-profile h2,
+    .agent-profile p {
+      margin: 0;
+    }
+
+    .agent-profile h2 {
+      font-size: 16px;
+    }
+
+    .agent-profile p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .artifact-list {
+      padding: 14px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .artifact-stack,
+    .trace-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .artifact {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      min-height: 62px;
+      padding: 9px;
+    }
+
+    .artifact-thumb {
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(85, 216, 255, 0.24);
+      border-radius: 6px;
+      background:
+        linear-gradient(90deg, rgba(85, 216, 255, 0.28) 1px, transparent 1px),
+        linear-gradient(rgba(54, 248, 168, 0.22) 1px, transparent 1px),
+        rgba(5, 16, 14, 0.86);
+      background-size: 10px 10px;
+      box-shadow: inset 0 0 14px rgba(85, 216, 255, 0.08);
+    }
+
+    .artifact h3,
+    .artifact p {
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .artifact h3 {
+      font-size: 13px;
+    }
+
+    .artifact p {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .trace-panel {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .trace-list {
+      padding: 12px;
+      overflow: auto;
+      align-content: start;
+    }
+
+    .trace-item {
+      border-left: 3px solid rgba(239, 255, 248, 0.16);
+      padding: 9px 10px;
+    }
+
+    .trace-item.agent { border-left-color: var(--green); }
+    .trace-item.user { border-left-color: var(--blue); }
+    .trace-item.error { border-left-color: var(--rose); }
+    .trace-item.tool { border-left-color: var(--amber); }
+
+    .trace-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .trace-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.38;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    @media (max-width: 1180px) {
+      .app { grid-template-columns: 72px minmax(0, 1fr); overflow: auto; }
+      html, body { overflow: auto; }
+      .detail-panel {
+        grid-column: 2;
+        grid-row: 2;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto minmax(260px, 1fr);
+        padding: 0 18px 18px;
+      }
+      .trace-panel { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 920px) {
+      html, body { overflow: auto; }
+      .app { display: block; height: auto; min-height: 100vh; }
+      .rail {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        flex-direction: row;
+        justify-content: space-between;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .rail-group { display: flex; }
+      .rail-spacer { display: none; }
+      .workspace, .detail-panel { padding: 14px; }
+      .board, .stage-grid, .command-deck, .detail-panel { grid-template-columns: 1fr; }
+      .context-column { border-left: 0; border-top: 1px solid var(--line); }
+      .node-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .topbar, .stage-header { grid-template-columns: 1fr; align-items: stretch; }
+      .top-actions { flex-wrap: wrap; }
+      .mode-grid { grid-template-columns: repeat(2, 1fr); }
+      .metric-grid, .agent-stats { grid-template-columns: 1fr; }
+      .node-strip { grid-template-columns: 1fr; }
+      .title-block h1 { font-size: 21px; }
+      .intent-card { position: static; width: auto; margin: 10px; }
+      .execution-map { grid-template-rows: auto auto; }
+      .inline-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="rail" aria-label="Primary">
+      <div class="mark" aria-label="Labaik future console">L0</div>
+      <div class="rail-group">
+        <button class="icon-button is-active" type="button" title="Missions" aria-label="Missions">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10"></path></svg>
+        </button>
+        <button class="icon-button" type="button" title="Artifacts" aria-label="Artifacts">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4"></path></svg>
+        </button>
+        <button class="icon-button" type="button" title="Trace" aria-label="Trace">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M6 8h12M8 16h8"></path></svg>
+        </button>
+      </div>
+      <div class="rail-spacer"></div>
+      <button class="icon-button" type="button" id="classicBtn" title="Close future console" aria-label="Close future console">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+      </button>
+    </nav>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="title-block">
+          <p>Labaik / Future console</p>
+          <h1 id="missionHeading">Neural product agent cockpit</h1>
+        </div>
+        <div class="top-actions">
+          <span class="pill"><span class="dot" aria-hidden="true"></span><span id="agentState">Bridge initializing</span></span>
+          <button class="ghost-button" type="button" id="newMissionBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            New mission
+          </button>
+          <button class="primary-button" type="button" id="pickWorkspaceBtn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            Workspace
+          </button>
+        </div>
+      </header>
+
+      <section class="board" aria-label="Agent workbench">
+        <aside class="surface left-panel" aria-label="Mission controls">
+          <div class="panel-header">
+            <h2>Mission stack</h2>
+            <p>Run the real Labaik engine from a separate console.</p>
+          </div>
+
+          <div class="control-stack">
+            <div class="field">
+              <label for="modelSelect">Main model</label>
+              <select id="modelSelect"></select>
+            </div>
+            <div class="field">
+              <label for="spaceSelect">Space</label>
+              <select id="spaceSelect"></select>
+            </div>
+            <div class="inline-row">
+              <div class="field">
+                <label for="workspacePath">Workspace path</label>
+                <input id="workspacePath" placeholder="No workspace selected">
+              </div>
+              <button class="ghost-button" type="button" id="saveWorkspaceBtn">Use</button>
+            </div>
+          </div>
+
+          <div class="mission-list" id="missionList"></div>
+        </aside>
+
+        <section class="surface main-stage" aria-label="Active mission">
+          <div class="stage-header">
+            <div>
+              <h2 id="activeTitle">Neural product agent cockpit</h2>
+              <p id="activeSummary">Command Labaik, watch its tool activity, and keep review gates visible.</p>
+            </div>
+            <div class="mode-grid" id="modeGrid" aria-label="Permission mode">
+              <button type="button" data-mode="observe">Observe</button>
+              <button type="button" data-mode="careful">Review</button>
+              <button type="button" data-mode="flow">Flow</button>
+              <button type="button" data-mode="autopilot">Auto</button>
+            </div>
+          </div>
+
+          <div class="stage-grid">
+            <div class="execution-map">
+              <div class="map-frame">
+                <canvas id="agentField" aria-label="Execution graph"></canvas>
+                <div class="intent-card">
+                  <p>Live intent</p>
+                  <h3 id="intentText">Send a command and Labaik will route it through the selected model.</h3>
+                  <div class="metric-grid" aria-label="Run metrics">
+                    <div class="metric">
+                      <b id="modelMetric">Model</b>
+                      <span>route</span>
+                    </div>
+                    <div class="metric">
+                      <b id="modeMetric">Auto</b>
+                      <span>gate</span>
+                    </div>
+                    <div class="metric">
+                      <b id="nextMetric">Ready</b>
+                      <span>next</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="node-strip" id="nodeStrip" aria-label="Execution stages"></div>
+            </div>
+
+            <aside class="context-column" aria-label="Context and permissions">
+              <div class="context-block">
+                <h3>Confidence rails</h3>
+                <div class="confidence-meter" id="confidenceMeter"></div>
+              </div>
+              <div class="context-block">
+                <h3>Memory in use</h3>
+                <div class="memory-list" id="memoryList"></div>
+              </div>
+              <div class="context-block">
+                <h3>Access gates</h3>
+                <div class="permission-list" id="permissionList"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section class="command-deck" aria-label="Command surface">
+        <div class="timeline">
+          <div class="pulse" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 12h4l2-5 4 10 2-5h4"></path></svg>
+          </div>
+          <div class="timeline-text">
+            <b id="timelineTitle">Future console is ready.</b>
+            <p id="timelineDetail">Pick a model, choose a workspace if needed, then send a command vector.</p>
+          </div>
+        </div>
+        <form class="composer" id="composer">
+          <div>
+            <label for="commandInput">Command vector</label>
+            <input id="commandInput" autocomplete="off" placeholder="Tell Labaik what to build, inspect, or explain">
+          </div>
+          <button class="send-button" type="submit" id="sendBtn" aria-label="Send command">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"></path><path d="m22 2-7 20-4-9-9-4z"></path></svg>
+          </button>
+        </form>
+      </section>
+    </main>
+
+    <aside class="detail-panel" aria-label="Agent details">
+      <section class="agent-card">
+        <div class="agent-profile">
+          <div class="agent-avatar" aria-hidden="true">AI</div>
+          <div>
+            <h2>Operator agent</h2>
+            <p id="agentModeText">Connected to Labaik desktop APIs.</p>
+          </div>
+        </div>
+        <div class="agent-stats">
+          <div class="agent-stat">
+            <b id="keyCount">0</b>
+            <span>keys</span>
+          </div>
+          <div class="agent-stat">
+            <b id="toolCount">Live</b>
+            <span>tools</span>
+          </div>
+          <div class="agent-stat">
+            <b id="turnCount">0</b>
+            <span>turns</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="artifact-list">
+        <div class="section-title">
+          <h2>Live artifacts</h2>
+          <span id="artifactCount">0 ready</span>
+        </div>
+        <div class="artifact-stack" id="artifactStack"></div>
+      </section>
+
+      <section class="trace-panel">
+        <div class="panel-header">
+          <h2>Decision trace</h2>
+          <p>Compact signal log from this console.</p>
+        </div>
+        <div class="trace-list" id="traceList"></div>
+      </section>
+    </aside>
+  </div>
+
+  <script>
+    const CLOUD_MODELS = [
+      { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", provider: "deepseek" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic" },
+      { id: "claude-opus-4-7", label: "Claude Opus 4.7", provider: "anthropic" },
+      { id: "gpt-5.4", label: "GPT-5.4", provider: "openai" },
+      { id: "gpt-5.4-thinking", label: "GPT-5.4 Thinking", provider: "openai" },
+      { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", provider: "openai" },
+      { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", provider: "google" },
+      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "google" },
+      { id: "grok-4.20-reasoning", label: "Grok 4.20 Reasoning", provider: "xai" },
+      { id: "kimi-k2.6", label: "Kimi K2.6 China", provider: "moonshot" },
+      { id: "kimi-intl/kimi-k2.6", label: "Kimi K2.6 Global", provider: "kimi" },
+      { id: "qwen3.6-max-preview", label: "Qwen 3.6 Max", provider: "dashscope" },
+      { id: "qwen3-coder-plus", label: "Qwen 3 Coder Plus", provider: "dashscope" },
+      { id: "glm-5.1", label: "GLM-5.1", provider: "zhipu" },
+      { id: "MiniMax-M2.7", label: "MiniMax M2.7", provider: "minimax" },
+      { id: "hy3-preview", label: "Hunyuan Hy3 Preview", provider: "hunyuan" }
+    ];
+
+    const DEFAULT_MISSIONS = [
+      {
+        id: "live",
+        title: "Live command mission",
+        summary: "Send work through the selected model and stream Labaik activity.",
+        status: "active",
+        progress: 30
+      },
+      {
+        id: "workspace",
+        title: "Workspace build pass",
+        summary: "Pick a folder to let the agent read files, edit, and run commands.",
+        status: "review",
+        progress: 10
+      },
+      {
+        id: "handoff",
+        title: "Launch handoff protocol",
+        summary: "Collect final answer, tool activity, touched files, and risk notes.",
+        status: "blocked",
+        progress: 0
+      }
+    ];
+
+    const NODE_LABELS = ["Intent", "Context", "Model", "Tools", "Proof"];
+    const MODE_COPY = {
+      observe: ["Observe", "Read-only. No writes or commands."],
+      careful: ["Review", "Ask before writes and commands."],
+      flow: ["Flow", "Auto safe work, ask on risky work."],
+      autopilot: ["Auto", "Run most workspace work, block protected paths."]
+    };
+    const COLORS = {
+      intent: "#36f8a8",
+      context: "#55d8ff",
+      execution: "#ffc857"
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const bridge = window.alaude;
+    const state = {
+      activeMissionId: "live",
+      missions: DEFAULT_MISSIONS.map((m) => ({ ...m })),
+      messages: [],
+      trace: [],
+      artifacts: [],
+      activity: [],
+      spaces: [],
+      keyStatuses: {},
+      workspacePath: localStorage.getItem("labaik:futureWorkspace") || "",
+      model: localStorage.getItem("labaik:futureModel") || "deepseek-v4-pro",
+      spaceId: localStorage.getItem("labaik:futureSpace") || "general",
+      mode: localStorage.getItem("labaik:futureMode") || "autopilot",
+      activeNode: 0,
+      running: false,
+      tick: 0
+    };
+
+    const missionList = $("missionList");
+    const nodeStrip = $("nodeStrip");
+    const confidenceMeter = $("confidenceMeter");
+    const memoryList = $("memoryList");
+    const permissionList = $("permissionList");
+    const artifactStack = $("artifactStack");
+    const traceList = $("traceList");
+    const canvas = $("agentField");
+    const context = canvas.getContext("2d");
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function providerOf(model) {
+      const m = String(model || "").toLowerCase();
+      if (m.startsWith("ollama/") || m.includes(":") || m.startsWith("gemma") || m.startsWith("qwen3:") || m.startsWith("llama3") || m.startsWith("deepseek-r1")) return "ollama";
+      const found = CLOUD_MODELS.find((item) => item.id === model);
+      if (found) return found.provider;
+      if (m.startsWith("gpt-") || m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4")) return "openai";
+      if (m.startsWith("gemini")) return "google";
+      if (m.startsWith("grok-")) return "xai";
+      if (m.startsWith("kimi-intl/")) return "kimi";
+      if (m.startsWith("kimi-") || m.startsWith("moonshot-")) return "moonshot";
+      if (m.startsWith("qwen")) return "dashscope";
+      if (m.startsWith("glm-")) return "zhipu";
+      if (m.startsWith("minimax-")) return "minimax";
+      if (m.startsWith("hy3-") || m.startsWith("hy4-") || m.startsWith("hunyuan-")) return "hunyuan";
+      if (m.startsWith("deepseek-")) return "deepseek";
+      return "anthropic";
+    }
+
+    function labelForModel(model) {
+      const cloud = CLOUD_MODELS.find((item) => item.id === model);
+      if (cloud) return cloud.label;
+      return model || "Model";
+    }
+
+    function setTimeline(title, detail) {
+      $("timelineTitle").textContent = title;
+      $("timelineDetail").textContent = detail || "";
+    }
+
+    function addTrace(kind, title, body) {
+      state.trace.unshift({
+        kind,
+        title,
+        body: String(body || "").slice(0, 2000),
+        ts: Date.now()
+      });
+      state.trace = state.trace.slice(0, 60);
+      renderTrace();
+    }
+
+    function setNode(index) {
+      state.activeNode = Math.max(0, Math.min(NODE_LABELS.length - 1, index));
+      renderNodes();
+    }
+
+    function activeMission() {
+      return state.missions.find((m) => m.id === state.activeMissionId) || state.missions[0];
+    }
+
+    function renderMissions() {
+      missionList.innerHTML = state.missions.map((mission) => `
+        <button class="mission-row ${mission.id === state.activeMissionId ? "is-selected" : ""}" type="button" data-id="${escapeHtml(mission.id)}">
+          <span>
+            <h3>${escapeHtml(mission.title)}</h3>
+            <p>${escapeHtml(mission.summary)}</p>
+          </span>
+          <span class="status-chip ${escapeHtml(mission.status)}">${escapeHtml(mission.status === "active" ? "Active" : mission.status === "review" ? "Review" : "Blocked")}</span>
+          <span class="progress" aria-label="${mission.progress}% complete"><span style="width: ${mission.progress}%"></span></span>
+        </button>
+      `).join("");
+      missionList.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.activeMissionId = button.dataset.id;
+          renderAll();
+        });
+      });
+    }
+
+    function renderActiveMission() {
+      const mission = activeMission();
+      $("missionHeading").textContent = mission.title;
+      $("activeTitle").textContent = mission.title;
+      $("activeSummary").textContent = mission.summary;
+      $("intentText").textContent = state.messages.length
+        ? "Continue the current mission with the selected model and visible access gates."
+        : "Send a command and Labaik will route it through the selected model.";
+      $("modelMetric").textContent = providerOf(state.model);
+      $("modeMetric").textContent = MODE_COPY[state.mode]?.[0] || state.mode;
+      $("nextMetric").textContent = state.running ? "Running" : "Ready";
+      $("agentState").textContent = state.running ? "Agent running" : `${MODE_COPY[state.mode]?.[0] || "Auto"} gates armed`;
+      $("agentModeText").textContent = MODE_COPY[state.mode]?.[1] || "Connected to Labaik desktop APIs.";
+    }
+
+    function renderNodes() {
+      nodeStrip.innerHTML = NODE_LABELS.map((node, index) => `
+        <div class="node ${index === state.activeNode ? "is-active" : ""}">
+          <span>${index + 1}</span>
+          <b>${escapeHtml(node)}</b>
+          <small>${index < state.activeNode ? "Complete" : index === state.activeNode ? "In motion" : "Queued"}</small>
+        </div>
+      `).join("");
+    }
+
+    function renderConfidence() {
+      const provider = providerOf(state.model);
+      const keyState = state.keyStatuses[provider] || (provider === "ollama" ? "none" : "unknown");
+      const values = {
+        bridge: bridge ? 96 : 0,
+        provider: keyState === "set" ? 90 : keyState === "available" ? 68 : 42,
+        workspace: state.workspacePath ? 88 : 40
+      };
+      confidenceMeter.innerHTML = Object.entries(values).map(([label, value]) => `
+        <div class="meter-row">
+          <span>${escapeHtml(label)}</span>
+          <span class="meter-track"><span style="width: ${value}%; background: ${label === "bridge" ? COLORS.intent : label === "provider" ? COLORS.context : COLORS.execution}"></span></span>
+          <span>${value}%</span>
+        </div>
+      `).join("");
+    }
+
+    function renderMemory() {
+      const currentSpace = state.spaces.find((space) => space.id === state.spaceId);
+      const rows = [
+        ["Space", currentSpace ? `${currentSpace.name}: ${currentSpace.description || "active prompt context"}` : "General assistant context."],
+        ["Workspace", state.workspacePath || "No folder selected. Chat still works, tools wait."],
+        ["Model route", `${labelForModel(state.model)} via ${providerOf(state.model)}`]
+      ];
+      memoryList.innerHTML = rows.map(([title, body]) => `
+        <div class="memory-item">
+          <b>${escapeHtml(title)}</b>
+          ${escapeHtml(body)}
+        </div>
+      `).join("");
+    }
+
+    function renderPermissions() {
+      const provider = providerOf(state.model);
+      const keyState = state.keyStatuses[provider] || "unknown";
+      const rows = [
+        ["Provider key", provider === "ollama" ? (keyState === "set" || keyState === "available" ? "Local ready" : "Ollama unavailable") : keyState],
+        ["Workspace tools", state.workspacePath ? "Available" : "Waiting for folder"],
+        ["Permission mode", MODE_COPY[state.mode]?.[1] || state.mode]
+      ];
+      permissionList.innerHTML = rows.map(([title, body]) => `
+        <div class="permission">
+          <span><b>${escapeHtml(title)}</b>${escapeHtml(body)}</span>
+          <span class="permission-state">${escapeHtml(String(body).split(" ")[0])}</span>
+        </div>
+      `).join("");
+    }
+
+    function renderArtifacts() {
+      const artifacts = state.artifacts.length ? state.artifacts : [
+        ["Console trace", "Waiting for the first command"],
+        ["Model route", providerOf(state.model)],
+        ["Workspace gate", state.workspacePath ? state.workspacePath : "Not selected"]
+      ];
+      artifactStack.innerHTML = artifacts.slice(0, 8).map(([title, body]) => `
+        <div class="artifact">
+          <span class="artifact-thumb" aria-hidden="true"></span>
+          <span>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(body)}</p>
+          </span>
+        </div>
+      `).join("");
+      $("artifactCount").textContent = `${state.artifacts.length} ready`;
+    }
+
+    function renderTrace() {
+      if (!state.trace.length) {
+        traceList.innerHTML = `
+          <div class="trace-item agent">
+            <strong>System</strong>
+            <p>Future console is connected. Send a command to begin.</p>
+          </div>
+        `;
+        return;
+      }
+      traceList.innerHTML = state.trace.map((item) => `
+        <div class="trace-item ${escapeHtml(item.kind)}">
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.body)}</p>
+        </div>
+      `).join("");
+    }
+
+    function renderStats() {
+      const connected = Object.values(state.keyStatuses).filter((value) => value === "set" || value === "available").length;
+      $("keyCount").textContent = String(connected);
+      $("turnCount").textContent = String(state.messages.filter((m) => m.role === "user").length);
+    }
+
+    function renderModeButtons() {
+      document.querySelectorAll("#modeGrid button").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.mode === state.mode);
+      });
+    }
+
+    function renderAll() {
+      renderMissions();
+      renderActiveMission();
+      renderNodes();
+      renderConfidence();
+      renderMemory();
+      renderPermissions();
+      renderArtifacts();
+      renderTrace();
+      renderStats();
+      renderModeButtons();
+      drawField();
+    }
+
+    async function refreshKeys() {
+      if (!bridge) return;
+      try {
+        state.keyStatuses = await bridge.getKeyStatuses();
+      } catch (err) {
+        addTrace("error", "Key status failed", err.message || err);
+      }
+      renderAll();
+    }
+
+    async function loadSpaces() {
+      if (!bridge) return;
+      try {
+        const data = await bridge.getSpaces();
+        state.spaces = [...(data.builtIn || []), ...(data.custom || [])];
+        state.spaceId = localStorage.getItem("labaik:futureSpace") || data.activeSpaceId || "general";
+        $("spaceSelect").innerHTML = state.spaces.map((space) => `
+          <option value="${escapeHtml(space.id)}" ${space.id === state.spaceId ? "selected" : ""}>${escapeHtml(space.name)}</option>
+        `).join("");
+      } catch (err) {
+        addTrace("error", "Spaces failed", err.message || err);
+      }
+    }
+
+    async function loadModels() {
+      const groups = new Map();
+      for (const model of CLOUD_MODELS) {
+        const group = model.provider;
+        if (!groups.has(group)) groups.set(group, []);
+        groups.get(group).push(model);
+      }
+      const html = [];
+      for (const [provider, models] of groups) {
+        html.push(`<optgroup label="${escapeHtml(provider)}">`);
+        for (const model of models) {
+          html.push(`<option value="${escapeHtml(model.id)}" ${model.id === state.model ? "selected" : ""}>${escapeHtml(model.label)}</option>`);
+        }
+        html.push("</optgroup>");
+      }
+      if (bridge) {
+        try {
+          const installed = await bridge.ollamaList().catch(() => []);
+          const catalog = await bridge.ollamaCatalog().catch(() => []);
+          const installedNames = new Set((installed || []).map((item) => typeof item === "string" ? item : item.name || item.model || item.id).filter(Boolean));
+          const localModels = (catalog || []).filter((m) => !String(m.id || "").toLowerCase().includes("embed"));
+          if (installedNames.size || localModels.length) {
+            html.push('<optgroup label="ollama">');
+            for (const name of installedNames) {
+              html.push(`<option value="${escapeHtml(name)}" ${name === state.model ? "selected" : ""}>${escapeHtml(name)} installed</option>`);
+            }
+            for (const m of localModels.slice(0, 8)) {
+              if (installedNames.has(m.id)) continue;
+              html.push(`<option value="${escapeHtml(m.id)}" ${m.id === state.model ? "selected" : ""}>${escapeHtml(m.name || m.id)}</option>`);
+            }
+            html.push("</optgroup>");
+          }
+        } catch (err) {
+          addTrace("error", "Local model list failed", err.message || err);
+        }
+      }
+      $("modelSelect").innerHTML = html.join("");
+      $("modelSelect").value = state.model;
+      if (!$("modelSelect").value) {
+        state.model = "deepseek-v4-pro";
+        $("modelSelect").value = state.model;
+      }
+    }
+
+    async function syncModeFromApp() {
+      if (!bridge) return;
+      try {
+        const result = await bridge.permGetMode(state.workspacePath || null);
+        if (result?.mode) state.mode = result.mode;
+      } catch {}
+      renderAll();
+    }
+
+    async function setMode(mode) {
+      state.mode = mode;
+      localStorage.setItem("labaik:futureMode", mode);
+      renderAll();
+      if (!bridge) return;
+      try {
+        await bridge.permSetMode(state.workspacePath || null, mode);
+        addTrace("agent", "Access gate updated", `${MODE_COPY[mode]?.[0] || mode}: ${MODE_COPY[mode]?.[1] || ""}`);
+      } catch (err) {
+        addTrace("error", "Access gate failed", err.message || err);
+      }
+    }
+
+    async function pickWorkspace() {
+      if (!bridge) return;
+      try {
+        const picked = await bridge.pickFolder();
+        if (!picked) return;
+        state.workspacePath = picked;
+        $("workspacePath").value = picked;
+        localStorage.setItem("labaik:futureWorkspace", picked);
+        addTrace("agent", "Workspace linked", picked);
+        await syncModeFromApp();
+      } catch (err) {
+        addTrace("error", "Workspace picker failed", err.message || err);
+      }
+    }
+
+    function saveWorkspace() {
+      state.workspacePath = $("workspacePath").value.trim();
+      localStorage.setItem("labaik:futureWorkspace", state.workspacePath);
+      addTrace("agent", "Workspace path set", state.workspacePath || "No workspace selected");
+      syncModeFromApp();
+    }
+
+    function handleActivity(activity) {
+      if (!activity) return;
+      state.activity.push({ ...activity, ts: Date.now() });
+      state.activity = state.activity.slice(-30);
+
+      if (activity.phase === "token") {
+        setNode(2);
+        setTimeline("Model stream active.", String(activity.text || "").slice(0, 120));
+        return;
+      }
+      if (activity.phase === "reasoning_token" || activity.phase === "thinking") {
+        setNode(1);
+        setTimeline("Reasoning signal detected.", "The selected model is working through the mission.");
+        return;
+      }
+      if (activity.phase === "file_edit") {
+        setNode(3);
+        state.artifacts.unshift([activity.path || "File edit", activity.isNewFile ? "Created by agent" : "Updated by agent"]);
+        state.artifacts = state.artifacts.slice(0, 12);
+        addTrace("tool", "File edit", activity.path || "File changed");
+        renderArtifacts();
+        return;
+      }
+
+      const name = activity.name || activity.tool || activity.phase || "tool";
+      const args = activity.args ? JSON.stringify(activity.args).slice(0, 180) : "";
+      setNode(3);
+      addTrace("tool", name, args || "Tool activity");
+      setTimeline("Tool activity received.", name);
+    }
+
+    async function sendCommand(value) {
+      if (!bridge) {
+        addTrace("error", "Bridge unavailable", "This page must be opened inside Labaik Electron.");
+        return;
+      }
+      const text = String(value || "").trim();
+      if (!text || state.running) return;
+
+      state.running = true;
+      $("sendBtn").disabled = true;
+      setNode(0);
+      setTimeline("Command vector accepted.", text);
+      state.messages.push({ role: "user", content: text });
+      addTrace("user", "You", text);
+      updateMissionProgress("live", 55, "active");
+      renderAll();
+
+      const messageId = `future_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const startedAt = performance.now();
+      try {
+        const response = await bridge.chat(
+          state.messages,
+          state.model,
+          state.workspacePath || null,
+          state.spaceId || "general",
+          {
+            messageId,
+            sessionId: "future-console",
+            entry: "future-console",
+            action: "command",
+            planMode: state.mode === "observe",
+            hasAttachments: false
+          }
+        );
+        const content = String(response || "");
+        state.messages.push({ role: "assistant", content });
+        state.artifacts.unshift(["Assistant response", content.slice(0, 120) || "Done"]);
+        state.artifacts = state.artifacts.slice(0, 12);
+        addTrace("agent", "Labaik", content || "(empty response)");
+        setNode(4);
+        updateMissionProgress("live", 100, "active");
+        setTimeline("Mission complete.", `${labelForModel(state.model)} returned in ${Math.round(performance.now() - startedAt)} ms.`);
+        bridge.logUxEvent?.({
+          kind: "future_console_complete",
+          model: state.model,
+          provider: providerOf(state.model),
+          latencyMs: Math.round(performance.now() - startedAt),
+          ok: true
+        }).catch(() => {});
+      } catch (err) {
+        const msg = err?.message || String(err);
+        addTrace("error", "Run failed", msg);
+        setTimeline("Mission failed.", msg);
+        updateMissionProgress("live", 35, "blocked");
+        bridge.logUxEvent?.({
+          kind: "future_console_error",
+          model: state.model,
+          provider: providerOf(state.model),
+          latencyMs: Math.round(performance.now() - startedAt),
+          ok: false,
+          errorKind: msg
+        }).catch(() => {});
+      } finally {
+        state.running = false;
+        $("sendBtn").disabled = false;
+        renderAll();
+      }
+    }
+
+    function updateMissionProgress(id, progress, status) {
+      const mission = state.missions.find((m) => m.id === id);
+      if (!mission) return;
+      mission.progress = progress;
+      mission.status = status || mission.status;
+    }
+
+    function newMission() {
+      state.messages = [];
+      state.trace = [];
+      state.artifacts = [];
+      state.activity = [];
+      state.activeNode = 0;
+      state.missions = DEFAULT_MISSIONS.map((m) => ({ ...m }));
+      setTimeline("New mission ready.", "Send a command vector to begin.");
+      renderAll();
+    }
+
+    function drawField() {
+      const rect = canvas.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * scale));
+      canvas.height = Math.max(1, Math.floor(rect.height * scale));
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      const width = rect.width;
+      const height = rect.height;
+      context.clearRect(0, 0, width, height);
+
+      const nodes = [
+        [width * 0.18, height * 0.28, "Intent"],
+        [width * 0.48, height * 0.18, "Context"],
+        [width * 0.76, height * 0.34, "Model"],
+        [width * 0.62, height * 0.68, "Tools"],
+        [width * 0.28, height * 0.62, "Proof"]
+      ];
+      const centerX = width * 0.5;
+      const centerY = height * 0.44;
+      const scanRadius = Math.min(width, height) * 0.18 + Math.sin(state.tick / 22) * 6;
+
+      context.lineWidth = 1;
+      context.strokeStyle = "rgba(54, 248, 168, 0.12)";
+      for (let ring = 1; ring <= 3; ring += 1) {
+        context.beginPath();
+        context.arc(centerX, centerY, scanRadius * ring * 0.72, 0, Math.PI * 2);
+        context.stroke();
+      }
+
+      context.lineWidth = 1.7;
+      nodes.forEach((node, index) => {
+        const next = nodes[(index + 1) % nodes.length];
+        const gradient = context.createLinearGradient(node[0], node[1], next[0], next[1]);
+        gradient.addColorStop(0, "rgba(54, 248, 168, 0.46)");
+        gradient.addColorStop(0.55, "rgba(85, 216, 255, 0.3)");
+        gradient.addColorStop(1, "rgba(183, 140, 255, 0.28)");
+        context.strokeStyle = gradient;
+        context.beginPath();
+        context.moveTo(node[0], node[1]);
+        context.lineTo(next[0], next[1]);
+        context.stroke();
+      });
+
+      nodes.forEach((node, index) => {
+        const pulse = Math.sin((state.tick + index * 18) / 18) * 3;
+        const radius = index === state.activeNode ? 14 + pulse : 10;
+        context.shadowBlur = index === state.activeNode ? 28 : 18;
+        context.shadowColor = index === state.activeNode ? "rgba(54, 248, 168, 0.85)" : "rgba(85, 216, 255, 0.52)";
+        context.fillStyle = index === state.activeNode ? "rgba(54, 248, 168, 0.18)" : "rgba(85, 216, 255, 0.12)";
+        context.beginPath();
+        context.arc(node[0], node[1], radius + 10, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = index === state.activeNode ? "#36f8a8" : "#55d8ff";
+        context.beginPath();
+        context.arc(node[0], node[1], Math.max(8, radius), 0, Math.PI * 2);
+        context.fill();
+        context.shadowBlur = 0;
+        context.fillStyle = "rgba(239, 255, 248, 0.9)";
+        context.font = "12px Inter, system-ui, sans-serif";
+        context.fillText(node[2], node[0] + 18, node[1] + 4);
+      });
+    }
+
+    function animate() {
+      state.tick += 1;
+      drawField();
+      window.requestAnimationFrame(animate);
+    }
+
+    async function boot() {
+      $("workspacePath").value = state.workspacePath;
+      if (!bridge) {
+        addTrace("error", "Bridge unavailable", "Open this page from Labaik, not a regular browser.");
+        renderAll();
+        animate();
+        return;
+      }
+
+      await Promise.all([loadSpaces(), loadModels(), refreshKeys()]);
+      $("modelSelect").value = state.model;
+      $("spaceSelect").value = state.spaceId;
+      await syncModeFromApp();
+      bridge.onToolActivity?.(handleActivity);
+      addTrace("agent", "Future console online", `Version ${bridge.version || "dev"}. Classic Labaik remains unchanged.`);
+      setTimeline("Future console is online.", "Commands now use Labaik's real model and tool bridge.");
+      renderAll();
+      animate();
+    }
+
+    $("classicBtn").addEventListener("click", () => window.close());
+    $("newMissionBtn").addEventListener("click", newMission);
+    $("pickWorkspaceBtn").addEventListener("click", pickWorkspace);
+    $("saveWorkspaceBtn").addEventListener("click", saveWorkspace);
+    $("modelSelect").addEventListener("change", () => {
+      state.model = $("modelSelect").value;
+      localStorage.setItem("labaik:futureModel", state.model);
+      addTrace("agent", "Model route changed", `${labelForModel(state.model)} via ${providerOf(state.model)}`);
+      renderAll();
+    });
+    $("spaceSelect").addEventListener("change", async () => {
+      state.spaceId = $("spaceSelect").value;
+      localStorage.setItem("labaik:futureSpace", state.spaceId);
+      try { await bridge?.setActiveSpace?.(state.spaceId); } catch {}
+      addTrace("agent", "Space changed", state.spaceId);
+      renderAll();
+    });
+    document.querySelectorAll("#modeGrid button").forEach((button) => {
+      button.addEventListener("click", () => setMode(button.dataset.mode));
+    });
+    $("composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const value = $("commandInput").value.trim();
+      if (!value) return;
+      $("commandInput").value = "";
+      sendCommand(value);
+    });
+    $("commandInput").addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        $("composer").requestSubmit();
+      }
+    });
+    window.addEventListener("resize", drawField);
+
+    renderAll();
+    boot();
+  </script>
+</body>
+</html>

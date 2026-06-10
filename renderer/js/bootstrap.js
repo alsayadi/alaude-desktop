@@ -32,7 +32,7 @@ export function bootMemorySystem({
   // ── data layer ────────────────────────────────────────────────
   //
   // v0.7.59: memory + profile persistence now routes through the main
-  // process filesystem (`~/.alaude/memory.json`, `~/.alaude/profile.json`)
+  // process filesystem (`~/.labaik/memory.json`, `~/.labaik/profile.json`)
   // instead of Chromium localStorage. Chromium batches localStorage
   // writes to LevelDB asynchronously, which can drop recent writes on
   // SIGTERM/crash — the cause of "I added a memory yesterday, it's gone
@@ -198,13 +198,15 @@ export function bootMemorySystem({
         '.gsearch-overlay',
         '.drop-overlay',
         '.ptt-overlay',
+        '.ask-modal-overlay',
+        '.perm-dialog-overlay',
       ].join(',')
       const cleared = []
       doc.querySelectorAll(OVERLAY_SELECTOR).forEach(el => {
         const hadShow = el.classList.contains('show')
-        const hadInlineFlex = el.style && el.style.display === 'flex'
-        if (hadShow || hadInlineFlex) {
-          cleared.push({ id: el.id || '(no id)', class: el.className, hadShow, hadInlineFlex })
+        const hadInlineDisplay = el.style && (el.style.display === 'flex' || el.style.display === 'block')
+        if (hadShow || hadInlineDisplay) {
+          cleared.push({ id: el.id || '(no id)', class: el.className, hadShow, hadInlineDisplay })
         }
         if (hadShow) el.classList.remove('show')
         // v0.7.48 FIX: clear the inline display entirely (don't set to 'none').
@@ -219,6 +221,12 @@ export function bootMemorySystem({
       // Also remove any leaked image-lightbox (z-index:9999, created in JS).
       const lb = doc.getElementById('alaude-lightbox')
       if (lb) { cleared.push({ id: 'alaude-lightbox', note: 'leaked lightbox' }); lb.remove() }
+      // Approval dialogs (v0.4.1) are always-visible JS-created overlays with
+      // no .show toggle — a reload mid-prompt would otherwise leave one stuck
+      // blocking the whole UI. Remove any survivors outright.
+      doc.querySelectorAll('.perm-dialog-overlay').forEach(el => {
+        cleared.push({ id: el.id || '(no id)', note: 'leaked approval dialog' }); el.remove()
+      })
       if (cleared.length) {
         console.warn('[v0.7.33] Cleared stuck overlays on boot:', cleared)
       }
