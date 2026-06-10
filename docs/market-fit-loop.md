@@ -126,3 +126,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   churn. Instead: local-only funnel marks funnel_install → funnel_key_saved
   → funnel_first_reply (with sinceInstallMs) into the existing OODA event
   log. The <60s activation metric is now measurable on real installs.
+
+### Cycle 8 — routines notify natively (2026-06-10)
+- Routine results only showed as an in-app toast — invisible whenever the
+  app was unfocused, which is exactly when scheduled work runs. Success and
+  failure now post real macOS notifications (click → focus app) when the
+  window isn't focused. First Phase D retention hook, pulled forward.
+- Quick window triage decision: KEEP — spotlight-style access serves the
+  wedge directly.

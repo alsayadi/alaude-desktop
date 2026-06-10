@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences } = require('electron')
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, dialog, globalShortcut, nativeImage, screen, systemPreferences, Notification } = require('electron')
 const path = require('path')
 const os = require('os')
 const http = require('http')
@@ -2102,11 +2102,26 @@ app.whenReady().then(() => {
             const preview = (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 400)
             routines.recordRun(routine.id, { status: 'ok', resultPreview: preview })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: true, result }) } catch {}
+            // v0.8 retention: a routine that runs silently into a toast
+            // might as well not exist. Surface it as a real macOS
+            // notification when the window isn't focused.
+            try {
+              if (Notification.isSupported() && !mainWindow?.isFocused()) {
+                const n = new Notification({ title: `⏰ ${routine.name}`, body: preview.slice(0, 140) })
+                n.on('click', () => { try { mainWindow?.show(); mainWindow?.focus() } catch {} })
+                n.show()
+              }
+            } catch {}
             resolve()
           },
           reject: (err) => {
             routines.recordRun(routine.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
             try { mainWindow?.webContents?.send('routine-ran', { routine, success: false, error: String(err?.message || err) }) } catch {}
+            try {
+              if (Notification.isSupported() && !mainWindow?.isFocused()) {
+                new Notification({ title: `⏰ ${routine.name} failed`, body: String(err?.message || err).slice(0, 140) }).show()
+              }
+            } catch {}
             resolve()
           },
         })
