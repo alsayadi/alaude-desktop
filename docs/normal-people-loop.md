@@ -301,3 +301,14 @@
   re-locked). The 0.7.76 build is signed but NOT notarized — release
   held; v0.7.75 stays latest so users are unaffected. Owner action:
   unlock keychain / rerun, then rebuild + notarize + publish.
+
+### Cycle 22 — Audio Overviews v1 (2026-06-11)
+- ⌘K → "🎧 Listen to this": the current model writes a strict A:/B:
+  two-host dialogue about the conversation (+ attached docs) in the UI
+  language; the Mac's own voices perform it the moment it lands — two
+  distinct voices (pitch-contrast fallback when only one exists),
+  playback fully offline, Esc stops. Graceful fallback to plain
+  read-aloud if the model ignores the A:/B: format.
+- NotebookLM's one genuine normal-people hit, rebuilt local-first at
+  near-zero cost: the script is just a chat turn; the audio never
+  touches the network. EN/中文/العربية. 228 checks green.

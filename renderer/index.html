@@ -7711,6 +7711,60 @@
       showRewindToast?.(t('paperwork.remindReady'), false)
     }
 
+    // ── v0.8 cycle 22 — Audio Overviews ─────────────────────────────────
+    // NotebookLM's one genuine normal-people hit, local-first: any model
+    // writes a strict A:/B: two-host dialogue about the current
+    // conversation; the Mac's own voices perform it (two different
+    // voices, zero network for playback). Esc stops, like read-aloud.
+    function audioOverviewStart() {
+      if (isStreaming) { showRewindToast?.(t('audio.busy'), false); return }
+      const hasContent = Array.isArray(messages) && messages.some(m => m.role === 'assistant' && typeof m.content === 'string' && m.content)
+      const hasDoc = attachedFiles.length > 0
+      if (!hasContent && !hasDoc) { showRewindToast?.(t('audio.nothing'), false); return }
+      window._audioOverviewPending = true
+      input.value = t('audio.prompt')
+      input.dispatchEvent(new Event('input'))
+      sendMessage()
+      showRewindToast?.(t('audio.making'), false)
+    }
+
+    function pickTwoVoices() {
+      const all = (window.speechSynthesis?.getVoices?.() || [])
+      const pref = { en: 'en', zh: 'zh', ar: 'ar' }[i18n.lang] || 'en'
+      const local = all.filter(v => (v.lang || '').toLowerCase().startsWith(pref))
+      const pool = local.length ? local : all
+      if (!pool.length) return [null, null]
+      if (pool.length === 1) return [pool[0], pool[0]]
+      // Two distinct voices; prefer different names for audible contrast.
+      return [pool[0], pool.find(v => v.name !== pool[0].name) || pool[1]]
+    }
+
+    function playTwoHostAudio(script) {
+      if (!window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+        showRewindToast?.('TTS not available in this environment', true); return
+      }
+      const lines = String(script || '').split('\n')
+        .map(l => l.trim())
+        .map(l => {
+          const m = l.match(/^\**(A|B)\**\s*[::]\s*(.+)$/)
+          return m ? { host: m[1], text: m[2].replace(/\*+/g, '') } : null
+        })
+        .filter(Boolean)
+      if (!lines.length) { toggleReadAloud(messages.length - 1); return } // graceful: plain read-aloud
+      window.speechSynthesis.cancel()
+      const [vA, vB] = pickTwoVoices()
+      for (const line of lines) {
+        const u = new SpeechSynthesisUtterance(line.text)
+        const isA = line.host === 'A'
+        if (isA && vA) u.voice = vA
+        if (!isA && vB) u.voice = vB
+        u.rate = isA ? 1.08 : 1.0
+        u.pitch = (vA === vB) ? (isA ? 1.15 : 0.9) : 1.0  // same voice → contrast via pitch
+        window.speechSynthesis.speak(u)
+      }
+      showRewindToast?.(t('audio.playing'), false)
+    }
+
     async function undoLastAgentTurn() {
       try {
         const turns = await window.alaude.undoListTurns()
@@ -10818,6 +10872,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '🦙', label: 'Local Models', search: 'local models ollama', action: () => { closeCmdPalette(); toggleLocalModelsModal() } },
         { kind: 'action', icon: '↩︎', label: 'Undo last file changes', search: 'undo revert restore rollback files agent', action: () => { closeCmdPalette(); undoLastAgentTurn() } },
         { kind: 'action', icon: '⚙️', label: 'Settings', search: 'settings preferences options config hub gear', action: () => { closeCmdPalette(); toggleSettingsHub() } },
+        { kind: 'action', icon: '🎧', label: 'Listen to this — two-host audio overview', search: 'listen audio overview podcast hear read aloud two host', action: () => { closeCmdPalette(); audioOverviewStart() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
@@ -11813,6 +11868,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.backup': 'Back up & restore',
         'hub.backup.desc': 'One file with everything — keys excluded',
         'routine.nlReady': '🔔 Got it — reminder pre-filled. Check the schedule, then press Add.',
+        'audio.prompt': 'Turn this conversation (and any attached document) into a short, lively two-host audio overview I can listen to. Host A is curious and asks sharp questions; Host B explains clearly with concrete examples. 300-450 words, spoken style, no headings or stage directions. Format STRICTLY as alternating lines starting with "A: " or "B: ". End with the single most useful takeaway.',
+        'audio.making': '🎧 Writing your audio overview…',
+        'audio.playing': '🎧 Playing — Esc stops it',
+        'audio.nothing': '🎧 Nothing to overview yet — chat a little or attach a document first',
+        'audio.busy': '⏳ Wait for the current reply to finish first',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12191,6 +12251,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.backup': '备份与恢复',
         'hub.backup.desc': '一个文件包含全部——不含密钥',
         'routine.nlReady': '🔔 明白了——提醒已预填。确认时间后点「添加」。',
+        'audio.prompt': '把这段对话（以及附带的文件）改写成一段轻快的双主持人音频节目稿，供我收听。主持人 A 好奇、会提出尖锐的问题；主持人 B 解释清晰、举例具体。全长 300-450 字，口语风格，不要标题和舞台说明。严格使用交替行格式，每行以「A: 」或「B: 」开头。结尾给出一条最有用的要点。',
+        'audio.making': '🎧 正在撰写你的音频概览……',
+        'audio.playing': '🎧 播放中——按 Esc 停止',
+        'audio.nothing': '🎧 还没有可概览的内容——先聊几句或附上文件',
+        'audio.busy': '⏳ 请先等当前回复完成',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12545,6 +12610,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.backup': 'النسخ الاحتياطي والاستعادة',
         'hub.backup.desc': 'ملف واحد يضم كل شيء — دون المفاتيح',
         'routine.nlReady': '🔔 فهمت — جُهِّز التذكير. تحقَّق من الموعد ثم اضغط «إضافة».',
+        'audio.prompt': 'حوِّل هذه المحادثة (وأي مستند مرفق) إلى حلقة صوتية قصيرة وحيوية بمضيفين اثنين أستمع إليها. المضيف A فضولي يطرح أسئلة ذكية؛ والمضيف B يشرح بوضوح وبأمثلة ملموسة. 300-450 كلمة بأسلوب حديث مسموع، دون عناوين أو إرشادات مسرحية. التزم حرفيًّا بسطور متناوبة تبدأ بـ "A: " أو "B: ". واختم بأهم خلاصة واحدة.',
+        'audio.making': '🎧 يكتب النظرة الصوتية الآن…',
+        'audio.playing': '🎧 يعمل الآن — اضغط Esc للإيقاف',
+        'audio.nothing': '🎧 لا يوجد ما يُلخَّص بعد — تحدَّث قليلًا أو أرفق مستندًا أولًا',
+        'audio.busy': '⏳ انتظر اكتمال الرد الحالي أولًا',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -14139,6 +14209,15 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 cycle 12 — Paperwork sessions get one-tap next actions
         // (draft a reply letter, print) after each answer.
         maybePaperworkActions?.()
+        // v0.8 cycle 22 — an Audio Overview turn auto-plays its script
+        // with two system voices the moment it lands.
+        if (window._audioOverviewPending) {
+          window._audioOverviewPending = false
+          const fin = target[target.length - 1]
+          if (fin && typeof fin.content === 'string' && !fin.content.startsWith('Error:')) {
+            playTwoHostAudio(fin.content)
+          }
+        }
       } catch (err) {
         console.error('[callAI] error:', err)
         const prev = target[target.length - 1]
