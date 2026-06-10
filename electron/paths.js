@@ -31,7 +31,7 @@
  *       no-op (the new file already exists, the copy is skipped).
  *
  * API
- *   BASE_DIR              — ~/.labaik/
+ *   BASE_DIR              — ~/.labaik/ (or LABAIK_HOME when set)
  *   CREDENTIALS_FILE      — ~/.labaik/credentials.json
  *   EVENTS_FILE           — ~/.labaik/events.ndjson
  *   OODA_STATE_FILE       — ~/.labaik/ooda-state.json
@@ -48,7 +48,14 @@ const path = require('path')
 const os = require('os')
 
 const HOME = os.homedir()
-const BASE_DIR = path.join(HOME, '.labaik')
+
+// Test harnesses can set LABAIK_HOME to keep all state in a throwaway
+// directory. When active, legacy paths are also pointed inside that root so a
+// fixture cannot accidentally read or migrate the user's real ~/.claude or
+// ~/.alaude data.
+const CUSTOM_BASE_DIR = (process.env.LABAIK_HOME || '').trim()
+const BASE_DIR = CUSTOM_BASE_DIR ? path.resolve(CUSTOM_BASE_DIR) : path.join(HOME, '.labaik')
+const USING_CUSTOM_HOME = !!CUSTOM_BASE_DIR
 
 // Canonical (new) file locations.
 const CREDENTIALS_FILE  = path.join(BASE_DIR, 'credentials.json')
@@ -58,8 +65,8 @@ const UX_PROPOSALS_FILE = path.join(BASE_DIR, 'ux-proposals.md')
 const SPACES_FILE       = path.join(BASE_DIR, 'spaces.json')
 
 // Legacy locations we might need to read from on first boot.
-const LEGACY_CLAUDE_DIR = path.join(HOME, '.claude')
-const LEGACY_ALAUDE_DIR = path.join(HOME, '.alaude')
+const LEGACY_CLAUDE_DIR = USING_CUSTOM_HOME ? path.join(BASE_DIR, '__legacy_claude__') : path.join(HOME, '.claude')
+const LEGACY_ALAUDE_DIR = USING_CUSTOM_HOME ? path.join(BASE_DIR, '__legacy_alaude__') : path.join(HOME, '.alaude')
 
 function ensureBaseDir() {
   try { fs.mkdirSync(BASE_DIR, { recursive: true, mode: 0o700 }) } catch {}
@@ -99,6 +106,7 @@ function resolveWithMigration(canonical, legacyPaths) {
 module.exports = {
   HOME,
   BASE_DIR,
+  USING_CUSTOM_HOME,
   CREDENTIALS_FILE,
   EVENTS_FILE,
   OODA_STATE_FILE,

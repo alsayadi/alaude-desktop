@@ -131,7 +131,7 @@ async function remove(model) {
 // moves it to /Applications, and launches it. No browser trip. No separate
 // installer. One confirmation, ~60s on a decent connection.
 //
-// Linux: downloads the static tarball, extracts `ollama` into ~/.alaude/bin/
+// Linux: downloads the static tarball, extracts `ollama` into ~/.labaik/bin/
 // and spawns the daemon as a child process. Doesn't touch system dirs.
 // Windows: not implemented yet — falls back to opening ollama.com.
 //
@@ -143,6 +143,7 @@ const fs = require('fs')
 const _path = require('path')
 const os = require('os')
 const _childProcess = require('child_process')
+const paths = require('./paths')
 const { spawn } = _childProcess
 
 function _ghAssetUrl() {
@@ -216,8 +217,8 @@ async function installOllama({ onProgress } = {}) {
       await _run('/usr/bin/open', ['-g', userTarget])
     }
   } else {
-    // Linux: place binary in ~/.alaude/bin/ollama and spawn daemon
-    const binDir = _path.join(os.homedir(), '.alaude', 'bin')
+    // Linux: place binary in ~/.labaik/bin/ollama and spawn daemon
+    const binDir = _path.join(paths.BASE_DIR, 'bin')
     fs.mkdirSync(binDir, { recursive: true })
     const extractedBin = _path.join(tmpDir, 'bin', 'ollama')
     const target = _path.join(binDir, 'ollama')

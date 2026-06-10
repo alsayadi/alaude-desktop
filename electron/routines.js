@@ -1,64 +1,78 @@
 /**
- * Cron Skills — scheduled background chats.
+ * Routines — cron-scheduled background chats.
  *
- * A "skill" is a prompt + cron spec that Labaik runs automatically on a
+ * A "routine" is a prompt + cron spec that Labaik runs automatically on a
  * schedule. Examples:
  *   • 08:00 daily → "summarize overnight Hacker News"
  *   • 18:00 weekdays → "draft a standup update from my git log"
  *   • every 15 minutes → "ping the production status URL and alert if it changed"
  *
+ * (Formerly "Cron Skills" — renamed so "Skills" can mean folder-based
+ * SKILL.md skills, matching the wider agent ecosystem. See
+ * docs/research/agent-landscape-2026.md and electron/folder-skills.js.)
+ *
  * Runtime behaviour
- *   • Skills live in ~/.alaude/skills.json.
- *   • A polling scheduler wakes once a minute and fires any due skill via
- *     the chat IPC. Results stream into a dedicated "Skills" session so the
- *     user can scroll back through automated runs.
- *   • Fires are serialised to avoid hammering the provider — one skill at a
- *     time. A skill that takes 2 min just pushes out the next one.
+ *   • Routines live in ~/.labaik/routines.json (migrated from the old
+ *     skills.json on first load).
+ *   • A polling scheduler wakes once a minute and fires any due routine via
+ *     the chat IPC.
+ *   • Fires are serialised to avoid hammering the provider — one routine at
+ *     a time. A routine that takes 2 min just pushes out the next one.
  *
  * Why in-process and not a cron daemon: the user's machine must be awake
- * for a skill to run, and we want provider creds + memory + workspace
+ * for a routine to run, and we want provider creds + memory + workspace
  * context available. Simpler than shelling to `cron`.
  */
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
+const paths = require('./paths')
 
-const SKILLS_FILE = path.join(os.homedir(), '.alaude', 'skills.json')
-const HISTORY_FILE = path.join(os.homedir(), '.alaude', 'skill-history.ndjson')
+const ROUTINES_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'routines.json'),
+  [path.join(paths.BASE_DIR, 'skills.json'),
+   path.join(paths.LEGACY_ALAUDE_DIR, 'skills.json')]
+)
+const HISTORY_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'routine-history.ndjson'),
+  [path.join(paths.BASE_DIR, 'skill-history.ndjson')]
+)
 
 function _load() {
   try {
-    if (!fs.existsSync(SKILLS_FILE)) return { version: 1, skills: [] }
-    const data = JSON.parse(fs.readFileSync(SKILLS_FILE, 'utf8'))
-    if (!Array.isArray(data.skills)) data.skills = []
+    if (!fs.existsSync(ROUTINES_FILE)) return { version: 1, routines: [] }
+    const data = JSON.parse(fs.readFileSync(ROUTINES_FILE, 'utf8'))
+    // Accept the pre-rename shape ({ skills: [...] }) so a migrated
+    // skills.json keeps working without a separate rewrite step.
+    if (!Array.isArray(data.routines)) data.routines = Array.isArray(data.skills) ? data.skills : []
+    delete data.skills
     return data
-  } catch { return { version: 1, skills: [] } }
+  } catch { return { version: 1, routines: [] } }
 }
 
 function _save(state) {
   try {
-    fs.mkdirSync(path.dirname(SKILLS_FILE), { recursive: true })
-    fs.writeFileSync(SKILLS_FILE, JSON.stringify(state, null, 2), 'utf8')
+    fs.mkdirSync(path.dirname(ROUTINES_FILE), { recursive: true })
+    fs.writeFileSync(ROUTINES_FILE, JSON.stringify(state, null, 2), 'utf8')
   } catch (err) {
-    console.error('[skills] save failed:', err.message)
+    console.error('[routines] save failed:', err.message)
   }
 }
 
-function list() { return _load().skills }
+function list() { return _load().routines }
 
-function upsert(skill) {
+function upsert(routine) {
   const state = _load()
-  const id = skill.id || ('sk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6))
+  const id = routine.id || ('rt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6))
   const now = Date.now()
-  const existing = state.skills.find(s => s.id === id)
+  const existing = state.routines.find(s => s.id === id)
   const merged = {
     id,
-    name: String(skill.name || 'Untitled skill').slice(0, 100),
-    prompt: String(skill.prompt || ''),
-    model: skill.model || '',
-    cron: String(skill.cron || ''),  // e.g. "0 8 * * *" or "*/15 * * * *"
-    enabled: skill.enabled !== false,
+    name: String(routine.name || 'Untitled routine').slice(0, 100),
+    prompt: String(routine.prompt || ''),
+    model: routine.model || '',
+    cron: String(routine.cron || ''),  // e.g. "0 8 * * *" or "*/15 * * * *"
+    enabled: routine.enabled !== false,
     lastRunAt: existing?.lastRunAt || null,
     lastStatus: existing?.lastStatus || null,
     lastResult: existing?.lastResult || null,
@@ -68,22 +82,22 @@ function upsert(skill) {
   }
   // Recompute nextFireAt on every save
   merged.nextFireAt = _nextFire(merged.cron, now)
-  const idx = state.skills.findIndex(s => s.id === id)
-  if (idx >= 0) state.skills[idx] = merged
-  else state.skills.push(merged)
+  const idx = state.routines.findIndex(s => s.id === id)
+  if (idx >= 0) state.routines[idx] = merged
+  else state.routines.push(merged)
   _save(state)
   return merged
 }
 
 function remove(id) {
   const state = _load()
-  state.skills = state.skills.filter(s => s.id !== id)
+  state.routines = state.routines.filter(s => s.id !== id)
   _save(state)
 }
 
 function setEnabled(id, enabled) {
   const state = _load()
-  const s = state.skills.find(s => s.id === id)
+  const s = state.routines.find(s => s.id === id)
   if (!s) return false
   s.enabled = !!enabled
   s.updatedAt = Date.now()
@@ -94,7 +108,7 @@ function setEnabled(id, enabled) {
 
 function recordRun(id, { status, resultPreview }) {
   const state = _load()
-  const s = state.skills.find(x => x.id === id)
+  const s = state.routines.find(x => x.id === id)
   if (!s) return
   s.lastRunAt = Date.now()
   s.lastStatus = status
@@ -191,7 +205,7 @@ function startScheduler(onFire) {
     const now = Date.now()
     const currentMinute = new Date(now)
     currentMinute.setSeconds(0, 0)
-    for (const s of state.skills) {
+    for (const s of state.routines) {
       if (!s.enabled) continue
       const parsed = _parseCron(s.cron)
       if (!_matchesNow(parsed, currentMinute)) continue
@@ -202,7 +216,7 @@ function startScheduler(onFire) {
       try {
         await onFire(s)
       } catch (err) {
-        console.error('[skills] fire failed:', err.message)
+        console.error('[routines] fire failed:', err.message)
         recordRun(s.id, { status: 'error', resultPreview: String(err.message).slice(0, 400) })
       } finally {
         _running = false
@@ -211,7 +225,7 @@ function startScheduler(onFire) {
   }
   // Poll every 30s (twice per minute) to minimise drift.
   _pollTimer = setInterval(() => { tick().catch(() => {}) }, 30000)
-  // Also do an immediate tick so a skill defined to run "every minute" fires
+  // Also do an immediate tick so a routine defined to run "every minute" fires
   // right after app boot rather than waiting for the first interval.
   setTimeout(() => tick().catch(() => {}), 2000)
 }

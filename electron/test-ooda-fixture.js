@@ -5,22 +5,19 @@
  * loop in 4 batches of 10 and verify each batch produces a sensible
  * diagnosis.
  *
- * Does NOT touch real event logs — uses isolated temp files.
+ * Does NOT touch real event logs. It points LABAIK_HOME at an isolated temp
+ * directory before loading OODA, then deletes that directory at the end.
  */
 
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
+const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'labaik-ooda-'))
+process.env.LABAIK_HOME = testHome
 const ooda = require('./ooda')
 
-// Back up real logs so we don't pollute user data
-const backups = {}
-for (const f of [ooda.EVENTS_FILE, ooda.STATE_FILE, ooda.PROPOSALS_FILE]) {
-  if (fs.existsSync(f)) backups[f] = fs.readFileSync(f)
-  try { fs.unlinkSync(f) } catch {}
-}
-
+try {
 let t = Date.now() - 4 * 3600 * 1000 // 4 hours ago
 const seq = []
 let idx = 0
@@ -123,14 +120,12 @@ console.log(`Total batches produced: ${results.length}`)
 // Show the proposals file
 if (fs.existsSync(ooda.PROPOSALS_FILE)) {
   const proposals = fs.readFileSync(ooda.PROPOSALS_FILE, 'utf8')
-  console.log('\n─── ~/.claude/alaude-ux-proposals.md preview ───\n')
+  console.log(`\n─── ${ooda.PROPOSALS_FILE} preview ───\n`)
   console.log(proposals.slice(0, 1500))
   console.log('\n... (truncated)')
 }
 
-// Restore real data
-for (const [f, data] of Object.entries(backups)) fs.writeFileSync(f, data)
-for (const f of [ooda.EVENTS_FILE, ooda.STATE_FILE, ooda.PROPOSALS_FILE]) {
-  if (!backups[f] && fs.existsSync(f)) { try { fs.unlinkSync(f) } catch {} }
+console.log('\n✅ Hermetic fixture passed; real user data was untouched')
+} finally {
+  try { fs.rmSync(testHome, { recursive: true, force: true }) } catch {}
 }
-console.log('\n✅ User data restored')

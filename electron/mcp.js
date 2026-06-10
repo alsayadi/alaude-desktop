@@ -1,7 +1,7 @@
 /**
  * MCP (Model Context Protocol) client — minimal, dep-free.
  *
- * Users drop a JSON config at ~/.alaude/mcp-servers.json:
+ * Users drop a JSON config at ~/.labaik/mcp-servers.json:
  *   { "servers": [
  *     { "name": "fs",      "command": "npx", "args": ["@modelcontextprotocol/server-filesystem", "/Users/me/docs"] },
  *     { "name": "github",  "command": "npx", "args": ["@modelcontextprotocol/server-github"], "env": { "GITHUB_TOKEN": "ghp_…" } },
@@ -23,10 +23,13 @@
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
 const { spawn } = require('child_process')
+const paths = require('./paths')
 
-const CONFIG_FILE = path.join(os.homedir(), '.alaude', 'mcp-servers.json')
+const CONFIG_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'mcp-servers.json'),
+  [path.join(paths.LEGACY_ALAUDE_DIR, 'mcp-servers.json')]
+)
 
 // Each server: { name, proc, tools: [...], _msgId, _pending: Map<id, resolve/reject>, _buf }
 const _servers = new Map()

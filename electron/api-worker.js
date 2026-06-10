@@ -10,6 +10,9 @@ const path = require('path')
 const os = require('os')
 const dns = require('dns')
 const https = require('https')
+const paths = require('./paths')
+// v0.8 — folder skills (SKILL.md). Plain fs module, safe in the worker.
+const folderSkills = require('./folder-skills')
 
 // v0.7.61 — provider routing moved into a shared registry so the worker
 // and the main process agree on which provider a given model belongs to.
@@ -69,10 +72,17 @@ function checkCommandScope(command, workspacePath) {
 // error promptly instead of waiting 30s for the parent-process's `exit`
 // handler to notice a dead worker.
 let _inFlightRequest = null  // { id, rejectOnCrash } — set when handleChat starts
+function formatErrorForUser(err) {
+  const base = err?.message || String(err)
+  const cause = err?.cause?.message || err?.cause?.code || err?.error?.message
+  if (cause && !base.includes(cause)) return `${base} (${cause})`
+  if (err?.status && !base.includes(String(err.status))) return `${base} (HTTP ${err.status})`
+  return base
+}
 process.on('uncaughtException', (err) => {
   try { process.stderr.write(`[worker] uncaughtException (recovered): ${err?.stack || err}\n`) } catch {}
   if (_inFlightRequest?.id != null) {
-    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: formatErrorForUser(err) }) + '\n') } catch {}
     _inFlightRequest = null
   }
   // Do NOT exit — the loop can accept new work.
@@ -80,7 +90,7 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   try { process.stderr.write(`[worker] unhandledRejection: ${err?.stack || err}\n`) } catch {}
   if (_inFlightRequest?.id != null) {
-    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: String(err?.message || err) }) + '\n') } catch {}
+    try { process.stdout.write(JSON.stringify({ id: _inFlightRequest.id, error: formatErrorForUser(err) }) + '\n') } catch {}
     _inFlightRequest = null
   }
 })
@@ -96,34 +106,48 @@ dns.lookup = function patchedLookup(hostname, options, callback) {
   if (typeof options === 'function') { callback = options; options = {} }
   if (typeof options === 'number') { options = { family: options } }
 
-  // Try system DNS first (preserves VPN routing)
-  const timeout = setTimeout(() => {
-    process.stderr.write(`[dns] system DNS timed out for ${hostname}, trying public DNS\n`)
+  let settled = false
+  let fallbackTried = false
+  const done = (...args) => {
+    if (settled) return
+    settled = true
+    clearTimeout(fallbackTimer)
+    clearTimeout(finalTimer)
+    callback(...args)
+  }
+  const usePublicDns = (reason, allowFailure) => {
+    if (fallbackTried || settled) return
+    fallbackTried = true
+    process.stderr.write(`[dns] ${reason}, trying public DNS\n`)
     publicResolver.resolve4(hostname, (err2, addresses) => {
+      if (settled) return
       if (!err2 && addresses?.length) {
         process.stderr.write(`[dns] public DNS resolved ${hostname} -> ${addresses[0]}\n`)
-        if (options.all) return callback(null, addresses.map(a => ({ address: a, family: 4 })))
-        return callback(null, addresses[0], 4)
+        if (options.all) return done(null, addresses.map(a => ({ address: a, family: 4 })))
+        return done(null, addresses[0], 4)
       }
-      callback(err2 || new Error(`DNS resolution failed for ${hostname}`))
+      process.stderr.write(`[dns] public DNS failed for ${hostname}: ${(err2 && err2.message) || 'no addresses'}\n`)
+      if (allowFailure) done(err2 || new Error(`DNS resolution failed for ${hostname}`))
     })
+  }
+
+  // Try system DNS first (preserves VPN routing). If it is merely slow, public
+  // DNS can win early, but public failure no longer kills the still-pending
+  // system lookup.
+  const fallbackTimer = setTimeout(() => {
+    usePublicDns(`system DNS timed out for ${hostname}`, false)
   }, 3000)
+  const finalTimer = setTimeout(() => {
+    done(new Error(`DNS resolution timed out for ${hostname}`))
+  }, 20000)
 
   _origLookup.call(dns, hostname, options, (err, ...args) => {
-    clearTimeout(timeout)
     if (!err) {
       process.stderr.write(`[dns] system DNS resolved ${hostname}\n`)
-      return callback(null, ...args)
+      return done(null, ...args)
     }
-    process.stderr.write(`[dns] system DNS failed for ${hostname}: ${err.message}, trying public DNS\n`)
-    publicResolver.resolve4(hostname, (err2, addresses) => {
-      if (!err2 && addresses?.length) {
-        process.stderr.write(`[dns] public DNS resolved ${hostname} -> ${addresses[0]}\n`)
-        if (options.all) return callback(null, addresses.map(a => ({ address: a, family: 4 })))
-        return callback(null, addresses[0], 4)
-      }
-      callback(err2 || err)
-    })
+    process.stderr.write(`[dns] system DNS failed for ${hostname}: ${err.message}\n`)
+    usePublicDns(`system DNS failed for ${hostname}: ${err.message}`, true)
   })
 }
 
@@ -136,9 +160,9 @@ function getCredential(provider) {
   // `claude-local-src/` fallback so existing users don't lose access —
   // main.js writes to the new location on any set-key, which takes over.
   const credPaths = [
-    path.join(os.homedir(), '.labaik', 'credentials.json'),
-    path.join(os.homedir(), '.claude', '.credentials.json'),
-    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
+    paths.CREDENTIALS_FILE,
+    path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json'),
+    ...(paths.USING_CUSTOM_HOME ? [] : [path.join(os.homedir(), 'claude-local-src', '.credentials.json')]),
   ]
   for (const credPath of credPaths) {
     try {
@@ -233,6 +257,128 @@ function detectRichIntent(userText) {
   return keys
 }
 
+// v0.7.67 — AGENTS.md / CLAUDE.md auto-injection.
+//
+// When the workspace contains an AGENTS.md (vendor-neutral convention) or
+// CLAUDE.md (Anthropic's convention) at its root, append its contents to the
+// system prompt so project-specific instructions reach the model on every
+// turn — no separate pasting, no settings UI to maintain.
+//
+// Precedence: AGENTS.md > CLAUDE.md > .agents.md > .claude.md. First hit wins.
+// Capped at 16KB so a 200KB README accidentally renamed AGENTS.md doesn't
+// blow up the context window. Truncation marker tells the model + the user
+// what happened.
+//
+// Read fresh on every chat turn (no cache) so the user can edit the file
+// and see the change take effect on the next message. Files are tiny
+// (single-digit KB typically) — re-reading is cheaper than cache invalidation.
+const AGENTS_MD_CANDIDATES = ['AGENTS.md', 'CLAUDE.md', '.agents.md', '.claude.md']
+const AGENTS_MD_MAX_BYTES = 16 * 1024
+
+function loadProjectInstructions(workspacePath) {
+  if (!workspacePath) return null
+  for (const name of AGENTS_MD_CANDIDATES) {
+    const fp = path.join(workspacePath, name)
+    try {
+      const stat = fs.statSync(fp)
+      if (!stat.isFile()) continue
+      let text = fs.readFileSync(fp, 'utf8')
+      const originalLen = text.length
+      if (text.length > AGENTS_MD_MAX_BYTES) {
+        text = text.slice(0, AGENTS_MD_MAX_BYTES) +
+          `\n\n[…truncated ${originalLen - AGENTS_MD_MAX_BYTES} chars on inject — keep ${name} under ${AGENTS_MD_MAX_BYTES / 1024}KB for full context]`
+      }
+      return { name, text, bytes: originalLen }
+    } catch { /* not present, try next candidate */ }
+  }
+  return null
+}
+
+// v0.4.2 — git awareness. When the workspace is a git repo, inject a compact
+// snapshot (branch, short status, recent commits) so the model knows what
+// it's working on without having to spend tool calls on `git status` /
+// `git log`. Mirrors the gitStatus block Claude Code seeds. Read fresh each
+// turn — cheap (single-digit ms) and always current. Fails silently for
+// non-repos or if git isn't installed.
+function loadGitContext(workspacePath) {
+  if (!workspacePath) return null
+  const { execSync } = require('child_process')
+  const run = (cmd) => {
+    try {
+      return execSync(cmd, { cwd: workspacePath, timeout: 2000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    } catch { return null }
+  }
+  const inside = run('git rev-parse --is-inside-work-tree')
+  if (inside !== 'true') return null
+  const branch = run('git rev-parse --abbrev-ref HEAD') || 'detached'
+  // Porcelain status, capped so a huge uncommitted tree doesn't flood context.
+  let status = run('git status --porcelain') || ''
+  const statusLines = status ? status.split('\n') : []
+  const STATUS_CAP = 30
+  let statusBlock = statusLines.slice(0, STATUS_CAP).join('\n')
+  if (statusLines.length > STATUS_CAP) statusBlock += `\n… and ${statusLines.length - STATUS_CAP} more changed file(s)`
+  if (!statusBlock) statusBlock = '(clean)'
+  const log = run('git log --oneline -5') || '(no commits yet)'
+  return { branch, statusBlock, log, dirty: statusLines.length > 0 }
+}
+
+// v0.4.4 — @-mention expansion. The composer lets the user type "@path/to/file"
+// to reference a workspace file (see updateAtMenu in the renderer). Here we
+// resolve those tokens in the latest user turn and inline the file contents so
+// the model sees them without spending a read_file tool call — Claude Code's
+// @-mention behavior. Path-escape guarded: a mention that resolves outside the
+// workspace, or to a missing/binary/huge file, is left as plain text.
+const MENTION_MAX_BYTES = 24 * 1024
+const MENTION_MAX_FILES = 10
+function expandFileMentions(messages, workspacePath) {
+  if (!workspacePath || !Array.isArray(messages)) return
+  // Operate on the latest user turn only.
+  let idx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'user') { idx = i; break }
+  }
+  if (idx === -1) return
+  const msg = messages[idx]
+  const text = typeof msg.content === 'string'
+    ? msg.content
+    : Array.isArray(msg.content)
+      ? msg.content.filter(p => p?.type === 'text').map(p => p.text || '').join('\n')
+      : ''
+  if (!text || text.indexOf('@') === -1) return
+  const root = path.resolve(workspacePath)
+  const seen = new Set()
+  const blocks = []
+  const re = /(^|\s)@([^\s@]+)/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    if (blocks.length >= MENTION_MAX_FILES) break
+    // Trim trailing punctuation that's likely sentence grammar, not the path.
+    let rel = m[2].replace(/[.,;:)\]]+$/, '')
+    if (!rel || seen.has(rel)) continue
+    seen.add(rel)
+    const fp = path.resolve(root, rel)
+    if (fp !== root && !fp.startsWith(root + path.sep)) continue   // escapes workspace
+    try {
+      const st = fs.statSync(fp)
+      if (!st.isFile()) continue
+      let body = fs.readFileSync(fp, 'utf8')
+      if (body.includes("\u0000")) continue  // null byte -> binary
+      const overBytes = Buffer.byteLength(body, 'utf8') > MENTION_MAX_BYTES
+      if (overBytes) body = body.slice(0, MENTION_MAX_BYTES) + `\n… [truncated — @${rel} is larger than ${MENTION_MAX_BYTES / 1024}KB]`
+      const ext = (rel.split('.').pop() || '').toLowerCase()
+      blocks.push(`### @${rel}\n\n\`\`\`${ext}\n${body}\n\`\`\``)
+    } catch { /* missing / unreadable — leave token as plain text */ }
+  }
+  if (!blocks.length) return
+  const attachment = `\n\n---\nReferenced files (auto-attached from @ mentions):\n\n${blocks.join('\n\n')}`
+  if (typeof msg.content === 'string') {
+    msg.content = msg.content + attachment
+  } else if (Array.isArray(msg.content)) {
+    msg.content = [...msg.content, { type: 'text', text: attachment }]
+  }
+  try { console.error(`[worker] Expanded ${blocks.length} @-mention(s) into context`) } catch {}
+}
+
 function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userText }) {
   let sys = 'You are Labaik, a helpful AI assistant.'
   // v0.7.42 — ambiguity nudge. Without this, a one-word prompt like "test"
@@ -252,6 +398,8 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
     // installed by default. The model often reaches for `python` which
     // fails with ENOENT. Tell it up front.
     sys += ` When running Python, use \`python3\` (not \`python\`) — plain \`python\` is not installed on modern macOS.`
+    // v0.4.4 — tell the model that @-mentioned files are pre-attached.
+    sys += ` If the user references a file with @path (e.g. "@src/app.js"), its contents are auto-attached below under "Referenced files" — read from there instead of re-reading with a tool.`
   }
   // Local models: stay quiet unless the user clearly wants a rich block. Small
   // open-weight models process every token slowly, and they often ignore the
@@ -267,6 +415,211 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
     // Cloud models get a tiny one-liner — cheap enough, reminds them the
     // rich blocks exist for follow-up turns in the same session.
     sys += '\n\nLabaik renders chart / mermaid / svg / html / pptx / docx / xlsx fenced blocks when the user asks for visuals or exports.'
+  }
+  // v0.7.67 — inject project instructions from AGENTS.md / CLAUDE.md if present.
+  // Goes BEFORE the space prompt so the user's space-level system prompt can
+  // override or extend the project's defaults if they conflict.
+  if (workspacePath) {
+    const proj = loadProjectInstructions(workspacePath)
+    if (proj) {
+      sys += `\n\n## Project instructions (from ${proj.name})\n\n${proj.text}`
+      try { console.error(`[worker] Injected ${proj.name} (${proj.bytes} bytes) from ${workspacePath}`) } catch {}
+    }
+    // v0.4.2 — git snapshot so the model has repo context for free.
+    const git = loadGitContext(workspacePath)
+    if (git) {
+      sys += `\n\n## Git status\n\nBranch: ${git.branch}\n\nStatus${git.dirty ? '' : ' (clean)'}:\n${git.statusBlock}\n\nRecent commits:\n${git.log}\n\nUse this for context (don't re-run git status/log unless you need fresher data). Never commit, push, or change git history unless the user explicitly asks.`
+      try { console.error(`[worker] Injected git context (branch ${git.branch}, ${git.dirty ? 'dirty' : 'clean'})`) } catch {}
+    }
+    // v0.4.3 — live task list. For multi-step work, the model maintains a
+    // checklist the user can watch progress against. Skip for local models
+    // (extra tokens hurt small-model latency/quality).
+    if (provider !== 'ollama') {
+      sys += `
+
+## Task checklist (multi-step work)
+
+When a request needs 3+ distinct steps, maintain a live checklist so the
+user can see progress. Emit a fenced \`\`\`todos\`\`\` JSON block:
+
+\`\`\`todos
+{"items":[
+  {"title":"Short task description","status":"done"},
+  {"title":"The step you're on now","status":"in_progress"},
+  {"title":"A step not started yet","status":"todo"}
+]}
+\`\`\`
+
+Rules:
+- status is one of: "todo", "in_progress", "done".
+- Keep exactly ONE item "in_progress" at a time.
+- RE-EMIT the FULL updated list each time you report progress (after
+  finishing steps / between tool batches), flipping statuses as you go —
+  the UI shows the latest block as a live progress card.
+- Titles are short (3-8 words), user-facing, no file paths.
+- Skip the checklist for simple 1-2 step requests — it's only worth the
+  noise on genuinely multi-step tasks.`
+    }
+  }
+  // v0.7.67 — Browser/web tools restraint. The browser_* tools are tempting
+  // for the model to use speculatively ("let me look up this package on
+  // npm"), which surprises the user with a popped-up Chromium window they
+  // didn't ask for. This system-level guard tells the model to treat
+  // browser tools as opt-in: only fire when the user explicitly asks.
+  sys += `
+
+## Browser tools are opt-in
+
+The browser_* tools (browser_navigate, browser_get_text, browser_click,
+browser_fill, browser_screenshot) open a real Chromium window the user
+will see. DO NOT use them unless:
+
+1. The user explicitly asks you to "open", "go to", "visit", "look up
+   online", "browse", or "fetch" a URL or website, OR
+2. They asked a question that genuinely cannot be answered without live
+   web data (e.g. "what's the latest version of X right now?", "what
+   does this URL say?") AND the answer would be wrong without it.
+
+Do NOT browse to:
+- Look up package documentation, library docs, npm/PyPI pages — write
+  your answer from training. If you're unsure, say so and offer to look
+  it up if the user wants.
+- "Verify" facts, "research", or grab examples speculatively.
+- Find sample code for a task — write it yourself.
+
+When in doubt: don't browse. Tell the user what you'd browse for and
+let them say "yes look it up" first.`
+
+  // v0.7.72 — Output cleanliness rules. Two failure modes the user has
+  // flagged: chatty per-step narration during tool work, and raw shell
+  // stderr (pip notices, install spam) pasted into the assistant's reply.
+  sys += `
+
+## Output cleanliness
+
+The Labaik UI shows live activity chips while you call tools, so you
+DO NOT need to narrate "Let me X… Now Y… Server is live… Let me open
+it…" as plain text. The chips already say what's happening; doubling
+it as prose is noise.
+
+When tools return verbose output (pip notices, npm warnings, deprecated
+flags, install logs, lint warnings about the tool itself), do NOT
+paste them into your reply. Pull out only what's useful to the user
+("installed 4 packages", "tests passed") and skip the rest. Tool
+stderr that's irrelevant to the user's request belongs in the worker
+log, not in chat.
+
+When you mention a filename, write it as plain text — \`app.py\` or
+just app.py — never as a markdown link to a fake URL. Same for
+sentence-end words: write "scaffold it now. Now let me…" with a real
+sentence break, not a domain-looking pseudo-link.`
+
+  // v0.7.67 — Ask-user-question capability. Any chat can use this; the
+  // renderer turns the block into a single multi-question popup.
+  sys += `
+
+## Asking the user clarifying questions
+
+You can ask 1-3 clarifying questions when the user's request has a real
+fork in it — different scope / format / approach / tone — that would
+shape the answer meaningfully. The user gets a tidy popup with picker
+options + a "Skip — use defaults" button, so asking is cheap on their
+side. Use it.
+
+Ask when:
+- The decision genuinely changes the shape of the answer (scope, tone,
+  output format, level of depth, target audience, approach).
+- The request is open-ended enough that you'd otherwise be making
+  meaningful assumptions (e.g. "build me an app" → which kind?
+  "summarize this" → how long? for whom?).
+- A wrong guess would waste the user's time or cost them real money.
+
+Don't ask when:
+- The decision is trivial and one-line — just pick reasonably and
+  mention your assumption in passing ("I'll assume Python — say if
+  you want a different stack").
+- The user already specified the answer somewhere in the conversation.
+- You're in autopilot for a tiny task (rename a variable, fix a typo).
+
+When you DO ask, emit a SINGLE structured question block with up to 3
+questions inside it. The user gets ONE popup with all questions stacked
+and answers them in one click of "Submit". Never emit multiple ask-blocks
+across turns — gather every question you need ONCE.
+
+### What to ask about
+
+Anywhere you'd otherwise GUESS at the user's intent. Examples across
+different domains:
+
+- **Scope**: "Should this run on every save or only when I push?"
+- **Behavior**: "On error, should it halt the flow or log and continue?"
+- **Output format**: "Markdown report, CSV, or JSON?"
+- **Trade-offs**: "Optimize for speed or for readability?"
+- **Coverage**: "Just the happy path, or full edge-case handling?"
+- **Tone / register**: "Casual / formal / academic?"
+- **Approach**: "Quick patch on top of the existing code, or refactor it properly?"
+- **Audience**: "Are you new to this topic, or comfortable with the basics?"
+- **Privacy**: "Run locally only, or sync to the cloud?"
+- **Length**: "1-paragraph summary, 1-page brief, or full deep-dive?"
+- **Data source**: "Use the sample CSV, or the live API?"
+- **Tech stack** — when relevant. Don't ask about tools when the task
+  isn't tool-flavored (writing a poem doesn't need a framework choice).
+
+### Format
+
+Fenced \`\`\`ask\`\`\` block with JSON. Below is just an EXAMPLE — use the
+schema for whatever your actual questions are:
+
+\`\`\`ask
+{
+  "questions": [
+    {
+      "question": "How long should the summary be?",
+      "options": [
+        {"label": "One paragraph", "desc": "Quick gist, ~3-4 sentences", "recommended": true},
+        {"label": "One page", "desc": "Structured with headings, ~500 words"},
+        {"label": "Full deep-dive", "desc": "Everything you'd put in a report"}
+      ]
+    },
+    {
+      "question": "What tone?",
+      "options": [
+        {"label": "Casual", "desc": "Like explaining to a friend", "recommended": true},
+        {"label": "Professional", "desc": "Suitable for a stakeholder email"}
+      ]
+    }
+  ]
+}
+\`\`\`
+
+### Hard rules
+
+- AT MOST 3 questions per block. 1-2 is better. Pick the decisions where
+  guessing wrong would actually waste the user's time.
+- 2-4 options per question. 3 is usually best.
+- ALWAYS mark exactly ONE option per question with \`"recommended": true\`.
+- Each option's "desc" is ONE short sentence on the trade-off.
+- If the user clicks "Skip — use defaults", proceed with the recommended
+  options as the answer. Do NOT re-ask.
+
+### When NOT to ask
+
+- The intent is unambiguous — just do the work.
+- A yes/no that's obviously yes — just do it.
+- Asking for free-form data (a name, a path, a URL) — use prose.
+- The user has already answered / skipped — don't re-ask.`
+  // v0.8 — folder skills index. Names + descriptions only; bodies load via
+  // the use_skill tool so unused skills cost ~a line of tokens each. Skipped
+  // for local models (same latency budget reasoning as the task checklist —
+  // and tool-less local models couldn't call use_skill anyway).
+  if (!isLocal) {
+    const skills = listSkillsSafe()
+    if (skills.length) {
+      sys += `\n\n## Skills\n\nThe user has installed skills — reusable instruction sets for specific tasks. When a request matches a skill's description, call the use_skill tool with its slug FIRST, then follow the loaded instructions. If the user types /<slug>, that's an explicit invocation. Available:\n`
+      for (const sk of skills) {
+        sys += `\n- ${sk.slug}${sk.name !== sk.slug ? ` (${sk.name})` : ''}${sk.description ? ` — ${sk.description}` : ''}`
+      }
+    }
   }
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys
@@ -297,6 +650,56 @@ const TOOLS = [
   { type: 'function', function: { name: 'start_dev_server', description: 'Start a dev server in the background (npm run dev, python -m http.server, etc). Returns the process ID. The server keeps running.', parameters: { type: 'object', properties: { command: { type: 'string', description: 'Command to start the server (e.g. "npm run dev")' }, port: { type: 'number', description: 'Expected port number (e.g. 3000)' } }, required: ['command'] } } },
 ]
 
+// ── Sub-agents (v0.4.5) ────────────────────────────────────────────────────
+// A "spawn_subagent" tool that runs a focused, self-contained task in a NESTED
+// chat loop (same provider/model/workspace, fresh context, its own tool budget)
+// and returns a final report as the tool result — Claude Code's Task/sub-agent
+// pattern. Offered only at the top level (depth 0): a sub-agent never gets the
+// spawn tool itself, so recursion can't run away. Lets the parent agent fan a
+// big job into bounded pieces ("audit auth", "write the tests") without
+// drowning its own context in intermediate tool output.
+const SUBAGENT_TOOLS = [
+  { type: 'function', function: {
+    name: 'spawn_subagent',
+    description: 'Delegate a focused, self-contained sub-task to a fresh autonomous agent that has the same file/command tools scoped to this workspace. It works on its own (no user interaction) and returns a concise report. Use this to parallelize or isolate a chunk of a larger task (e.g. "investigate how routing works and summarize", "write unit tests for src/auth.js"). The sub-agent cannot spawn further sub-agents. Give it everything it needs in the prompt — it does NOT see this conversation.',
+    parameters: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'A short 3-6 word label for the sub-task (shown to the user).' },
+        prompt: { type: 'string', description: 'The full, self-contained instruction for the sub-agent. Include all context, file paths, and what to return — it has no memory of this chat.' },
+      },
+      required: ['description', 'prompt'],
+    },
+  } },
+]
+
+// ── Folder skills (v0.8) ──────────────────────────────────────────────────
+// Skills follow the SKILL.md folder convention (~/.labaik/skills/<slug>/).
+// The system prompt lists name + description only; the body enters context
+// ONLY when the model calls use_skill — Claude Code's selective-loading
+// pattern, so 30 installed skills don't cost 30 bodies of tokens per turn.
+// The tool is offered whenever at least one skill exists (no workspace
+// needed — skills are user-global).
+const SKILL_TOOLS = [
+  { type: 'function', function: {
+    name: 'use_skill',
+    description: 'Load the full instructions of an installed skill by slug. The available skills are listed in the system prompt under "## Skills". Call this when the user\'s request matches a skill\'s description (or they name it with /slug), then follow the returned instructions for the rest of the turn.',
+    parameters: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'The skill slug exactly as listed in the system prompt.' },
+      },
+      required: ['slug'],
+    },
+  } },
+]
+
+// List skills fresh per turn (cheap fs scan; user can drop a folder in and
+// use it on the next message). Returns [] on any failure.
+function listSkillsSafe() {
+  try { return folderSkills.discover() } catch { return [] }
+}
+
 // ── Screen Control tools (v0.5.10) ────────────────────────────────────────
 // Paired with Screen Vision: the model sees a screenshot, then clicks /
 // types / hits keys on the actual desktop. Tool implementations live in
@@ -315,12 +718,100 @@ const SCREEN_TOOLS = [
 // reads its own copy via `require('./browser-agent').TOOLS`; the two must
 // match. Keep them in sync if you edit one.
 const BROWSER_TOOLS = [
-  { type: 'function', function: { name: 'browser_navigate', description: 'Open or navigate a Chromium browser window to the given URL. Only http(s) allowed. Returns the final URL (after redirects) and the page title.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
-  { type: 'function', function: { name: 'browser_get_text', description: 'Read the text content of the current page, or of a specific CSS selector. Returns up to 20,000 characters.', parameters: { type: 'object', properties: { selector: { type: 'string' } } } } },
-  { type: 'function', function: { name: 'browser_click', description: 'Click an element in the current page (buttons, links). Selector must be a CSS query.', parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } } },
-  { type: 'function', function: { name: 'browser_fill', description: 'Type into an input / textarea / contenteditable element. Fires input + change events so frameworks pick up the value.', parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } } },
-  { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. Use for debugging or visual verification.', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'browser_navigate', description: 'Open or navigate a Chromium browser window to the given URL. ONLY use when the user explicitly asks you to visit a specific URL, look something up online, or interact with a webpage. Do NOT use for general research, package lookup, documentation reading, or speculative browsing — write your answer from your training and ask the user if they want a live lookup. Only http(s) allowed.', parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] } } },
+  { type: 'function', function: { name: 'browser_get_text', description: 'Read the text content of the current page, or of a specific CSS selector. Returns up to 20,000 characters. Only useful AFTER browser_navigate has been called for a specific user-requested URL.', parameters: { type: 'object', properties: { selector: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'browser_click', description: 'Click an element in the current page (buttons, links). Selector must be a CSS query. Only used when interacting with a page the user explicitly asked you to drive.', parameters: { type: 'object', properties: { selector: { type: 'string' } }, required: ['selector'] } } },
+  { type: 'function', function: { name: 'browser_fill', description: 'Type into an input / textarea / contenteditable element. Fires input + change events. Only used when interacting with a page the user explicitly asked you to drive.', parameters: { type: 'object', properties: { selector: { type: 'string' }, text: { type: 'string' } }, required: ['selector', 'text'] } } },
+  { type: 'function', function: { name: 'browser_screenshot', description: 'Capture the current browser window as a PNG. Returns base64 + mime. For debugging or showing the user what the page looks like.', parameters: { type: 'object', properties: {} } } },
 ]
+
+// v0.7.72 — Browser-tools gating. The system prompt already says "browser
+// tools are opt-in", but reasoning models (DeepSeek V4 with thinking,
+// o1/o3, etc) sometimes call them speculatively anyway, e.g.
+// `browser_navigate("about:blank")` to "warm up" before a build task that
+// has nothing to do with browsing. The user sees a popped browser window
+// they didn't ask for and an `about:blank` chip in the activity stream.
+//
+// Cleaner fix: don't even OFFER browser tools to the model unless the
+// user's most recent message signals browser intent. Detection looks for
+// either an explicit http(s) URL or a small set of unambiguous keywords.
+// False negative (user wanted browser, didn't trip heuristic) → user can
+// rephrase. False positive (model still misuses) → executor-side URL
+// guard below catches the worst cases.
+function userWantsBrowserIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  // Only the latest user message matters — earlier turns don't justify
+  // re-exposing browser tools forever. Walk backwards to the most recent
+  // role:'user' entry.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    // Strong: explicit http(s) URL.
+    if (/https?:\/\/\S+/.test(text)) return true
+    // Strong: unambiguous browse-the-web keywords.
+    // "browse", "navigate to" + url-ish noun, "look up online", "search the web",
+    // "scrape", "fetch the page", "open <a website>", "the URL".
+    if (/\b(browse|navigate to|look (it|that|this) up online|look up online|search the web|scrape|fetch the page|open the (url|link|page|site|website))\b/.test(text)) return true
+    // The literal word "browser" almost always implies the tool.
+    if (/\bbrowser\b/.test(text)) return true
+    return false
+  }
+  return false
+}
+
+// ── Image generation ──────────────────────────────────────────────────────
+// v0.7.72: tool-callable image generation. Same gating discipline as the
+// browser tools — only expose to the model when the user's latest message
+// signals image intent. Image gen routes through OpenAI's images.generate
+// (gpt-image-1 / variants). Output saved to ~/.labaik/images/{id}.png so
+// it persists across session reloads without bloating sessions.json.
+
+const IMAGE_TOOLS = [
+  { type: 'function', function: {
+    name: 'generate_image',
+    description: 'Generate an image from a text prompt. ONLY use when the user explicitly asks for an image, picture, drawing, illustration, photo, poster, logo, icon, or visual artwork. Do NOT generate images for tasks where text/code would suffice. The result is saved to disk and rendered inline in the chat.',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Detailed visual description. Include subject, style, lighting, composition. Be specific.' },
+        size: { type: 'string', enum: ['1024x1024', '1536x1024', '1024x1536'], description: 'Image dimensions. Default 1024x1024 (square). Use 1536x1024 for landscape, 1024x1536 for portrait.' },
+        quality: { type: 'string', enum: ['standard', 'high'], description: 'standard = faster/cheaper, high = more detail. Default standard.' },
+      },
+      required: ['prompt'],
+    },
+  } },
+]
+
+function userWantsImageIntent(messages) {
+  if (!Array.isArray(messages)) return false
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m?.role !== 'user') continue
+    let text = ''
+    if (typeof m.content === 'string') text = m.content
+    else if (Array.isArray(m.content)) {
+      text = m.content.filter(p => p?.type === 'text').map(p => p.text || '').join(' ')
+    }
+    if (!text) return false
+    text = text.toLowerCase()
+    // Strong, unambiguous image-request keywords. False negative is
+    // recoverable; false positive risks the model speculatively spending
+    // image-gen credits.
+    if (/\b(draw|generate|create|make|design|render|sketch|illustrate|paint)\s+(an?|the|me\s+an?)\s+(image|picture|drawing|illustration|photo|poster|logo|icon|sketch|portrait|painting|graphic|artwork|visual|cover|banner|wallpaper|avatar|mockup|scene|landscape)/i.test(text)) return true
+    if (/\b(image|picture|illustration|photo|poster|logo|icon|drawing|sketch|painting|portrait|graphic|artwork)\s+of\s+/i.test(text)) return true
+    if (/\b(visualize|visualise|show me|imagine)\s+(an?|the)?\s*(image|picture|scene|view)/i.test(text)) return true
+    return false
+  }
+  return false
+}
+
 
 // ── Health-Specific Tools ──────────────────────────────────────────────────
 
@@ -432,15 +923,28 @@ function formatHealthCard(toolName, args, result) {
 
 async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   const { execSync } = require('child_process')
-  // v0.4.0: Observe mode is read-only. The gate here lives alongside the
-  // existing containedPath guards so a wrong mode can't slip past. More
-  // granular gates (prompt / allow-list / rule resolution) arrive with the
-  // approval IPC in v0.4.1+.
+  // v0.4.0: Observe mode is read-only — a cheap inline backstop. The full
+  // gate (prompt / allow-list / rule resolution) runs in main via the
+  // approval bridge below (v0.4.1).
   const WRITE_TOOLS = new Set(['write_file', 'run_command', 'open_in_browser', 'start_dev_server',
     'browser_navigate', 'browser_click', 'browser_fill',
     'screen_click', 'screen_type', 'screen_key', 'screen_move_mouse'])
   if (mode === 'observe' && WRITE_TOOLS.has(name)) {
     return { error: `Observe mode is read-only. Switch to Careful, Flow, or Autopilot (Shift+Tab) to enable ${name}.` }
+  }
+
+  // v0.4.1: approval gate. Side-effecting filesystem/command tools route
+  // through main, which owns the permission rules AND the window that can
+  // ask the user. Main runs permissions.resolveGate(); if the verdict is
+  // 'prompt' it shows the approval dialog and waits for the user. We only
+  // gate the write/exec/open tools here — reads stay on the fast path, and
+  // browser_/screen_/mcp_ tools have their own gating downstream.
+  const GATED_TOOLS = new Set(['write_file', 'run_command', 'start_dev_server', 'open_in_browser'])
+  if (GATED_TOOLS.has(name)) {
+    const gate = await requestApproval({ tool: name, args: args || {}, workspacePath, summary: summarizeArgs(name, args) })
+    if (gate && gate.verdict && gate.verdict !== 'allow') {
+      return { error: gate.message || `Blocked: "${name}" was not approved. Ask the user to allow it, or switch permission mode.` }
+    }
   }
 
   // v0.5.5: Browser Agent — tool runs in main via IPC. All browser_* tools
@@ -455,6 +959,24 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // v0.5.10: Screen control tools — click / type / key / move. Route to main.
   if (name.startsWith('screen_')) {
     return await requestScreenTool(name, args || {})
+  }
+  // v0.7.72: image generation. Routes through OpenAI's images API.
+  // Saves the result to ~/.labaik/images/{id}.png and emits an
+  // image_generated activity event so the renderer can attach the
+  // image to the streaming bubble. Returns a brief success/error
+  // string to the model so it can compose its text reply.
+  if (name === 'generate_image') {
+    return await runImageGen(args || {})
+  }
+  // v0.8: folder skills — load a SKILL.md body on demand. Read-only, global
+  // (no workspace required), so it stays outside the approval gate.
+  if (name === 'use_skill') {
+    const skill = folderSkills.get(String(args?.slug || '').trim())
+    if (!skill) {
+      const known = listSkillsSafe().map(s => s.slug).join(', ') || '(none installed)'
+      return { error: `No skill with slug "${args?.slug}". Installed skills: ${known}` }
+    }
+    return { name: skill.name, instructions: skill.body }
   }
 
   try {
@@ -608,6 +1130,45 @@ function emitActivity(id, activity) {
   try { process.stdout.write(JSON.stringify({ id, activity }) + '\n') } catch {}
 }
 
+function shouldHeartbeatProviderWait(provider, model) {
+  return provider === 'deepseek' || /reasoner|thinking|^o[13]|^gpt-5.*think/i.test(model || '')
+}
+
+// Some reasoning providers accept a streaming request, then stay quiet before
+// the first SSE chunk. Tell main the worker is alive while the hard cap remains
+// responsible for truly wedged calls.
+async function withProviderWaitHeartbeat(provider, model, onActivity, fn) {
+  if (!shouldHeartbeatProviderWait(provider, model)) return await fn()
+
+  const ping = () => {
+    try { onActivity({ phase: 'provider_wait', provider, model }) } catch {}
+  }
+  ping()
+  const timer = setInterval(ping, 25 * 1000)
+  if (typeof timer.unref === 'function') timer.unref()
+
+  try {
+    return await fn()
+  } finally {
+    clearInterval(timer)
+  }
+}
+
+function buildChatCompletionParams({ provider, model, messages, stream, tools, suppressThinking }) {
+  const isDeepSeek = provider === 'deepseek'
+  const isDeepSeekV4 = isDeepSeek && /^deepseek-v4-/i.test(model || '')
+  const maxTokens = isDeepSeek ? 32768 : 4096
+  return {
+    model,
+    messages,
+    ...(isDeepSeek ? { max_tokens: maxTokens } : { max_completion_tokens: maxTokens }),
+    ...(stream ? { stream: true } : {}),
+    ...(tools ? { tools } : {}),
+    ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
+    ...(isDeepSeekV4 ? { reasoning_effort: 'high', thinking: { type: 'enabled' } } : {}),
+  }
+}
+
 // v0.5.5/0.5.6: Bridges for tools that live in main (browser agent &
 // MCP servers). Worker writes a request line to stdout, main runs the
 // tool, writes response back to stdin. Each request has a unique id.
@@ -627,6 +1188,27 @@ function _bridge(map, type, extra = {}) {
         resolve({ error: `${type} timed out after 60s` })
       }
     }, 60000)
+  })
+}
+
+// v0.4.1: approval bridge. Unlike the other bridges this can block on a
+// HUMAN, so it gets its own long timeout (10 min, then auto-deny) and
+// carries the chat request id so main can keep that request alive while
+// the dialog is open instead of tripping the idle timer.
+const _pendingApprovals = new Map()
+function requestApproval(detail) {
+  const id = 'ap_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  const chatId = _inFlightRequest?.id ?? null
+  try { process.stdout.write(JSON.stringify({ type: 'approval', id, chatId, ...detail }) + '\n') } catch {}
+  return new Promise((resolve) => {
+    _pendingApprovals.set(id, resolve)
+    const t = setTimeout(() => {
+      if (_pendingApprovals.has(id)) {
+        _pendingApprovals.delete(id)
+        resolve({ verdict: 'deny', message: 'Approval timed out — no response after 10 minutes.' })
+      }
+    }, 10 * 60 * 1000)
+    if (typeof t.unref === 'function') t.unref()
   })
 }
 
@@ -671,15 +1253,127 @@ function summarizeArgs(name, args) {
   if (name === 'health_calculator') return String(args.calculator || '')
   if (name === 'check_drug_interactions') return (args.drugs || []).join(', ').slice(0, 80)
   if (name === 'score_phq9' || name === 'score_gad7') return name.toUpperCase()
+  if (name === 'spawn_subagent') return String(args.description || 'task').slice(0, 80)
   return ''
 }
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode }) {
+// v0.7.67 — plan-mode addition. Appended to the system prompt when the
+// renderer requests plan mode. Tells the model to write a plan only and
+// NOT to execute. We also strip the workspace tools below so the model
+// physically cannot call write_file / run_command even if it tried.
+const PLAN_MODE_PROMPT_ADDITION = `
+
+## PLAN MODE — read this before responding
+
+You are in plan mode. The user wants a step-by-step plan, NOT execution.
+
+Rules:
+1. Do NOT call any tools. Do NOT write files. Do NOT run commands.
+
+2. **Resolve ambiguity FIRST with structured questions.** Before producing
+   a plan, look at the request: are there choices a user would reasonably
+   want to weigh in on? (framework, library, database, naming, scope,
+   etc.) If yes, emit a SINGLE \`\`\`ask\`\`\` block containing ALL the
+   questions you need answered (use the multi-question schema with the
+   \`questions\` array — see "Asking the user clarifying questions" above).
+
+   Hard ceiling: 3 questions per ask-block. 1-2 is better. Pick the most
+   important decisions; if you genuinely need more info later, ask once
+   and then plan with reasonable defaults for the rest.
+
+   Always mark exactly ONE option per question as recommended.
+
+   If the user clicks "Skip — use defaults" on the popup, proceed directly
+   to producing the plan with the recommended option as the assumed answer
+   for every question. Do NOT re-ask.
+
+3. Output a STRUCTURED PLAN BLOCK using a fenced \`\`\`plan\`\`\` JSON block.
+   The renderer turns this into a clean card. **Less is more** — the
+   user wants to know WHAT they'll get and WHAT to watch out for, not
+   the implementation details.
+
+   Required:
+     - headline: 1 line, plain English. The thing being built/done.
+     - whatYouGet: 1-2 sentences, USER-FACING outcome. Describe what the
+       user will be able to DO when this is done. NOT what you'll do.
+     - steps: 3-5 short bullets MAX. Each \`title\` is one short phrase
+       (3-7 words). Skip \`detail\` unless something is genuinely
+       non-obvious — most steps don't need it.
+
+   Optional (use sparingly):
+     - thingsToKnow: 1-3 short lines about gotchas, costs, or trade-offs
+       the user should know BEFORE approving. Skip if nothing surprising.
+     - files: list of paths you'll touch. The user CARES MOST about the
+       outcome, not the file paths — files are hidden behind a "show
+       details" toggle by default. Still include them; just keep \`steps\`
+       and \`whatYouGet\` non-technical.
+     - estimate: rough time, e.g. "~5 min".
+
+   Tone rules:
+     - Speak to the user, not about the code. "Login link expires in 15
+       min" beats "Set the JWT exp claim to 900 seconds".
+     - No jargon unless the user used it first.
+     - No file paths in \`whatYouGet\` or step titles. Save those for the
+       \`files\` section (which is collapsed by default).
+
+   Good example:
+
+   \`\`\`plan
+   {
+     "headline": "Add passwordless login",
+     "whatYouGet": "Users sign in by entering their email and clicking a magic link. No passwords to manage.",
+     "steps": [
+       {"title": "Install auth library"},
+       {"title": "Add login + verify pages"},
+       {"title": "Wire email sending"},
+       {"title": "Protect signed-in pages"}
+     ],
+     "files": [
+       {"path": "src/lib/auth.ts", "action": "create"},
+       {"path": "src/routes/auth/+page.svelte", "action": "create"},
+       {"path": "src/hooks.server.ts", "action": "modify"}
+     ],
+     "thingsToKnow": [
+       "Needs a Resend API key (free for 3,000 emails/mo)",
+       "Login links are single-use and expire in 15 minutes"
+     ],
+     "estimate": "~20 min"
+   }
+   \`\`\`
+
+   Bad example (too technical, files leaking into steps):
+
+   \`\`\`plan
+   {
+     "headline": "Set up @lucia-auth/lucia with Drizzle adapter",
+     "whatYouGet": "Implement Lucia v3 sessions backed by sessions table",
+     "steps": [
+       {"title": "Update package.json with @lucia-auth/lucia ^3.2", "detail": "..."},
+       {"title": "Configure auth.ts to import lucia + drizzleAdapter", "detail": "..."}
+     ]
+   }
+   \`\`\`
+
+4. After the plan block, end with this exact line: "Reply 'go' or click
+   Approve & execute below."
+
+   Do NOT add any other prose after the plan block. The card IS the plan.
+   If you have a short note, put it in \`thingsToKnow\`.
+
+The user will review the plan, then either approve it (which lands you
+back in normal mode with a "Proceed with the plan above" message) or
+ask for changes. Stay in plan mode until they explicitly approve.`
+
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
-    if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
-    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-5' }
+    // v0.7.67 — DeepSeek V4 Pro is the new default. Cheaper per token than
+    // OpenAI/Anthropic flagships with comparable quality on most tasks.
+    // Fallback chain in order of preference if the user lacks the key.
+    if (getApiKey('deepseek')) { provider = 'deepseek'; model = 'deepseek-v4-pro' }
+    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-6' }
+    else if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
     else throw new Error('No API key configured')
   }
   process.stderr.write(`[worker] resolved provider="${provider}" model="${model}"\n`)
@@ -698,24 +1392,40 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     return ''
   })()
 
-  const sysPrompt = buildSystemPrompt({
+  // v0.4.4 — inline any @-mentioned workspace files into the latest user turn
+  // so the model sees their contents (computed AFTER lastUserText so file
+  // bodies don't skew rich-intent detection).
+  try { expandFileMentions(messages, workspacePath) } catch (e) { try { console.error('[worker] mention expand failed:', e.message) } catch {} }
+
+  let sysPrompt = buildSystemPrompt({
     provider,
     model,
     workspacePath,
     spacePrompt,
     userText: lastUserText,
   })
+  // v0.7.67 — plan mode swaps in a "produce a plan, don't execute" addendum.
+  // Tools are also disabled below by passing skipTools=true into the chat
+  // routes that respect it. Belt + suspenders: prompt says don't, code
+  // can't.
+  if (planMode) {
+    sysPrompt += PLAN_MODE_PROMPT_ADDITION
+    process.stderr.write(`[worker] plan mode active for messageId=${messageId}\n`)
+  }
 
   // Wrap every activity event with the renderer messageId so the renderer can
   // route tokens to the right lane in council / multi-model mode.
   const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode })
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
-    const skipTools = shouldSkipToolsForLocal(model)
+    // Plan mode forces skipTools=true regardless of model — even a thinking
+    // model with tools available shouldn't be able to physically call them
+    // while planning.
+    const skipTools = planMode || shouldSkipToolsForLocal(model)
     const normalised = normalizeModelId(model)
     // Thinking models (Qwen 3, DeepSeek-R1, QwQ) get Ollama's native /api/chat
     // endpoint because OpenAI-compat silently drops chat_template_kwargs.
@@ -728,12 +1438,77 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     // v0.7.61: strip any routing-hint prefix (e.g. `kimi-intl/`) so the
     // SDK sees the raw upstream model id. Case is preserved — MiniMax
     // and other case-sensitive providers need `MiniMax-M2.7` unchanged.
-    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode })
+    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode })
+  }
+}
+
+// v0.7.72 — Image generation tool runner. Routes through OpenAI's
+// images.generate (gpt-image-1). Saves PNG to ~/.labaik/images/{id}.png
+// so the renderer can attach a stable file:// reference to the message
+// without bloating sessions.json with base64. Emits image_generated
+// activity so the renderer adds the image to the streaming target's
+// fileEdits-style record (new field: msg.imagesGenerated).
+let _imgActivityCb = null
+function setImageActivity(cb) { _imgActivityCb = cb }
+
+async function runImageGen(args) {
+  const apiKey = getApiKey('openai')
+  if (!apiKey) {
+    return { error: 'No OpenAI API key configured. Image generation needs the openai key. Open Keys modal (⌘⇧K) → add the OpenAI key, then try again.' }
+  }
+  const prompt = String(args.prompt || '').trim()
+  if (!prompt) return { error: 'generate_image requires a prompt.' }
+  const size = ['1024x1024', '1536x1024', '1024x1536'].includes(args.size) ? args.size : '1024x1024'
+  const quality = args.quality === 'high' ? 'high' : 'standard'
+
+  const OpenAI = require('openai').default || require('openai')
+  const client = new OpenAI({ apiKey, timeout: 120000 })  // image gen takes 5-30s
+  let resp
+  try {
+    resp = await client.images.generate({
+      model: 'gpt-image-1',
+      prompt,
+      size,
+      quality,
+      n: 1,
+      response_format: 'b64_json',
+    })
+  } catch (err) {
+    return { error: `Image generation failed: ${err?.message || String(err)}` }
+  }
+  const b64 = resp?.data?.[0]?.b64_json
+  if (!b64) return { error: 'OpenAI returned no image data.' }
+
+  // Save to ~/.labaik/images/{id}.png (honors LABAIK_HOME via paths.BASE_DIR)
+  const imagesDir = path.join(paths.BASE_DIR, 'images')
+  try { fs.mkdirSync(imagesDir, { recursive: true }) } catch {}
+  const id = 'img_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+  const filePath = path.join(imagesDir, `${id}.png`)
+  try {
+    fs.writeFileSync(filePath, Buffer.from(b64, 'base64'))
+  } catch (err) {
+    return { error: `Failed to save image to disk: ${err?.message || String(err)}` }
+  }
+
+  // Tell the renderer to attach this image to the active message.
+  if (_imgActivityCb) {
+    try { _imgActivityCb({ phase: 'image_generated', path: filePath, prompt, size, quality }) } catch {}
+  }
+
+  return {
+    success: true,
+    path: filePath,
+    size,
+    quality,
+    prompt,
+    note: 'Image saved and rendered inline. Acknowledge briefly in your reply (one short sentence).',
   }
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0 } = opts
+  // v0.7.72: route image-gen activity events to this turn's onActivity.
+  setImageActivity(onActivity)
   const OpenAI = require('openai').default || require('openai')
   // Ollama runs locally; keep a shorter timeout for external providers, longer for local generation.
   const timeout = provider === 'ollama' ? 300000 : 45000
@@ -770,10 +1545,21 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // "analyze_lab_result" calls on random input).
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
+  // v0.7.72: gate browser tools by user intent. Drops them from the tool
+  // list entirely when the latest user message has no URL / no browse
+  // keywords. Stops the model from speculatively popping a browser window
+  // for tasks that don't need it.
+  const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
+  const offerImage = !skipTools && userWantsImageIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    // Sub-agents only at the top level + when a workspace is open. A spawned
+    // sub-agent (depth > 0) never sees this tool, so it can't recurse.
+    ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []),
+    ...(offerBrowser ? BROWSER_TOOLS : []),
+    ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -797,42 +1583,87 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     // assembled message matches the non-streaming shape.
     let msg = null
     try {
-      const stream = await client.chat.completions.create({
-        model, messages: chatMsgs, max_completion_tokens: 4096, stream: true,
-        ...(useTools ? { tools: useTools } : {}),
-        ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
-      })
       let iterContent = ''
       // v0.7.65: DeepSeek's thinking-mode responses stream a separate
       // `delta.reasoning_content` channel. We aggregate it here and
       // carry it forward in the multi-turn history — DeepSeek's API
       // returns 400 "reasoning_content must be passed back" otherwise.
       let iterReasoning = ''
+      // v0.7.67 streaming verification: track the last finish_reason so we
+      // can detect token-cap truncation ("length") and other anomalies after
+      // the loop ends. Many providers send finish_reason in the FINAL chunk
+      // only, so we overwrite on every non-null sighting.
+      let lastFinishReason = null
       const partialTools = []
-      for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta
-        if (!delta) continue
-        if (delta.reasoning_content) {
-          iterReasoning += delta.reasoning_content
-          // Surface the reasoning tokens to the renderer as a distinct
-          // activity phase — the UI can choose to hide them (default) or
-          // render a collapsible "thinking" panel.
-          onActivity({ phase: 'reasoning_token', text: delta.reasoning_content })
-        }
-        if (delta.content) {
-          iterContent += delta.content
-          onActivity({ phase: 'token', text: delta.content })
-        }
-        if (delta.tool_calls) {
-          for (const tcd of delta.tool_calls) {
-            const idx = tcd.index ?? 0
-            if (!partialTools[idx]) partialTools[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } }
-            if (tcd.id) partialTools[idx].id = tcd.id
-            if (tcd.function?.name) partialTools[idx].function.name += tcd.function.name
-            if (tcd.function?.arguments) partialTools[idx].function.arguments += tcd.function.arguments
+      await withProviderWaitHeartbeat(provider, model, onActivity, async () => {
+        const stream = await client.chat.completions.create(buildChatCompletionParams({
+          provider,
+          model,
+          messages: chatMsgs,
+          stream: true,
+          tools: useTools,
+          suppressThinking,
+        }))
+        for await (const chunk of stream) {
+          const choice = chunk.choices?.[0]
+          if (choice?.finish_reason) lastFinishReason = choice.finish_reason
+          const delta = choice?.delta
+          if (!delta) continue
+          if (delta.reasoning_content) {
+            iterReasoning += delta.reasoning_content
+            // Surface the reasoning tokens to the renderer as a distinct
+            // activity phase — the UI can choose to hide them (default) or
+            // render a collapsible "thinking" panel.
+            onActivity({ phase: 'reasoning_token', text: delta.reasoning_content })
+          }
+          if (delta.content) {
+            iterContent += delta.content
+            onActivity({ phase: 'token', text: delta.content })
+          }
+          if (delta.tool_calls) {
+            for (const tcd of delta.tool_calls) {
+              const idx = tcd.index ?? 0
+              if (!partialTools[idx]) partialTools[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } }
+              if (tcd.id) partialTools[idx].id = tcd.id
+              if (tcd.function?.name) partialTools[idx].function.name += tcd.function.name
+              if (tcd.function?.arguments) partialTools[idx].function.arguments += tcd.function.arguments
+            }
           }
         }
+      })
+      // v0.7.67 streaming verification — post-stream sanity checks.
+      // We do NOT throw on warnings; we surface them so the user understands
+      // why a response looks short or empty, and we keep going.
+      if (lastFinishReason === 'length') {
+        const note = '\n\n⚠️ Response was cut off at the model\'s token limit. Ask "continue" to resume from where it stopped.'
+        iterContent += note
+        onActivity({ phase: 'stream_warning', reason: 'length_cap', note })
+        process.stderr.write(`[worker] stream truncated by length cap (model=${model})\n`)
+      } else if (!iterContent && !iterReasoning && !partialTools.length) {
+        // No text, no reasoning, no tool calls — most likely a transient
+        // server-side issue. Log loudly; don't fake content.
+        process.stderr.write(`[worker] stream ended with no content / no tool_calls / no reasoning (finish_reason=${lastFinishReason}, model=${model})\n`)
+        onActivity({ phase: 'stream_warning', reason: 'empty_stream' })
       }
+      // Validate any tool-call arguments JSON now, before they're handed to
+      // executeToolCall. Malformed JSON used to crash the whole turn at the
+      // JSON.parse() below; instead we drop bad calls with a clear error.
+      const validatedTools = partialTools.filter((tc, idx) => {
+        if (!tc.function?.name) {
+          process.stderr.write(`[worker] dropped tool_call ${idx}: missing function name\n`)
+          return false
+        }
+        try {
+          JSON.parse(tc.function.arguments || '{}')
+          return true
+        } catch (e) {
+          process.stderr.write(`[worker] dropped tool_call "${tc.function.name}": malformed args JSON: ${e.message}\n`)
+          onActivity({ phase: 'stream_warning', reason: 'bad_tool_args', name: tc.function.name })
+          return false
+        }
+      })
+      partialTools.length = 0
+      partialTools.push(...validatedTools)
       // OpenAI spec: content can only be null when tool_calls is set. If no
       // tools AND no text came back, send an empty string so the next turn's
       // history stays valid.
@@ -847,11 +1678,13 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     } catch (streamErr) {
       // Streaming not supported or failed — fall back to non-streaming on this iteration only
       process.stderr.write(`[worker] streaming failed (${streamErr.message}) — falling back to non-streaming\n`)
-      const res = await client.chat.completions.create({
-        model, messages: chatMsgs, max_completion_tokens: 4096,
-        ...(useTools ? { tools: useTools } : {}),
-        ...(suppressThinking ? { chat_template_kwargs: { enable_thinking: false } } : {}),
-      })
+      const res = await withProviderWaitHeartbeat(provider, model, onActivity, () => client.chat.completions.create(buildChatCompletionParams({
+        provider,
+        model,
+        messages: chatMsgs,
+        tools: useTools,
+        suppressThinking,
+      })))
       msg = res.choices?.[0]?.message
     }
 
@@ -860,9 +1693,26 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     if (msg.content) fullText += msg.content
     if (msg.tool_calls?.length) {
       for (const tc of msg.tool_calls) {
-        const args = JSON.parse(tc.function.arguments || '{}')
+        // v0.7.67 — second-line JSON.parse safety. The streaming validator
+        // above already filters malformed args, but the non-streaming
+        // fallback path doesn't run that check, so we guard here too.
+        let args
+        try { args = JSON.parse(tc.function.arguments || '{}') }
+        catch (e) {
+          process.stderr.write(`[worker] non-streaming bad tool args for ${tc.function.name}: ${e.message}\n`)
+          onActivity({ phase: 'stream_warning', reason: 'bad_tool_args', name: tc.function.name })
+          chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'tool arguments were not valid JSON; the model needs to retry' }) })
+          continue
+        }
         onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
-        const result = await executeToolCall(tc.function.name, args, workspacePath, mode)
+        // v0.4.5 — sub-agent delegation runs a nested chatOpenAI loop instead
+        // of going through executeToolCall (it needs provider/model/depth).
+        let result
+        if (tc.function.name === 'spawn_subagent') {
+          result = await runSubAgent(args, { model, provider, workspacePath, mode, depth, onActivity })
+        } else {
+          result = await executeToolCall(tc.function.name, args, workspacePath, mode)
+        }
         onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
         // Emit a structured file_edit event with old/new content so the renderer
         // can show a live colored diff inline in the chat bubble.
@@ -884,6 +1734,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         else if (tc.function.name === 'run_command') { toolLog += `\n⚡ Ran \`${args.command}\``; if (result.output) toolLog += `\n\`\`\`\n${result.output.slice(0, 500)}\n\`\`\`` }
         else if (tc.function.name === 'open_in_browser') { toolLog += `\n🌐 Opened \`${args.url}\`` }
         else if (tc.function.name === 'start_dev_server') { toolLog += `\n🚀 Started server: \`${args.command}\` (PID ${result.pid || '?'})` }
+        else if (tc.function.name === 'spawn_subagent') { toolLog += `\n🤖 Sub-agent: ${args.description || 'task'}` }
         chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
       }
       continue
@@ -900,6 +1751,46 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     return responseText + '\n\n' + formatRedFlagAlert(triageResult)
   }
   return responseText
+}
+
+// v0.4.5 — run a delegated sub-task in a nested chatOpenAI loop and return a
+// report object the parent agent gets as the spawn_subagent tool result.
+//   - depth+1 so the sub-agent never gets the spawn tool (no runaway recursion).
+//   - same provider/model/workspace/mode → approvals & scope guards still apply.
+//   - fresh message array + a sub-agent system role; it does NOT see the parent
+//     conversation (the parent must put everything in `prompt`).
+//   - sub-agent token/reasoning streams are NOT forwarded to the renderer (they
+//     would interleave into the parent's bubble); tool_start/tool_end/file_edit
+//     ARE forwarded (tagged subagent:true) so progress chips still show.
+async function runSubAgent(args, ctx) {
+  const { model, provider, workspacePath, mode, depth = 0, onActivity = () => {} } = ctx || {}
+  const description = String(args?.description || 'sub-task').slice(0, 120)
+  const prompt = String(args?.prompt || '').trim()
+  if (!prompt) return { error: 'spawn_subagent requires a non-empty prompt.' }
+  if (depth >= 1) return { error: 'Sub-agents cannot spawn further sub-agents.' }
+
+  let sysPrompt = buildSystemPrompt({ provider, model, workspacePath, spacePrompt: '', userText: prompt })
+  sysPrompt += `\n\n## You are a sub-agent\n\nYou were delegated a focused, self-contained task by another agent. Work autonomously — you cannot ask the user questions and you do not see the parent conversation. Use your tools to complete the task fully, then end with a concise report of what you did, what you found, and any file paths or results the parent agent needs. Be thorough but do not pad the report.`
+
+  const subActivity = (a) => {
+    if (!a || a.phase === 'token' || a.phase === 'reasoning_token') return
+    try { onActivity({ ...a, subagent: true, subagentLabel: description }) } catch {}
+  }
+
+  process.stderr.write(`[worker] spawning sub-agent "${description}" (depth ${depth + 1}, provider ${provider})\n`)
+  const subMsgs = [{ role: 'user', content: prompt }]
+  const subOpts = { onActivity: subActivity, mode, depth: depth + 1 }
+  try {
+    // Run the sub-agent on the parent's provider so it inherits the same model
+    // behavior + credentials. Both paths honor `depth` to withhold the spawn
+    // tool from the child.
+    const text = provider === 'anthropic'
+      ? await chatAnthropic(subMsgs, model, workspacePath, sysPrompt, subOpts)
+      : await chatOpenAI(subMsgs, model, provider, workspacePath, sysPrompt, subOpts)
+    return { success: true, description, report: String(text || '').slice(0, 20000) }
+  } catch (e) {
+    return { error: `Sub-agent "${description}" failed: ${e.message || String(e)}` }
+  }
 }
 
 /**
@@ -923,6 +1814,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
  */
 async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  setImageActivity(onActivity)
   const baseURL = 'http://localhost:11434'
   // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
   // V4 thinking-mode requires it be round-tripped in history. Other
@@ -934,10 +1826,15 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
   }))]
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
   const mcpTools = skipTools ? [] : await getMcpTools().catch(() => [])
+  // v0.7.72: same browser-intent gating as chatOpenAI above.
+  const offerBrowser = !skipTools && userWantsBrowserIntent(msgs)
+  const offerImage = !skipTools && userWantsImageIntent(msgs)
   const allTools = skipTools ? [] : [
     ...(workspacePath ? TOOLS : []),
-    ...BROWSER_TOOLS,     // v0.5.5: browser agent tools are always available
+    ...(offerBrowser ? BROWSER_TOOLS : []),
+    ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1061,7 +1958,8 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {}, mode = 'autopilot' } = opts
+  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0 } = opts
+  setImageActivity(onActivity)
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
   // token. The SDK takes authToken for Bearer auth. When the credential
@@ -1077,8 +1975,13 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   }
   const client = new Anthropic(clientOpts)
   const isHealthSpace = (sysPrompt || '').includes('health information assistant')
-  const mcpTools = await getMcpTools().catch(() => [])
-  const allAnthTools = [...(workspacePath ? TOOLS : []), ...BROWSER_TOOLS, ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  // v0.7.67 — plan mode strips ALL tools so the model physically can't act.
+  const mcpTools = planMode ? [] : await getMcpTools().catch(() => [])
+  // v0.7.72: gate browser tools by user intent (same heuristic as the
+  // OpenAI/Ollama paths). Plan mode already strips everything anyway.
+  const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
+  const offerImage = !planMode && userWantsImageIntent(msgs)
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs
@@ -1126,6 +2029,19 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
       res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
     }
 
+    // v0.7.67 — verify Anthropic stream completeness via stop_reason.
+    // Healthy values: "end_turn" (done), "tool_use" (will iterate), "stop_sequence".
+    // "max_tokens" means truncated → tell the user.
+    if (res?.stop_reason === 'max_tokens') {
+      const note = '\n\n⚠️ Response was cut off at the model\'s token limit. Ask "continue" to resume.'
+      fullText += note
+      onActivity({ phase: 'stream_warning', reason: 'length_cap', note })
+      process.stderr.write(`[worker] anthropic stream truncated by max_tokens (model=${model})\n`)
+    } else if (!res?.content?.length) {
+      process.stderr.write(`[worker] anthropic stream returned empty content (stop_reason=${res?.stop_reason}, model=${model})\n`)
+      onActivity({ phase: 'stream_warning', reason: 'empty_stream' })
+    }
+
     for (const b of res.content) { if (b.type === 'text') fullText += b.text }
     const tuBlocks = res.content.filter(b => b.type === 'tool_use')
     if (tuBlocks.length) {
@@ -1133,7 +2049,13 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
       const results = []
       for (const tu of tuBlocks) {
         onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
-        const result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
+        // v0.4.5 — sub-agent delegation runs a nested loop (see runSubAgent).
+        let result
+        if (tu.name === 'spawn_subagent') {
+          result = await runSubAgent(tu.input, { model, provider: 'anthropic', workspacePath, mode, depth, onActivity })
+        } else {
+          result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
+        }
         onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
         if (tu.name === 'write_file' && result?.success) {
           onActivity({
@@ -1152,6 +2074,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
         else if (tu.name === 'run_command') { toolLog += `\n⚡ Ran \`${tu.input.command}\``; if (result.output) toolLog += `\n\`\`\`\n${result.output.slice(0, 500)}\n\`\`\`` }
         else if (tu.name === 'open_in_browser') { toolLog += `\n🌐 Opened \`${tu.input.url}\`` }
         else if (tu.name === 'start_dev_server') { toolLog += `\n🚀 Started server: \`${tu.input.command}\` (PID ${result.pid || '?'})` }
+        else if (tu.name === 'spawn_subagent') { toolLog += `\n🤖 Sub-agent: ${tu.input.description || 'task'}` }
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) })
       }
       chatMsgs.push({ role: 'user', content: results })
@@ -1210,6 +2133,13 @@ process.stdin.on('data', (chunk) => {
         if (resolver) { _pendingMcpLists.delete(req.id); resolver({ tools: req.tools }) }
         continue
       }
+      // v0.4.1: approval verdict coming back from main (after the dialog or
+      // an instant allow/deny from resolveGate).
+      if (req.type === 'approval-response') {
+        const resolver = _pendingApprovals.get(req.id)
+        if (resolver) { _pendingApprovals.delete(req.id); resolver({ verdict: req.verdict, message: req.message }) }
+        continue
+      }
       _inFlightRequest = { id: req.id }
       handleChat(req)
         .then(result => {
@@ -1218,7 +2148,7 @@ process.stdin.on('data', (chunk) => {
         })
         .catch(err => {
           _inFlightRequest = null
-          process.stdout.write(JSON.stringify({ id: req.id, error: err.message || String(err) }) + '\n')
+          process.stdout.write(JSON.stringify({ id: req.id, error: formatErrorForUser(err) }) + '\n')
         })
     } catch (err) {
       process.stdout.write(JSON.stringify({ error: 'Invalid JSON: ' + err.message }) + '\n')

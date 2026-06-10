@@ -4,6 +4,15 @@ const os = require('os')
 const http = require('http')
 const crypto = require('crypto')
 
+// EPIPE on stdout/stderr crashes the app when the parent shell exits or
+// a background-task wrapper reaps our FDs (seen in dev runs launched via
+// `npm start &`). Attach a no-op error handler so a closed pipe doesn't
+// bubble to Electron's "Uncaught Exception" dialog. Anyone who needs to
+// know about a write failure can wrap their own write in try/catch.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err) => { if (err && err.code !== 'EPIPE') throw err })
+}
+
 // Identify as "Alaude" EVERYWHERE macOS might label us — menu bar, About
 // panel, notification sender, dock badge, user-data-dir. Happens during
 // dev runs (`npm start`), where the Electron binary would otherwise call
@@ -37,17 +46,21 @@ const ollama = require('./ollama')
 const modelCatalog = require('./model-catalog')
 const ooda = require('./ooda')
 const permissions = require('./permissions')
-const skills = require('./skills')
+const routines = require('./routines')
+const folderSkills = require('./folder-skills')
 const mcp = require('./mcp')
 const jsonStore = require('./json-store')
 const paths = require('./paths')
 const { detectProvider, getBaseURL, PROVIDER_KEY_IDS } = require('./provider-registry')
 
 // ── Permission mode persistence (v0.4.0) ──────────────────────────────────
-// Stored in ~/.alaude/permissions.json so it survives reinstalls. This
-// release only exposes Observe + Autopilot to the UI; Careful/Flow arrive
-// in v0.4.1/0.4.2 once the approval dialog lands.
-const PERMISSIONS_FILE = path.join(os.homedir(), '.alaude', 'permissions.json')
+// Stored in ~/.labaik/permissions.json so it survives reinstalls. All four
+// modes (Observe/Careful/Flow/Autopilot) are live; Careful/Flow surface the
+// approval dialog via the worker→main→renderer gate (see handleApprovalRequest).
+const PERMISSIONS_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'permissions.json'),
+  [path.join(paths.LEGACY_ALAUDE_DIR, 'permissions.json')]
+)
 let permState = null  // { version, defaultMode, workspaces: { [path]: { mode, allow, deny } } }
 
 function loadPermissions() {
@@ -114,6 +127,7 @@ function classifyError(err) {
 
 let mainWindow = null
 let quickWindow = null
+let futureWindow = null
 let tray = null
 
 // ── Window ───────────────────────────────────────────────────────────────────
@@ -165,7 +179,11 @@ function createWindow() {
   mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
     const lvl = ['log','warn','error'][level] || 'log'
     if (lvl === 'error' || lvl === 'warn') {
-      process.stderr.write(`[renderer ${lvl}] ${message} (${source}:${line})\n`)
+      // EPIPE-safe: when the parent shell exits (or a background-task
+      // wrapper reaps our stderr FD) the next sync write throws EPIPE
+      // which Electron surfaces as an "Uncaught Exception" dialog. We
+      // can't log the failure-to-log, so just drop it.
+      try { process.stderr.write(`[renderer ${lvl}] ${message} (${source}:${line})\n`) } catch {}
     }
   })
 
@@ -198,6 +216,77 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
+function createFutureWindow() {
+  if (futureWindow && !futureWindow.isDestroyed()) {
+    futureWindow.show()
+    futureWindow.focus()
+    return futureWindow
+  }
+
+  futureWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 620,
+    backgroundColor: '#050807',
+    title: 'Labaik Future Console',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: { x: 15, y: 15 },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      additionalArguments: [
+        `--alaude-version=${app.getVersion()}`,
+        `--alaude-homepage=${(() => { try { return require(path.join(__dirname, '..', 'package.json')).homepage || '' } catch { return '' } })()}`,
+      ],
+    },
+    icon: path.join(__dirname, '..', 'build', 'icons', 'icon.png'),
+  })
+
+  futureWindow.loadFile(path.join(__dirname, '..', 'renderer', 'future.html'))
+
+  if (process.env.ALAUDE_DEVTOOLS === '1') {
+    futureWindow.webContents.once('did-finish-load', () => {
+      futureWindow.webContents.openDevTools({ mode: 'detach' })
+    })
+  }
+
+  futureWindow.webContents.on('before-input-event', (_e, input) => {
+    const mac = process.platform === 'darwin'
+    const opensTools = input.type === 'keyDown' && input.key === 'i' &&
+      ((mac && input.meta && input.alt) || (!mac && input.control && input.shift))
+    if (opensTools) futureWindow.webContents.toggleDevTools()
+  })
+
+  futureWindow.webContents.on('console-message', (_e, level, message, line, source) => {
+    const lvl = ['log','warn','error'][level] || 'log'
+    if (lvl === 'error' || lvl === 'warn') {
+      try { process.stderr.write(`[future-renderer ${lvl}] ${message} (${source}:${line})\n`) } catch {}
+    }
+  })
+
+  futureWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('mailto:'))) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  futureWindow.webContents.on('will-navigate', (event, url) => {
+    const cur = futureWindow.webContents.getURL()
+    if (url !== cur) {
+      event.preventDefault()
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url)
+      }
+    }
+  })
+
+  futureWindow.on('closed', () => { futureWindow = null })
+  return futureWindow
+}
+
 // ── AI Chat backend ─────────────────────────────────────────────────────────
 
 /**
@@ -226,8 +315,8 @@ function getCredential(provider) {
   // first-save will copy them over to the new location.
   const credPaths = [
     paths.CREDENTIALS_FILE,
-    path.join(os.homedir(), '.claude', '.credentials.json'),
-    path.join(os.homedir(), 'claude-local-src', '.credentials.json'),
+    path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json'),
+    ...(paths.USING_CUSTOM_HOME ? [] : [path.join(os.homedir(), 'claude-local-src', '.credentials.json')]),
   ]
   for (const credPath of credPaths) {
     try {
@@ -386,7 +475,7 @@ function saveCredential(provider, key, kind /* 'api' | 'oauth' */) {
   // back to ~/.claude/.credentials.json until the user saves a key, at
   // which point the new file becomes authoritative.
   const credPath = paths.CREDENTIALS_FILE
-  const legacyCredPath = path.join(os.homedir(), '.claude', '.credentials.json')
+  const legacyCredPath = path.join(paths.LEGACY_CLAUDE_DIR, '.credentials.json')
 
   let data = {}
   try {
@@ -557,6 +646,14 @@ function getWorker() {
           })()
           continue
         }
+        // v0.4.1: approval request. The worker wants to run a side-effecting
+        // tool; main resolves the permission gate (it owns the rules) and,
+        // if the verdict is 'prompt', asks the user via the renderer dialog.
+        if (resp.type === 'approval') {
+          const pendingForApproval = pendingRequests.get(resp.chatId)
+          handleApprovalRequest(resp, pendingForApproval)
+          continue
+        }
         // v0.5.5: Browser Agent tool request from the worker. We run the
         // actual Electron BrowserWindow API here in main (the worker can't
         // touch BrowserWindow) and write the result back to its stdin.
@@ -697,10 +794,18 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // file_edit, thinking) resets the timer. Only a genuinely silent
     // provider/worker bails out.
     const isLocalModel = provider === 'ollama'
-    // Shorter idle cap because "no activity for N seconds" is a much
-    // stronger signal than total elapsed time. Local gets longer to
-    // account for weight loading on first call.
-    const IDLE_MS = isLocalModel ? 5 * 60 * 1000 : 90 * 1000
+    // v0.7.69: reasoning-model carve-out. Models that "think" before
+    // emitting visible tokens (DeepSeek V4 / Reasoner, OpenAI o1/o3,
+    // any *-thinking variant, GLM-4.5-thinking, Qwen3-thinking) can
+    // legitimately be silent for 2-5 minutes mid-analysis. The default
+    // cloud cap of 90s killed those requests with the misleading
+    // "Provider is silent" error. Real-world repro: DeepSeek-v4-pro
+    // on a multi-file code review crashed at the 90s mark.
+    const isReasoningModel = /reasoner|thinking|^o[13]|^gpt-5.*think|deepseek-v4|deepseek-reasoner/i.test(model || '')
+    // Idle (no-activity) cap. Reasoning + local both get 5 min; other
+    // cloud models get 3 min (was 90s — still strong enough to surface
+    // a genuinely dead socket without amputating legit long thinking).
+    const IDLE_MS = (isLocalModel || isReasoningModel) ? 5 * 60 * 1000 : 3 * 60 * 1000
     // Absolute ceiling so a model in an infinite tool-loop doesn't burn
     // credits forever even if it keeps emitting activity.
     const ABS_MS = isLocalModel ? 30 * 60 * 1000 : 15 * 60 * 1000
@@ -715,6 +820,10 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     const armIdle = () => {
       if (idleTimer) clearTimeout(idleTimer)
       idleTimer = setTimeout(() => {
+        // Don't kill a request that's parked on a human approval dialog —
+        // re-arm and keep waiting (the 10-min worker-side cap + ABS_MS
+        // ceiling still bound the wait).
+        if (pendingRequests.get(id)?.awaitingApproval) { armIdle(); return }
         if (pendingRequests.has(id)) {
           pendingRequests.delete(id)
           clearTimeout(absTimer)
@@ -743,7 +852,11 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // Pass the current permission mode for this workspace so the worker can
     // gate tool execution before the OS-level tool call actually runs.
     const mode = getCurrentMode(workspacePath)
-    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode }) + '\n'
+    // v0.7.67 — plan mode propagates from the renderer through uxMeta. The
+    // worker uses it to swap in the plan-only system prompt and skip tool
+    // offerings so the model can't sneak past the "no execution" rule.
+    const planMode = !!uxMeta?.planMode
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
     armIdle()
@@ -958,21 +1071,144 @@ ipcMain.handle('perm-get-state', () => {
   return permState
 })
 
-// ── IPC: Cron Skills (v0.5.4) ─────────────────────────────────────────────
-// Scheduled background chats. Read/write/list/toggle skills; the actual
+// ── Approval flow (v0.4.1) ──────────────────────────────────────────────────
+// The worker asks (via stdout) before running side-effecting tools. We resolve
+// the gate with the full rule set; an instant allow/deny replies immediately,
+// a 'prompt' verdict shows the renderer dialog and waits for the user.
+const pendingApprovals = new Map() // approvalId -> { workerId, workspacePath, tool, args, floor }
+
+function summarizeToolArgs(tool, args) {
+  const a = args || {}
+  if (tool === 'run_command' || tool === 'start_dev_server') return String(a.command || '').slice(0, 200)
+  if (tool === 'open_in_browser') return String(a.url || '').slice(0, 200)
+  if (tool === 'write_file' || tool === 'read_file') return String(a.path || '').slice(0, 200)
+  if (tool === 'list_directory') return String(a.path || '.').slice(0, 200)
+  return ''
+}
+
+function replyApprovalToWorker(workerId, verdict, message) {
+  try { apiWorker?.stdin.write(JSON.stringify({ type: 'approval-response', id: workerId, verdict, message }) + '\n') } catch {}
+}
+
+function handleApprovalRequest(resp, pendingChat) {
+  const workspacePath = resp.workspacePath || null
+  const mode = getCurrentMode(workspacePath)
+  if (!permState) permState = loadPermissions()
+  let gate
+  try {
+    gate = permissions.resolveGate({
+      tool: resp.tool,
+      args: resp.args || {},
+      mode,
+      workspaceRoot: workspacePath,
+      home: os.homedir(),
+      rules: permState,
+    })
+  } catch (err) {
+    console.warn('[approval] gate error, denying:', err.message)
+    return replyApprovalToWorker(resp.id, 'deny', 'Permission check failed.')
+  }
+
+  if (gate.verdict === 'allow') return replyApprovalToWorker(resp.id, 'allow')
+  if (gate.verdict === 'deny') return replyApprovalToWorker(resp.id, 'deny', gate.message || 'Blocked by permission policy.')
+
+  // verdict === 'prompt' — surface the dialog and wait for the user.
+  const target = (pendingChat?.sender && !pendingChat.sender.isDestroyed())
+    ? pendingChat.sender
+    : (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null)
+  if (!target) return replyApprovalToWorker(resp.id, 'deny', 'No window available to confirm the action.')
+
+  const approvalId = 'pa_' + (++requestId) + '_' + Date.now().toString(36)
+  pendingApprovals.set(approvalId, {
+    workerId: resp.id,
+    chatId: resp.chatId,  // pendingRequests key — workerId is the ap_ bridge id
+    workspacePath,
+    tool: resp.tool,
+    args: resp.args || {},
+    floor: !!gate.floor,
+  })
+  // Keep the chat request alive while the user decides — otherwise the idle
+  // timer would reject it mid-dialog. Cleared on response (see perm-respond).
+  if (pendingChat) { pendingChat.awaitingApproval = true; pendingChat.onActivity?.() }
+
+  try {
+    target.send('permission-request', {
+      approvalId,
+      tool: resp.tool,
+      summary: resp.summary || summarizeToolArgs(resp.tool, resp.args),
+      reason: gate.reason || null,
+      why: gate.detail?.why || null,
+      floor: !!gate.floor, // protected paths / dangerous commands: no "always"
+      mode,
+    })
+  } catch (err) {
+    pendingApprovals.delete(approvalId)
+    if (pendingChat) pendingChat.awaitingApproval = false
+    replyApprovalToWorker(resp.id, 'deny', 'Could not show the approval dialog.')
+  }
+}
+
+function addAllowRule(workspacePath, tool, args) {
+  if (!workspacePath) return
+  if (!permState) permState = loadPermissions()
+  if (!permState.workspaces[workspacePath]) permState.workspaces[workspacePath] = {}
+  const ws = permState.workspaces[workspacePath]
+  if (!Array.isArray(ws.allow)) ws.allow = []
+  const esc = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let pattern
+  if (tool === 'run_command' || tool === 'start_dev_server') pattern = '^' + esc(args?.command) + '$'
+  else if (tool === 'open_in_browser') pattern = '^' + esc(args?.url) + '$'
+  else pattern = '^' + esc(args?.path) + '$'
+  if (!ws.allow.some(r => r.tool === tool && r.pattern === pattern)) {
+    ws.allow.push({ tool, pattern })
+    savePermissions(permState)
+  }
+}
+
+ipcMain.handle('perm-respond', (_e, approvalId, decision) => {
+  const pend = pendingApprovals.get(approvalId)
+  if (!pend) return false
+  pendingApprovals.delete(approvalId)
+  // Re-arm the chat's idle timer now that the human has answered.
+  const pendingChat = pendingRequests.get(pend.chatId)
+  if (pendingChat) { pendingChat.awaitingApproval = false; pendingChat.onActivity?.() }
+
+  if (decision === 'deny') {
+    replyApprovalToWorker(pend.workerId, 'deny', 'You denied this action.')
+    return true
+  }
+  if (decision === 'allow-always' && !pend.floor) {
+    addAllowRule(pend.workspacePath, pend.tool, pend.args)
+  }
+  replyApprovalToWorker(pend.workerId, 'allow')
+  return true
+})
+
+// ── IPC: Routines (v0.5.4 as "Cron Skills"; renamed v0.8) ─────────────────────────────────────────────
+// Scheduled background chats. Read/write/list/toggle routines; the actual
 // firing happens inside the scheduler started at app-ready, which pipes
-// through the same `chat` IPC so skill runs share provider creds, memory,
+// through the same `chat` IPC so routine runs share provider creds, memory,
 // and the api-worker's tool pipeline.
-ipcMain.handle('skills-list', () => skills.list())
-ipcMain.handle('skills-upsert', (_e, skill) => skills.upsert(skill))
-ipcMain.handle('skills-remove', (_e, id) => { skills.remove(id); return true })
-ipcMain.handle('skills-set-enabled', (_e, id, enabled) => skills.setEnabled(id, enabled))
+ipcMain.handle('routines-list', () => routines.list())
+ipcMain.handle('routines-upsert', (_e, routine) => routines.upsert(routine))
+ipcMain.handle('routines-remove', (_e, id) => { routines.remove(id); return true })
+ipcMain.handle('routines-set-enabled', (_e, id, enabled) => routines.setEnabled(id, enabled))
+
+// ── IPC: folder-skills (v0.7.67) ─────────────────────────────────────────
+// Filesystem-discovered skill templates from ~/.labaik/skills/<slug>/SKILL.md.
+// Distinct concept from the cron routines above; see electron/folder-skills.js
+// for the rationale on the naming overlap.
+ipcMain.handle('folder-skills-list', () => {
+  folderSkills.ensureRoot()  // creates dir + README on first call
+  return { skills: folderSkills.discover(), root: folderSkills.getRoot() }
+})
+ipcMain.handle('folder-skills-get', (_e, slug) => folderSkills.get(slug))
 
 // ── IPC: durable JSON store (v0.7.59) ─────────────────────────────────────
 // Renderer-side stores (memory, profile, eventually sessions) used to live
 // in Chromium localStorage, which batches writes to LevelDB asynchronously
 // and can lose the most recent writes on SIGTERM/crash. These sync channels
-// write through to `~/.alaude/{name}.json` with an atomic tmp+rename so
+// write through to `~/.labaik/{name}.json` with an atomic tmp+rename so
 // data is durable by the time setItem returns. Small files, <5ms each —
 // the sync block is a fair price for not losing users' memories.
 ipcMain.on('fs-json-read-sync', (e, name) => {
@@ -1572,6 +1808,41 @@ ipcMain.handle('workspace-list', async (_, folderPath) => {
   }
 })
 
+// v0.4.4 — recursive workspace file index for @-mention autocomplete in the
+// composer. Returns workspace-relative file paths (files only, no dirs),
+// honoring WORKSPACE_IGNORE and a hard cap so a giant repo can't hang the
+// walk or flood IPC. Capped at ~4000 files / 8 dir levels — plenty for
+// fuzzy-matching, bounded enough to stay snappy.
+ipcMain.handle('workspace-files', async (_, folderPath) => {
+  const fs = require('fs')
+  const p = require('path')
+  if (!folderPath) return { error: 'no-folder' }
+  const MAX_FILES = 4000
+  const MAX_DEPTH = 8
+  const out = []
+  let truncated = false
+  const walk = (dir, depth) => {
+    if (truncated || depth > MAX_DEPTH) return
+    let entries
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (out.length >= MAX_FILES) { truncated = true; return }
+      if (e.name.startsWith('.') && e.name !== '.env.example') continue
+      if (WORKSPACE_IGNORE.has(e.name)) continue
+      const full = p.join(dir, e.name)
+      if (e.isDirectory()) walk(full, depth + 1)
+      else if (e.isFile()) out.push(p.relative(folderPath, full))
+    }
+  }
+  try {
+    walk(folderPath, 0)
+    out.sort((a, b) => a.localeCompare(b))
+    return { files: out, truncated }
+  } catch (err) {
+    return { error: err.message || 'walk-failed' }
+  }
+})
+
 ipcMain.handle('open-external', async (_, url) => {
   shell.openExternal(url)
 })
@@ -1662,6 +1933,7 @@ function createTray() {
         if (!mainWindow || mainWindow.isDestroyed()) createWindow()
         else mainWindow.show()
       }},
+      { label: 'Open Future Console', click: () => createFutureWindow() },
       { type: 'separator' },
       { label: 'Quit Labaik', click: () => app.quit() },
     ])
@@ -1675,6 +1947,10 @@ ipcMain.handle('quick-open-main', () => {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   else { mainWindow.show(); mainWindow.focus() }
   if (quickWindow) quickWindow.hide()
+})
+ipcMain.handle('open-future-console', () => {
+  createFutureWindow()
+  return true
 })
 
 // ── Menu ─────────────────────────────────────────────────────────────────────
@@ -1699,6 +1975,7 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'New Session', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('new-session') },
+        { label: 'Future Console', accelerator: 'CmdOrCtrl+Shift+F', click: () => createFutureWindow() },
         { type: 'separator' },
         { role: 'close' },
       ],
@@ -1748,9 +2025,9 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
-  // v0.5.4: kick off the cron-skills scheduler. Fires due skills by running
+  // v0.5.4: kick off the routines scheduler. Fires due routines by running
   // a silent chat turn through the existing worker pipeline and notifying
-  // the renderer so it can append the result into a dedicated skills session.
+  // the renderer so it can append the result into a dedicated routines session.
   // v0.5.6: Boot any configured MCP servers. Don't await — a slow server
   // shouldn't hold up the UI; its tools just appear once the handshake
   // completes. Errors surface as toasts via the mcp-status event.
@@ -1759,44 +2036,44 @@ app.whenReady().then(() => {
   }).catch(err => console.warn('[mcp] startAll failed:', err.message))
 
   try {
-    skills.startScheduler(async (skill) => {
+    routines.startScheduler(async (routine) => {
       const worker = getWorker()
       const id = ++requestId
-      const messageId = `skill_${skill.id}_${Date.now()}`
+      const messageId = `routine_${routine.id}_${Date.now()}`
       return new Promise((resolve) => {
         pendingRequests.set(id, {
           sender: mainWindow?.webContents,  // route any activity to main window
           resolve: (result) => {
             const preview = (typeof result === 'string' ? result : JSON.stringify(result)).slice(0, 400)
-            skills.recordRun(skill.id, { status: 'ok', resultPreview: preview })
-            try { mainWindow?.webContents?.send('skill-ran', { skill, success: true, result }) } catch {}
+            routines.recordRun(routine.id, { status: 'ok', resultPreview: preview })
+            try { mainWindow?.webContents?.send('routine-ran', { routine, success: true, result }) } catch {}
             resolve()
           },
           reject: (err) => {
-            skills.recordRun(skill.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
-            try { mainWindow?.webContents?.send('skill-ran', { skill, success: false, error: String(err?.message || err) }) } catch {}
+            routines.recordRun(routine.id, { status: 'error', resultPreview: String(err?.message || err).slice(0, 400) })
+            try { mainWindow?.webContents?.send('routine-ran', { routine, success: false, error: String(err?.message || err) }) } catch {}
             resolve()
           },
         })
-        const messagesRaw = [{ role: 'user', content: skill.prompt }]
-        const mode = getCurrentMode(null) // skills run with global default mode
-        const req = JSON.stringify({ id, messageId, messages: messagesRaw, model: skill.model || '', workspacePath: '', spacePrompt: '', mode }) + '\n'
+        const messagesRaw = [{ role: 'user', content: routine.prompt }]
+        const mode = getCurrentMode(null) // routines run with global default mode
+        const req = JSON.stringify({ id, messageId, messages: messagesRaw, model: routine.model || '', workspacePath: '', spacePrompt: '', mode }) + '\n'
         try { worker.stdin.write(req, 'utf8') } catch (err) {
           pendingRequests.delete(id)
           resolve()
         }
-        // Shorter cap for skill runs — don't let a stuck skill block the queue.
+        // Shorter cap for routine runs — don't let a stuck routine block the queue.
         setTimeout(() => {
           if (pendingRequests.has(id)) {
             pendingRequests.delete(id)
-            skills.recordRun(skill.id, { status: 'timeout', resultPreview: 'Skill timed out after 5 min' })
-            try { mainWindow?.webContents?.send('skill-ran', { skill, success: false, error: 'Timed out' }) } catch {}
+            routines.recordRun(routine.id, { status: 'timeout', resultPreview: 'Routine timed out after 5 min' })
+            try { mainWindow?.webContents?.send('routine-ran', { routine, success: false, error: 'Timed out' }) } catch {}
             resolve()
           }
         }, 5 * 60 * 1000)
       })
     })
-  } catch (err) { console.warn('[skills] start failed:', err.message) }
+  } catch (err) { console.warn('[routines] start failed:', err.message) }
 })
 
 app.on('will-quit', () => {

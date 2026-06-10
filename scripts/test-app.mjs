@@ -3,7 +3,8 @@
 //
 //   node scripts/test-app.mjs
 //
-// Runs four layers of automatic checks. Anything it can't cover from the
+// Runs automatic checks that are safe for CI and local refactors. Anything it
+// can't cover from the
 // command line gets printed as a manual checklist at the end for you to
 // verify in the running app window.
 //
@@ -12,10 +13,13 @@
 //      against a fake localStorage + mock Ollama. ~50 assertions.
 //   2. Bridge audit         — every inline onclick in index.html has a
 //      matching window.* alias in bootstrap.js.
-//   3. Data integrity       — ~/.alaude/skills.json + ~/.claude/alaude-
-//      events.ndjson parse clean; LevelDB localStorage writable.
-//   4. OODA diff            — compare pre-refactor vs post-refactor event
-//      signals (success rate, latency, errors) to spot regressions.
+//   3. Overlay coverage     — every overlay class is included in the boot
+//      reset guard.
+//
+// Optional manual mode:
+//   node scripts/test-app.mjs --manual
+//   Adds real on-disk data checks and OODA signal diffs against your local
+//   history. That is useful for dogfood, but too noisy for a release gate.
 //
 // What this DOESN'T test (you still need eyes on the window):
 //   - Visual rendering of modals, badges, chips
@@ -35,6 +39,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
+const RUN_MANUAL = process.argv.includes('--manual') || process.env.LABAIK_TEST_REAL_DATA === '1'
 
 let totalPass = 0, totalFail = 0
 
@@ -110,23 +115,24 @@ section('Layer 2b · Boot-time overlay guard covers all overlay classes')
   }
 }
 
-// ═══ Layer 3: data integrity ═══
-section('Layer 3 · On-disk state integrity')
+if (RUN_MANUAL) {
+// ═══ Manual Layer 3: data integrity ═══
+section('Manual · On-disk state integrity')
 {
-  // skills.json
+  // routines.json
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.alaude/skills.json'), 'utf8'))
-    check('skills.json parses + has skills array',
-      typeof data.version === 'number' && Array.isArray(data.skills))
-    const bad = (data.skills || []).filter(s => !s.id || !s.name || !s.cron || !s.prompt).length
-    check('all skills well-formed', bad === 0)
+    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.labaik/routines.json'), 'utf8'))
+    check('routines.json parses + has routines array',
+      typeof data.version === 'number' && Array.isArray(data.routines || data.skills))
+    const bad = (data.routines || data.skills || []).filter(s => !s.id || !s.name || !s.cron || !s.prompt).length
+    check('all routines well-formed', bad === 0)
   } catch (err) {
-    if (err.code === 'ENOENT') console.log('  ⚠️  skills.json not present (ok — no skills defined yet)')
-    else { check('skills.json readable', false, err.message) }
+    if (err.code === 'ENOENT') console.log('  ⚠️  routines.json not present (ok — no routines defined yet)')
+    else { check('routines.json readable', false, err.message) }
   }
   // event log
   try {
-    const lines = fs.readFileSync(path.join(os.homedir(), '.claude/alaude-events.ndjson'), 'utf8').split('\n').filter(Boolean)
+    const lines = fs.readFileSync(path.join(os.homedir(), '.labaik/events.ndjson'), 'utf8').split('\n').filter(Boolean)
     let bad = 0
     for (const l of lines) { try { JSON.parse(l) } catch { bad++ } }
     check(`event log parses (${lines.length} events, ${bad} malformed)`, bad === 0)
@@ -144,10 +150,10 @@ section('Layer 3 · On-disk state integrity')
   }
 }
 
-// ═══ Layer 4: OODA signal diff (optional — needs event log) ═══
-section('Layer 4 · Event signal diff (last 100 pre- vs all post-refactor)')
+// ═══ Manual Layer 4: OODA signal diff (optional — needs event log) ═══
+section('Manual · Event signal diff (last 100 pre- vs all post-refactor)')
 try {
-  const events = fs.readFileSync(path.join(os.homedir(), '.claude/alaude-events.ndjson'), 'utf8')
+  const events = fs.readFileSync(path.join(os.homedir(), '.labaik/events.ndjson'), 'utf8')
     .split('\n').filter(Boolean).map(l => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
   // Cutoff: 1 hour before last mtime of bootstrap.js (proxy for refactor time)
   const bootMtime = fs.statSync(path.join(ROOT, 'renderer/js/bootstrap.js')).mtimeMs
@@ -177,6 +183,10 @@ try {
 } catch (err) {
   console.log('  ⚠️  Signal diff skipped:', err.message)
 }
+} else {
+  section('Manual dogfood checks')
+  console.log('  ⏭️  Skipped real on-disk state and OODA history checks. Run `npm run test:manual` when you want local dogfood signals.')
+}
 
 // ═══ Final summary ═══
 console.log('\n' + '═'.repeat(62))
@@ -199,7 +209,7 @@ What this test cannot cover (verify in the app window):
   │   6. 🕶️ Incognito toggle → profile injection stops silently. │
   │                                                              │
   │  Classic features (no-refactor regression canaries)          │
-  │   7. ⏰ Skills modal opens, shows existing skills.           │
+  │   7. ⏰ Routines modal opens, shows existing routines.           │
   │   8. Ollama model list loads, can install an embed model.    │
   │   9. Sidebar collapse/resize still works.                    │
   │  10. Crew mode (3 lanes) renders side-by-side.               │

@@ -36,11 +36,14 @@ The name `labaik` is Arabic for *"here I am — at your service."* That's the id
 | **No subscription** | $0 app fee. You pay only the providers you already have keys for — or pay nothing when you run local models. |
 | **10 providers, one dropdown** | Anthropic · OpenAI · Google · xAI · Kimi (kimi.ai + kimi.com) · Alibaba Qwen · Zhipu GLM · MiniMax · Tencent Hunyuan · Ollama. |
 | **Crew — multi-model in parallel** | Send one prompt to 2–4 models at once. Each replies in its own lane. Pick the best or have them debate. |
-| **Skills — cron for AI** | Schedule Labaik to do things on its own. *"Summarize HN at 8am." "Draft standup at 6pm." "Ping prod every 15 min."* Results stream to a dedicated session. |
+| **Routines — cron for AI** | Schedule Labaik to do things on its own. *"Summarize HN at 8am." "Draft standup at 6pm." "Ping prod every 15 min."* Results stream to a dedicated session. |
+| **Skills — SKILL.md folders** | Drop a folder in `~/.labaik/skills/<slug>/` with a `SKILL.md` and it's live: listed to the model, loaded on demand via `use_skill`, invocable as `/<slug>` in the composer. |
+| **Agentic coding** | Subagents (`spawn_subagent`), `@file` mentions, git context injection, AGENTS.md/CLAUDE.md auto-load, plan mode, and four permission modes (Observe / Careful / Flow / Autopilot) with an approval dialog. |
 | **Built-in browser** | The agent can open URLs, read pages, fill forms, click buttons, take screenshots — all inside the app. |
 | **Persistent memory + profile** | "Remember this" on any message. Profile = always-on facts about you. Memory = workspace-scoped, searchable with embeddings. |
 | **Rich content display** | Real markdown, diffs, charts, Mermaid, SVG, file previews, artifacts. Whatever the model returns, the app renders it right. |
-| **Tool calling + MCP** | Six built-in workspace tools (`read_file`, `write_file`, `list_directory`, `run_command`, `open_in_browser`, `start_dev_server`) plus full MCP server support. |
+| **Tool calling + MCP** | Workspace tools (`read_file`, `write_file`, `list_directory`, `run_command`, `open_in_browser`, `start_dev_server`), image generation (`generate_image`), screen control, plus full MCP server support. |
+| **3 languages** | English, 中文, and العربية — with full right-to-left layout. |
 | **Privacy by construction** | No Labaik backend. Keys at `~/.labaik/credentials.json` mode `0600`. Prompts go machine → provider directly. Zero telemetry. |
 | **Source-available, MIT** | Fork it, inspect it, ship your own build. |
 
@@ -99,6 +102,8 @@ bun start           # or: npm start
 
 **Requires:** Bun or Node 18+, Electron 33 (auto-installed).
 
+**Tests:** `npm test` — module tests + app checks + a hermetic end-to-end agent-loop fixture (`npm run test:worker`) that needs no API keys.
+
 **Build locally:** `bun run build:mac` (or `build:win` / `build:linux`). Output in `dist/`.
 
 ---
@@ -113,9 +118,11 @@ All under `~/.labaik/`:
 | `sessions.json` | Chat history |
 | `memory.json` | Scoped memory entries (with embeddings) |
 | `profile.json` | Always-on profile facts |
-| `skills.json` + `skill-history.ndjson` | Scheduled Skills + their run log |
+| `routines.json` + `routine-history.ndjson` | Routines (scheduled prompts) + their run log — migrated from `skills.json` |
+| `skills/<slug>/SKILL.md` | Folder skills (on-demand instruction sets) |
+| `images/` | Generated images (`generate_image` tool) |
 | `spaces.json` | Custom Spaces |
-| `permissions.json` | Per-workspace permission modes |
+| `permissions.json` | Per-workspace permission modes + allow rules |
 | `events.ndjson` + `ooda-state.json` + `ux-proposals.md` | Local-only OODA UX loop |
 
 v0.7.64 consolidated everything into `~/.labaik/`. Legacy files under `~/.claude/` or `~/.alaude/` are read as a fallback and silently copied forward on first access — nothing is moved or deleted from the legacy locations.
@@ -137,8 +144,9 @@ alaude-desktop/
 │   ├── mcp.js               MCP server manager
 │   ├── ollama.js            Local runtime integration
 │   ├── ooda.js              Local UX health loop
-│   ├── permissions.js       Per-workspace permission modes
-│   └── skills.js            Cron-for-AI runner
+│   ├── permissions.js       Per-workspace permission modes + gate resolution
+│   ├── routines.js          Routines — cron-scheduled prompt runner
+│   └── folder-skills.js     SKILL.md folder discovery (model-invocable skills)
 ├── renderer/
 │   ├── index.html           UI (chat, model picker, modals, Spaces)
 │   ├── logo.jpg             The brand mark

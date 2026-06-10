@@ -1,6 +1,6 @@
 {
   "name": "alaude-desktop",
-  "version": "0.7.66",
+  "version": "0.7.72",
   "description": "Labaik — AI coding assistant for your desktop",
   "main": "electron/main.js",
   "homepage": "https://github.com/alsayadi/alaude-desktop",
@@ -13,6 +13,12 @@
   },
   "scripts": {
     "start": "electron .",
+    "test": "npm run test:app && npm run test:worker",
+    "test:unit": "node scripts/test-modules.mjs",
+    "test:fixtures": "node electron/test-ooda-fixture.js",
+    "test:app": "node scripts/test-app.mjs",
+    "test:worker": "node scripts/test-worker-loop.mjs",
+    "test:manual": "node scripts/test-app.mjs --manual",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",

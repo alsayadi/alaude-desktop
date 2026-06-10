@@ -7,11 +7,10 @@
  */
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
 const paths = require('./paths')
 
 const STORE_PATH = paths.SPACES_FILE
-const LEGACY_STORE_PATH = path.join(os.homedir(), '.claude', 'alaude-spaces.json')
+const LEGACY_STORE_PATH = path.join(paths.LEGACY_CLAUDE_DIR, 'alaude-spaces.json')
 
 function readStore() {
   try {

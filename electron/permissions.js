@@ -189,7 +189,7 @@ function classifyCommand(command, { workspaceRoot = '', home = '' } = {}) {
  * the tool should: 'allow' (run silently), 'prompt' (ask the user), or
  * 'deny' (return an error without running).
  *
- * rules schema (from ~/.alaude/permissions.json):
+ * rules schema (from ~/.labaik/permissions.json):
  *   { defaultMode, workspaces: { [path]: { mode, allow: [{tool,pattern}], deny: [{tool,pattern}] } },
  *     global: { deny: [...] } }
  *
