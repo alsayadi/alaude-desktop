@@ -461,6 +461,16 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('rm of a single file NOT flagged', rmClass('rm file.txt') !== 'dangerous')
   check('word containing rm NOT flagged', rmClass('confirm-rm script') !== 'dangerous')
   check('isDangerousRm exported + works', perms.isDangerousRm('rm -r -f x') === true && perms.isDangerousRm('ls') === false)
+  // Cycle 44: force-push + recursive-chmod detection regardless of flag position/spelling
+  check('git push --force (flag first) flagged', rmClass('git push --force origin main') === 'dangerous')
+  check('git push ... --force (flag last) flagged', rmClass('git push origin main --force') === 'dangerous')
+  check('git push refspec +branch flagged', rmClass('git push origin +main') === 'dangerous')
+  check('git push --force-with-lease flagged', rmClass('git push --force-with-lease') === 'dangerous')
+  check('plain git push NOT flagged', rmClass('git push origin main') !== 'dangerous')
+  check('chmod -fR (combined) flagged', rmClass('chmod -fR 777 x') === 'dangerous')
+  check('chmod --recursive flagged', rmClass('chmod --recursive 777 x') === 'dangerous')
+  check('chmod non-recursive NOT flagged', rmClass('chmod 644 file') !== 'dangerous')
+  check('no cross-segment bleed (push then ls -R)', rmClass('git push origin main && ls -R') !== 'dangerous')
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

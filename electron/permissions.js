@@ -121,11 +121,16 @@ function isProtectedPath({ path, workspaceRoot, home, op = 'write' }) {
 const DANGEROUS_PATTERNS = [
   { re: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/,                 why: 'recursive force delete' },
   { re: /(^|\s)sudo\b|(^|\s)su\s/,                                                 why: 'privilege escalation' },
-  { re: /\bchmod\s+-R\b|\bchown\b/,                                                why: 'broad permission change' },
+  // v0.8 cycle 44: catch recursive chmod in any flag spelling within the
+  // chmod segment (-R, -fR, -Rf, --recursive) — not just a leading -R.
+  { re: /\bchmod\b[^;&|]*?(\s-[a-zA-Z]*R[a-zA-Z]*\b|\s--recursive\b)|\bchown\b/,    why: 'broad permission change' },
   { re: /\bdd\s+if=|\bmkfs\b|\bfdisk\b|\bparted\b/,                                why: 'block device write' },
   { re: /\bkill(all)?\s+-9\b|\bpkill\b/,                                           why: 'force-kill processes' },
   { re: /\b(curl|wget)\b[^|]*\|\s*(sh|bash|zsh|python3?|node|perl|ruby)\b/,        why: 'pipe to shell (curl|bash)' },
-  { re: /\bgit\s+push\s+(--force|-f)\b/,                                           why: 'force push' },
+  // v0.8 cycle 44: force-push detection no longer requires the flag to sit
+  // immediately after `push` — `git push origin main --force` (the common
+  // form) and refspec force `git push origin +main` were both bypassing.
+  { re: /\bgit\s+push\b[^;&|]*?(\s(--force(-with-lease)?|-f)\b|\s\+\S)/,           why: 'force push' },
   { re: /\bgit\s+reset\s+--hard\b/,                                                why: 'hard reset' },
   { re: /\bgit\s+clean\s+-[a-zA-Z]*f/,                                             why: 'force-clean untracked' },
   { re: /\b(npm|yarn|bun|pnpm)\s+publish\b/,                                       why: 'publish to registry' },

@@ -426,3 +426,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   rm segment carrying both a recursive and a force indicator (any spelling),
   while leaving force-only, recursive-only, single-file rm, and words like
   "confirm-rm" untouched. 11 unit tests. 122 checks.
+
+### Cycle 44 — close the same bypass in git-push & chmod (2026-06-10)
+- Confirmed cycle 43's bug class repeated elsewhere. `git push origin main
+  --force` (THE common form) and refspec force `git push origin +main` both
+  classified as "unknown" → Autopilot force-pushes silently; `chmod -fR` and
+  `chmod --recursive` likewise. Rewrote both patterns to be segment-scoped
+  ([^;&|] so no cross-command bleed) but flag-position- and spelling-
+  agnostic. 9 more permission tests (131 total). Force-only/recursive-only/
+  plain forms stay un-flagged.
