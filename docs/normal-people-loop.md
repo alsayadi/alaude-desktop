@@ -355,3 +355,11 @@
   releases live (0.7.73-75), 154 → 234 automated checks, two re-scopes
   honestly taken (hub migration, conversation mode). v0.7.76 release
   HELD on keychain access.
+
+### Cycle 26 — Easy mode v1 (2026-06-11)
+- One 🧓 switch in the settings hub: ~18% bigger everything (CSS zoom —
+  scales the px-based layout uniformly, RTL-safe) and the power-user
+  chrome disappears (plan-mode button, ⌘K hint chip, workspace file
+  tree). Persisted across launches; toast confirms each flip; state
+  shown in the hub row. The "set it up for someone you love" arc
+  begins. EN/中文/العربية. 234 checks green.

@@ -4050,6 +4050,12 @@
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
     #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    /* v0.8 cycle 26 — Easy mode: bigger everything, fewer buttons. The
+       adult child setting Labaik up for a parent flips one switch. */
+    html[data-easy="1"] body { zoom: 1.18; }
+    html[data-easy="1"] #plan-mode-btn,
+    html[data-easy="1"] #cmdk-hint,
+    html[data-easy="1"] #sidebar-files { display: none !important; }
     /* v0.8 cycle 19 — settings hub */
     .hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     .hub-card {
@@ -11924,6 +11930,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.done': '🖼️ Picture copied — paste it into WhatsApp or Messages',
         'routines.watch.placeholder': '👁 Watch a page (optional) — https://… · runs only when it changes',
         'routines.watch.httpsOnly': '👁 Watched pages must start with https://',
+        'hub.easy': 'Easy mode',
+        'hub.easy.desc': 'Bigger text, fewer buttons — comfortable for everyone',
+        'hub.easy.on': 'On',
+        'hub.easy.off': 'Off',
+        'easy.on': '🧓 Easy mode is ON — bigger text, fewer buttons',
+        'easy.off': 'Easy mode is off',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12312,6 +12324,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.done': '🖼️ 图片已复制——粘贴到微信或 WhatsApp 即可',
         'routines.watch.placeholder': '👁 盯一个网页（可选）——https://… · 仅在页面变化时运行',
         'routines.watch.httpsOnly': '👁 盯的网页必须以 https:// 开头',
+        'hub.easy': '轻松模式',
+        'hub.easy.desc': '更大的字、更少的按钮——人人都舒适',
+        'hub.easy.on': '已开启',
+        'hub.easy.off': '已关闭',
+        'easy.on': '🧓 轻松模式已开启——字更大、按钮更少',
+        'easy.off': '轻松模式已关闭',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12676,6 +12694,12 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.done': '🖼️ نُسخت الصورة — ألصقها في واتساب أو الرسائل',
         'routines.watch.placeholder': '👁 راقب صفحة (اختياري) — https://… · لا يعمل إلا عند تغيُّرها',
         'routines.watch.httpsOnly': '👁 الصفحات المراقبة يجب أن تبدأ بـ https://',
+        'hub.easy': 'الوضع الميسَّر',
+        'hub.easy.desc': 'خط أكبر وأزرار أقل — مريح للجميع',
+        'hub.easy.on': 'مفعَّل',
+        'hub.easy.off': 'متوقف',
+        'easy.on': '🧓 الوضع الميسَّر مفعَّل — خط أكبر وأزرار أقل',
+        'easy.off': 'الوضع الميسَّر متوقف',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -20274,6 +20298,9 @@ Title:`
             <span class="hub-card-desc" style="margin-left:auto;text-align:end">${escapeHtml(voiceStatus)}</span></div>
           <div class="hub-inline-row"><span class="hub-card-icon">🎨</span><span class="hub-card-name">${escapeHtml(t('hub.theme'))}</span>
             <button class="key-save-btn" style="margin-left:auto;background:var(--bg-sidebar);color:var(--text);padding:5px 14px" onclick="toggleTheme()">${escapeHtml(t('hub.theme.toggle'))}</button></div>
+          <div class="hub-inline-row"><span class="hub-card-icon">🧓</span><span class="hub-card-body"><span class="hub-card-name">${escapeHtml(t('hub.easy'))}</span>
+            <span class="hub-card-desc">${escapeHtml(t('hub.easy.desc'))}</span></span>
+            <button class="key-save-btn" style="margin-left:auto;${document.documentElement.dataset.easy === '1' ? '' : 'background:var(--bg-sidebar);color:var(--text);'}padding:5px 14px" onclick="toggleEasyMode(); toggleSettingsHub(); toggleSettingsHub()">${escapeHtml(t(document.documentElement.dataset.easy === '1' ? 'hub.easy.on' : 'hub.easy.off'))}</button></div>
         </div>
         <div class="hub-grid">${cards}</div>`
       m.classList.add('show')
@@ -20282,6 +20309,24 @@ Title:`
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); toggleSettingsHub() }
     })
+
+    // ── v0.8 cycle 26 — Easy mode ───────────────────────────────────────
+    // One switch: ~18% bigger everything (CSS zoom — scales the px-based
+    // layout uniformly), and the power-user chrome (plan mode, ⌘K hint,
+    // workspace file tree) disappears. Persisted; RTL-safe (zoom is
+    // direction-agnostic).
+    const LS_EASY_MODE = 'alaude:easyMode:v1'
+    function loadEasyMode() {
+      try { if (localStorage.getItem(LS_EASY_MODE) === '1') document.documentElement.dataset.easy = '1' } catch {}
+    }
+    function toggleEasyMode() {
+      const on = document.documentElement.dataset.easy === '1'
+      if (on) delete document.documentElement.dataset.easy
+      else document.documentElement.dataset.easy = '1'
+      try { localStorage.setItem(LS_EASY_MODE, on ? '0' : '1') } catch {}
+      showRewindToast?.(t(on ? 'easy.off' : 'easy.on'), false)
+      logUx({ kind: 'easy_mode', on: !on })
+    }
     async function clearDataStore(key, label) {
       const isKeys = false  // credentials are not in the clearable set
       if (!confirm(t('data.clearConfirm').replace('{label}', label))) return
@@ -20935,6 +20980,7 @@ Title:`
     loadCouncilState()
     refreshPermModeUi()
     loadVoiceMode()
+    loadEasyMode()  // cycle 26 — restore Easy mode before first paint settles
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
     // Boot beacon — the LAST statement of the main script. scripts/test-boot.mjs
