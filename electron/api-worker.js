@@ -11,6 +11,8 @@ const os = require('os')
 const dns = require('dns')
 const https = require('https')
 const paths = require('./paths')
+// v0.8 — folder skills (SKILL.md). Plain fs module, safe in the worker.
+const folderSkills = require('./folder-skills')
 
 // v0.7.61 — provider routing moved into a shared registry so the worker
 // and the main process agree on which provider a given model belongs to.
@@ -606,6 +608,19 @@ schema for whatever your actual questions are:
 - A yes/no that's obviously yes — just do it.
 - Asking for free-form data (a name, a path, a URL) — use prose.
 - The user has already answered / skipped — don't re-ask.`
+  // v0.8 — folder skills index. Names + descriptions only; bodies load via
+  // the use_skill tool so unused skills cost ~a line of tokens each. Skipped
+  // for local models (same latency budget reasoning as the task checklist —
+  // and tool-less local models couldn't call use_skill anyway).
+  if (!isLocal) {
+    const skills = listSkillsSafe()
+    if (skills.length) {
+      sys += `\n\n## Skills\n\nThe user has installed skills — reusable instruction sets for specific tasks. When a request matches a skill's description, call the use_skill tool with its slug FIRST, then follow the loaded instructions. If the user types /<slug>, that's an explicit invocation. Available:\n`
+      for (const sk of skills) {
+        sys += `\n- ${sk.slug}${sk.name !== sk.slug ? ` (${sk.name})` : ''}${sk.description ? ` — ${sk.description}` : ''}`
+      }
+    }
+  }
   if (spacePrompt) sys += '\n\n' + spacePrompt
   return sys
 }
@@ -657,6 +672,33 @@ const SUBAGENT_TOOLS = [
     },
   } },
 ]
+
+// ── Folder skills (v0.8) ──────────────────────────────────────────────────
+// Skills follow the SKILL.md folder convention (~/.labaik/skills/<slug>/).
+// The system prompt lists name + description only; the body enters context
+// ONLY when the model calls use_skill — Claude Code's selective-loading
+// pattern, so 30 installed skills don't cost 30 bodies of tokens per turn.
+// The tool is offered whenever at least one skill exists (no workspace
+// needed — skills are user-global).
+const SKILL_TOOLS = [
+  { type: 'function', function: {
+    name: 'use_skill',
+    description: 'Load the full instructions of an installed skill by slug. The available skills are listed in the system prompt under "## Skills". Call this when the user\'s request matches a skill\'s description (or they name it with /slug), then follow the returned instructions for the rest of the turn.',
+    parameters: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string', description: 'The skill slug exactly as listed in the system prompt.' },
+      },
+      required: ['slug'],
+    },
+  } },
+]
+
+// List skills fresh per turn (cheap fs scan; user can drop a folder in and
+// use it on the next message). Returns [] on any failure.
+function listSkillsSafe() {
+  try { return folderSkills.discover() } catch { return [] }
+}
 
 // ── Screen Control tools (v0.5.10) ────────────────────────────────────────
 // Paired with Screen Vision: the model sees a screenshot, then clicks /
@@ -925,6 +967,16 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
   // string to the model so it can compose its text reply.
   if (name === 'generate_image') {
     return await runImageGen(args || {})
+  }
+  // v0.8: folder skills — load a SKILL.md body on demand. Read-only, global
+  // (no workspace required), so it stays outside the approval gate.
+  if (name === 'use_skill') {
+    const skill = folderSkills.get(String(args?.slug || '').trim())
+    if (!skill) {
+      const known = listSkillsSafe().map(s => s.slug).join(', ') || '(none installed)'
+      return { error: `No skill with slug "${args?.slug}". Installed skills: ${known}` }
+    }
+    return { name: skill.name, instructions: skill.body }
   }
 
   try {
@@ -1510,6 +1562,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1784,6 +1837,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     ...(offerBrowser ? BROWSER_TOOLS : []),
     ...(offerImage ? IMAGE_TOOLS : []),
     ...SCREEN_TOOLS,      // v0.5.10: full screen control
+    ...(listSkillsSafe().length ? SKILL_TOOLS : []),  // v0.8: folder skills
     ...mcpTools,          // v0.5.6: tools from any user-configured MCP servers
     ...(isHealthSpace ? HEALTH_TOOLS : []),
   ]
@@ -1930,7 +1984,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   // OpenAI/Ollama paths). Plan mode already strips everything anyway.
   const offerBrowser = !planMode && userWantsBrowserIntent(msgs)
   const offerImage = !planMode && userWantsImageIntent(msgs)
-  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
+  const allAnthTools = planMode ? [] : [...(workspacePath ? TOOLS : []), ...((workspacePath && depth === 0) ? SUBAGENT_TOOLS : []), ...(offerBrowser ? BROWSER_TOOLS : []), ...(offerImage ? IMAGE_TOOLS : []), ...SCREEN_TOOLS, ...(listSkillsSafe().length ? SKILL_TOOLS : []), ...mcpTools, ...(isHealthSpace ? HEALTH_TOOLS : [])]
   const anthTools = allAnthTools.length > 0 ? allAnthTools.map(t => ({ name: t.function.name, description: t.function.description, input_schema: t.function.parameters })) : undefined
   // Multimodal: the renderer produces content in OpenAI shape. Reshape any
   // array-content messages to Anthropic's content-block format. Image URLs

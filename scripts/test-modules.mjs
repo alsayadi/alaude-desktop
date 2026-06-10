@@ -42,7 +42,7 @@ function check(label, cond, extra = '') {
 // ═══════════════════════════════════════════════════════════════
 // TEST 1: MemoryStore — basic CRUD + dedup + scope
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[1/6] MemoryStore — basic CRUD + scope')
+console.log('\n[1/8] MemoryStore — basic CRUD + scope')
 {
   const storage = new FakeStorage()
   const store = new MemoryStore({ storage })
@@ -78,7 +78,7 @@ console.log('\n[1/6] MemoryStore — basic CRUD + scope')
 // ═══════════════════════════════════════════════════════════════
 // TEST 2: MemoryStore — visiblePool scope filter
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[2/6] MemoryStore — scope filtering')
+console.log('\n[2/8] MemoryStore — scope filtering')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   store.add('global fact', null, { scope: 'global' })
@@ -120,7 +120,7 @@ console.log('\n[2/6] MemoryStore — scope filtering')
 // ═══════════════════════════════════════════════════════════════
 // TEST 3: ProfileStore — store + grouping + system block
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[3/6] ProfileStore — CRUD + grouping + system block')
+console.log('\n[3/8] ProfileStore — CRUD + grouping + system block')
 {
   const storage = new FakeStorage()
   const profile = new ProfileStore({ storage })
@@ -164,7 +164,7 @@ console.log('\n[3/6] ProfileStore — CRUD + grouping + system block')
 // ═══════════════════════════════════════════════════════════════
 // TEST 4: MemoryExtract — regex + candidates
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[4/6] MemoryExtract — patterns + candidates')
+console.log('\n[4/8] MemoryExtract — patterns + candidates')
 {
   const cases = [
     { text: 'My name is Ahmed', expect: 'Name: Ahmed', cat: 'identity', promotes: true },
@@ -199,7 +199,7 @@ console.log('\n[4/6] MemoryExtract — patterns + candidates')
 // ═══════════════════════════════════════════════════════════════
 // TEST 5: MemoryEmbeddings — cosine + backfill
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[5/6] MemoryEmbeddings — cosine + backfill loop')
+console.log('\n[5/8] MemoryEmbeddings — cosine + backfill loop')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -227,7 +227,7 @@ console.log('\n[5/6] MemoryEmbeddings — cosine + backfill loop')
 // ═══════════════════════════════════════════════════════════════
 // TEST 6: MemoryRecall — scoring + profile injection
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[6/6] MemoryRecall — scoring + injection')
+console.log('\n[6/8] MemoryRecall — scoring + injection')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -269,6 +269,69 @@ console.log('\n[6/6] MemoryRecall — scoring + injection')
   const injectedIncog = await recall.injectIntoLastUser(messages, 'prefers', profileBlockBuilder)
   check('incognito blocks profile injection',
     injectedIncog.profileUsed === false)
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEST 7: folder-skills — discovery, frontmatter, guards
+// (CJS module; loaded with LABAIK_HOME pointed at a temp dir so the
+// test never touches ~/.labaik.)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
+{
+  const { createRequire } = await import('node:module')
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const require = createRequire(import.meta.url)
+
+  const testHome = fs.mkdtempSync(path.join(os.tmpdir(), 'labaik-test-'))
+  process.env.LABAIK_HOME = testHome
+  // paths.js caches BASE_DIR at load — must require AFTER setting the env.
+  const folderSkills = require('../electron/folder-skills.js')
+
+  check('discover returns [] when root missing', folderSkills.discover().length === 0)
+
+  const mkSkill = (slug, content) => {
+    fs.mkdirSync(path.join(testHome, 'skills', slug), { recursive: true })
+    fs.writeFileSync(path.join(testHome, 'skills', slug, 'SKILL.md'), content)
+  }
+  mkSkill('pr-polish', '---\nname: Polish a PR\ndescription: Clean up a PR body\n---\n\nRewrite the PR description…')
+  mkSkill('no-front', 'Just a body, no frontmatter.')
+  fs.mkdirSync(path.join(testHome, 'skills', 'empty-dir'))  // no SKILL.md — ignored
+
+  const found = folderSkills.discover()
+  check('discovers 2 skills (ignores empty dir)', found.length === 2, `got ${found.length}`)
+  const pr = found.find(s => s.slug === 'pr-polish')
+  check('frontmatter name parsed', pr?.name === 'Polish a PR')
+  check('frontmatter description parsed', pr?.description === 'Clean up a PR body')
+  check('body excludes frontmatter', pr?.body.startsWith('Rewrite the PR description'))
+  check('no-frontmatter slug becomes name', found.find(s => s.slug === 'no-front')?.name === 'no-front')
+
+  check('get() loads by slug', folderSkills.get('pr-polish')?.name === 'Polish a PR')
+  check('get() rejects path traversal', folderSkills.get('../outside') === null)
+  check('get() unknown slug → null', folderSkills.get('nope') === null)
+
+  const { meta, body } = folderSkills._parseFrontmatter('---\nName: "Quoted"\n---\nbody')
+  check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
+
+  // ═══ TEST 8: routines — cron parse + legacy shape ═══
+  console.log('\n[8/8] routines — cron parsing + legacy skills.json shape')
+  const routines = require('../electron/routines.js')
+  check('parses standard cron', routines._parseCron('0 8 * * *') !== null)
+  check('rejects 4-field cron', routines._parseCron('0 8 * *') === null)
+  const next = routines._nextFire('*/15 * * * *', Date.now())
+  check('nextFire lands within 15 min', next !== null && next - Date.now() <= 15 * 60 * 1000)
+  // Legacy shape: a migrated skills.json still loads.
+  fs.writeFileSync(path.join(testHome, 'routines.json'),
+    JSON.stringify({ version: 1, skills: [{ id: 'sk_1', name: 'Old', prompt: 'p', cron: '0 8 * * *', enabled: true }] }))
+  const listed = routines.list()
+  check('legacy {skills:[…]} shape accepted', listed.length === 1 && listed[0].name === 'Old')
+  routines.upsert({ name: 'New one', prompt: 'p2', cron: '0 9 * * *' })
+  const onDisk = JSON.parse(fs.readFileSync(path.join(testHome, 'routines.json'), 'utf8'))
+  check('save writes routines key (not skills)', Array.isArray(onDisk.routines) && onDisk.routines.length === 2 && !onDisk.skills)
+  check('new ids use rt_ prefix', onDisk.routines[1].id.startsWith('rt_'))
+
+  fs.rmSync(testHome, { recursive: true, force: true })
 }
 
 // ═══════════════════════════════════════════════════════════════

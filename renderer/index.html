@@ -7570,6 +7570,7 @@
 
     let slashActiveIdx = 0
     let slashFiltered = []
+    let _slashSkillsFetched = false
     function updateSlashMenu() {
       const menu = document.getElementById('slash-menu')
       if (!menu) return
@@ -7579,8 +7580,24 @@
       // when the user writes "/" mid-sentence like "this/that".
       const firstWord = val.split(/\s/)[0]
       if (!val.startsWith('/') || val.includes('\n')) { closeSlashMenu(); return }
+      // v0.8 — folder skills join the slash menu as /<slug> triggers. Lazy
+      // first fetch; later opens reuse the cache (palette refreshes it too).
+      if (!_slashSkillsFetched) {
+        _slashSkillsFetched = true
+        _refreshFolderSkills().then(() => {
+          if (menu.classList.contains('show')) updateSlashMenu()
+        })
+      }
+      const skillItems = _folderSkillsCache.map(sk => ({
+        id: 'skill:' + sk.slug,
+        trigger: '/' + sk.slug,
+        icon: '🧩',
+        name: sk.name,
+        desc: sk.description || t('slash.skillDesc'),
+        _skillSlug: sk.slug,
+      }))
       const query = firstWord.slice(1).toLowerCase()
-      slashFiltered = snippets.filter(s => {
+      slashFiltered = [...snippets, ...skillItems].filter(s => {
         const hay = (s.trigger + ' ' + s.name + ' ' + (s.desc || '')).toLowerCase()
         return !query || hay.includes(query)
       })
@@ -7623,6 +7640,21 @@
     function slashSelect(idx) {
       const snip = slashFiltered[idx]
       if (!snip) return
+      if (snip._skillSlug) {
+        // Folder skill: insert the /slug trigger token, keeping anything the
+        // user already typed after it. The body is NOT pasted — the model
+        // loads it itself via the use_skill tool when the message sends.
+        const rest = input.value.split(/\s/).slice(1).join(' ')
+        input.value = snip.trigger + ' ' + rest
+        closeSlashMenu()
+        input.style.height = 'auto'
+        input.style.height = Math.min(input.scrollHeight, 200) + 'px'
+        sendBtn.disabled = !input.value.trim() || isStreaming
+        input.focus()
+        const pos = input.value.length
+        input.setSelectionRange(pos, pos)
+        return
+      }
       input.value = snip.body
       closeSlashMenu()
       // Resize + focus + jump to first placeholder
@@ -11321,7 +11353,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults.title': 'Restore built-in snippets',
         'snippet.new': '+ New snippet',
         // Slash-menu (rendered dynamically — looked up via t())
-        'slash.header': 'Snippets',
+        'slash.header': 'Snippets & skills',
+        'slash.skillDesc': 'Skill (SKILL.md)',
         'slash.match': 'match',
         'slash.matches': 'matches',
         'slash.noMatch': 'no match',
@@ -11574,7 +11607,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults': '↺ 恢复默认',
         'snippet.restoreDefaults.title': '恢复内置片段',
         'snippet.new': '+ 新建片段',
-        'slash.header': '片段',
+        'slash.header': '片段与技能',
+        'slash.skillDesc': '技能（SKILL.md）',
         'slash.match': '条匹配',
         'slash.matches': '条匹配',
         'slash.noMatch': '无匹配',
@@ -11812,7 +11846,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'snippet.restoreDefaults': '↺ استعادة الافتراضيات',
         'snippet.restoreDefaults.title': 'استعادة المقاطع المضمَّنة',
         'snippet.new': '+ مقطع جديد',
-        'slash.header': 'مقاطع',
+        'slash.header': 'مقاطع ومهارات',
+        'slash.skillDesc': 'مهارة (SKILL.md)',
         'slash.match': 'مطابقة',
         'slash.matches': 'مطابقات',
         'slash.noMatch': 'لا مطابقات',

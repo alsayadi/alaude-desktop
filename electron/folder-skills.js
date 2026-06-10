@@ -14,9 +14,11 @@
  *     ---
  *
  *     # Skill body — markdown freeform.
- *     # Whatever the user wants the model to do when they pick this skill.
- *     # The body is what gets injected into the composer when the skill is
- *     # selected from the command palette.
+ *     # Whatever the user wants the model to do when this skill fires.
+ *     # The body reaches the model two ways: the use_skill tool loads it
+ *     # on demand mid-chat (names+descriptions are listed in the system
+ *     # prompt; see api-worker.js), and the command palette can still
+ *     # paste it into the composer directly.
  *
  * If the frontmatter is missing or unparseable, the slug becomes the name
  * and the description stays empty — discovery NEVER throws on bad input,
@@ -27,9 +29,8 @@
  * there's no frontmatter). It's what gets prepended to the user's next
  * message when the skill fires.
  *
- * NOT a cron-routine: routines (electron/skills.js) are scheduled prompts.
- * Folder skills are user-callable templates. Different concept, different
- * file. The naming overlap is unfortunate but historical.
+ * NOT a routine: routines (electron/routines.js) are cron-scheduled prompts.
+ * Folder skills are on-demand instruction sets the user or the model invokes.
  */
 
 const fs = require('fs')

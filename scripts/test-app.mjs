@@ -209,7 +209,7 @@ What this test cannot cover (verify in the app window):
   │   6. 🕶️ Incognito toggle → profile injection stops silently. │
   │                                                              │
   │  Classic features (no-refactor regression canaries)          │
-  │   7. ⏰ Skills modal opens, shows existing skills.           │
+  │   7. ⏰ Routines modal opens, shows existing routines.           │
   │   8. Ollama model list loads, can install an embed model.    │
   │   9. Sidebar collapse/resize still works.                    │
   │  10. Crew mode (3 lanes) renders side-by-side.               │
