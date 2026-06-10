@@ -6785,6 +6785,20 @@
   </div>
 
   <!-- What's in Labaik — feature tour / changelog -->
+  <!-- v0.8 cycle 25: Your data — the private wedge made visible -->
+  <div class="modal-overlay" id="yourdata-modal">
+    <div class="modal" style="max-width:560px;width:92vw">
+      <h2><span data-i18n="data.title">🔒 Your data</span>
+        <button class="modal-close" onclick="toggleYourDataModal()">&times;</button></h2>
+      <div data-i18n="data.intro" style="font-size:12.5px;color:var(--text-dim);margin-bottom:12px;line-height:1.5">Everything Labaik knows lives on this Mac — no cloud account, no server. Here's exactly what's stored.</div>
+      <div id="yourdata-list" style="font-size:13px"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="msg-action-btn" onclick="revealDataFolder()" data-i18n="data.reveal">📂 Reveal in Finder</button>
+        <button class="msg-action-btn" onclick="closeYourDataModal(); openBackupFromData()" data-i18n="data.backup">💾 Back up…</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="whats-in-modal">
     <div class="modal ux-modal" style="max-width:720px;width:94vw">
       <h2>
@@ -10590,6 +10604,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 general-use: one-click install of three bundled starter skills
         // (meeting notes, trip planner, weekly review). Idempotent — existing
         // folders are never overwritten.
+        { kind: 'action', icon: '🔒', label: 'Your data — what Labaik stores on this Mac', search: 'your data privacy local storage what stored disk reveal folder size', action: () => { closeCmdPalette(); toggleYourDataModal() } },
         { kind: 'action', icon: '💾', label: 'Back up Labaik (sessions, memory, routines, skills — no keys)', search: 'backup export save everything bundle portable migrate device', action: async () => {
           closeCmdPalette()
           // Snippets + templates live in renderer localStorage — ride along.
@@ -11619,6 +11634,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'cmdk.hint': 'Everything is one shortcut away —',
         'routines.recentRuns': 'Recent runs',
         'routines.notify': '🔔 Notify',
+        'data.title': '🔒 Your data',
+        'data.intro': "Everything Labaik knows lives on this Mac — no cloud account, no server. Here's exactly what's stored.",
+        'data.reveal': '📂 Reveal in Finder',
+        'data.backup': '💾 Back up…',
+        'data.total': 'Total on disk',
+        'data.loading': 'Reading local files…',
+        'data.failed': "Couldn't read the data folder.",
         'routines.notify.title': 'Show a desktop notification each run',
         'routines.runNow': 'Run now',
         'routines.running': '▶ Running — result lands in Recent runs below.',
@@ -11894,6 +11916,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'cmdk.hint': '一切功能尽在一个快捷键 —',
         'routines.recentRuns': '近期运行',
         'routines.notify': '🔔 通知',
+        'data.title': '🔒 你的数据',
+        'data.intro': 'Labaik 所知的一切都存在这台 Mac 上——没有云账户，没有服务器。以下是确切的存储内容。',
+        'data.reveal': '📂 在访达中显示',
+        'data.backup': '💾 备份…',
+        'data.total': '磁盘占用合计',
+        'data.loading': '正在读取本地文件…',
+        'data.failed': '无法读取数据文件夹。',
         'routines.notify.title': '每次运行显示桌面通知',
         'routines.runNow': '立即运行',
         'routines.running': '▶ 正在运行——结果稍后显示在下方「近期运行」。',
@@ -12154,6 +12183,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'cmdk.hint': 'كل شيء على بُعد اختصار واحد —',
         'routines.recentRuns': 'عمليات التشغيل الأخيرة',
         'routines.notify': '🔔 إشعار',
+        'data.title': '🔒 بياناتك',
+        'data.intro': 'كل ما يعرفه لبيك موجود على هذا الجهاز — دون حساب سحابي ولا خادم. هذا ما يُخزَّن بالضبط.',
+        'data.reveal': '📂 إظهار في فايندر',
+        'data.backup': '💾 نسخة احتياطية…',
+        'data.total': 'الإجمالي على القرص',
+        'data.loading': 'جارٍ قراءة الملفات المحلية…',
+        'data.failed': 'تعذّر قراءة مجلد البيانات.',
         'routines.notify.title': 'إظهار إشعار سطح المكتب عند كل تشغيل',
         'routines.runNow': 'تشغيل الآن',
         'routines.running': '▶ قيد التشغيل — ستظهر النتيجة أدناه في «عمليات التشغيل الأخيرة».',
@@ -19141,6 +19177,42 @@ Title:`
       { v: '0.2.49', icon: '🎨', name: 'Session accent colors',          desc: '8-color palette per session; a dot before the sidebar title.' },
       { v: '0.2.50', icon: '🎉', name: 'What\'s in Labaik',              desc: 'This feature tour. Every capability shipped in the v0.2 line.' },
     ]
+    let _yourDataBaseDir = ''
+    function fmtBytes(n) {
+      if (!n) return '—'
+      if (n < 1024) return n + ' B'
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+      return (n / 1024 / 1024).toFixed(1) + ' MB'
+    }
+    async function toggleYourDataModal() {
+      const m = document.getElementById('yourdata-modal')
+      if (m.classList.contains('show')) { m.classList.remove('show'); return }
+      const list = document.getElementById('yourdata-list')
+      list.innerHTML = `<div style="color:var(--text-faint)">${escapeHtml(t('data.loading'))}</div>`
+      m.classList.add('show')
+      let inv
+      try { inv = await window.alaude.dataInventory() } catch { inv = null }
+      if (!inv) { list.innerHTML = `<div style="color:#e07070">${escapeHtml(t('data.failed'))}</div>`; return }
+      _yourDataBaseDir = inv.baseDir
+      const total = inv.items.reduce((a, b) => a + (b.bytes || 0), 0)
+      list.innerHTML = inv.items.map(it => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span style="color:var(--text)">${escapeHtml(it.label)}</span>
+          <span style="color:var(--text-faint);font-variant-numeric:tabular-nums">${it.exists ? fmtBytes(it.bytes) : '—'}</span>
+        </div>`).join('') +
+        `<div style="display:flex;justify-content:space-between;padding:8px 0 0;font-weight:600">
+          <span style="color:var(--text)">${escapeHtml(t('data.total'))}</span>
+          <span style="color:var(--text)">${fmtBytes(total)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-faint);margin-top:8px;font-family:var(--mono,monospace)">${escapeHtml(inv.baseDir)}</div>`
+    }
+    function closeYourDataModal() { document.getElementById('yourdata-modal')?.classList.remove('show') }
+    function revealDataFolder() { if (_yourDataBaseDir) window.alaude.showInFolder?.(_yourDataBaseDir) }
+    function openBackupFromData() {
+      // Reuse the palette's backup flow.
+      const ev = buildCmdItems?.().find?.(x => /Back up Labaik/.test(x.label))
+      if (ev?.action) ev.action()
+    }
     function toggleWhatsInLabaik() {
       const modal = document.getElementById('whats-in-modal')
       if (!modal) return

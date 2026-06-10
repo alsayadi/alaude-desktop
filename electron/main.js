@@ -1173,6 +1173,47 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8 cycle 25: "Your data" — reinforce the private wedge by showing
+// exactly what Labaik keeps on this Mac, with sizes. Read-only inventory;
+// reveal/clear go through existing show-in-folder / per-store handlers.
+ipcMain.handle('data-inventory', () => {
+  const fs = require('fs')
+  const items = [
+    { key: 'sessions.json', label: 'Conversations' },
+    { key: 'memory.json', label: 'Memory' },
+    { key: 'profile.json', label: 'Profile' },
+    { key: 'routines.json', label: 'Routines' },
+    { key: 'routine-history.ndjson', label: 'Routine run log' },
+    { key: 'spaces.json', label: 'Spaces' },
+    { key: 'credentials.json', label: 'API keys (never leave this Mac)' },
+    { key: 'events.ndjson', label: 'Local usage events' },
+    { key: 'images', label: 'Generated images', dir: true },
+    { key: 'skills', label: 'Folder skills', dir: true },
+  ]
+  const dirSize = (d) => {
+    let total = 0
+    try {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const fp = require('path').join(d, e.name)
+        try { total += e.isDirectory() ? dirSize(fp) : fs.statSync(fp).size } catch {}
+      }
+    } catch {}
+    return total
+  }
+  const out = []
+  for (const it of items) {
+    const fp = require('path').join(paths.BASE_DIR, it.key)
+    let bytes = 0, exists = false
+    try {
+      const st = fs.statSync(fp)
+      exists = true
+      bytes = it.dir ? dirSize(fp) : st.size
+    } catch {}
+    out.push({ ...it, bytes, exists })
+  }
+  return { baseDir: paths.BASE_DIR, items: out }
+})
+
 // v0.8 cycle 22: backup & restore. One portable JSON bundle (sessions,
 // memory, profile, routines, spaces, skills) — credentials excluded by
 // design. Import backs up every file it overwrites.

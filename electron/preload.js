@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('alaude', {
   // v0.8 — portable backup bundle (keys excluded by design).
   backupExport: (extras) => ipcRenderer.invoke('backup-export', extras),
   backupImport: () => ipcRenderer.invoke('backup-import'),
+  // v0.8 — read-only inventory of what's stored locally (the private wedge).
+  dataInventory: () => ipcRenderer.invoke('data-inventory'),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

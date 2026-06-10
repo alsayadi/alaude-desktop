@@ -253,3 +253,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   success and failure notifications on it. Honest skips this cycle:
   cross-history search (global search already spans all sessions incl.
   imports) and per-routine model (the model select already existed).
+
+### Cycle 25 — "Your data" privacy panel (2026-06-10) · CHECKPOINT 3
+- ⌘K → "Your data": read-only inventory (data-inventory IPC) of exactly
+  what Labaik keeps on this Mac — conversations, memory, profile, routines,
+  keys, images, skills — each with size + total + the real folder path,
+  Reveal-in-Finder, and a jump to Backup. Makes the "private, no
+  subscription" wedge tangible instead of a claim. Cycles 21-25 pushed.
