@@ -23,7 +23,9 @@
 
 ## What is Labaik
 
-Labaik is a macOS desktop app that talks to every AI provider worth using — **Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan** — plus fully-offline **local models via Ollama**. One app, your API keys, no middleman, no monthly fee. Open-source under MIT.
+**The fastest way to use any frontier AI on your Mac with your own keys — private, no subscription.**
+
+Labaik talks to every AI provider worth using — **Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan, DeepSeek** — plus fully-offline **local models via Ollama**. Paste any API key and Labaik detects the provider; switch models mid-conversation; schedule routines that run while you sleep; import your ChatGPT history and keep going. One app, your keys on your disk, no middleman, no monthly fee. Open-source under MIT.
 
 The name `labaik` is Arabic for *"here I am — at your service."* That's the idea: a quiet desktop client that's wherever you need it, for whichever AI you want today.
 

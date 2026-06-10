@@ -183,3 +183,8 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   key ever saves — the activation moment.
 - Phase A (first hour) is now complete. Next: Phase B/C leftovers — memory
   promote polish, README wedge alignment, App-quality pass.
+
+### Cycle 16 — README leads with the wedge (2026-06-10)
+- The wedge sentence is now the first bold line of "What is Labaik", and the
+  intro paragraph references the activation features that exist (paste-any-
+  key detection, mid-conversation switching, routines, ChatGPT import).
