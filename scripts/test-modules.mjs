@@ -42,7 +42,7 @@ function check(label, cond, extra = '') {
 // ═══════════════════════════════════════════════════════════════
 // TEST 1: MemoryStore — basic CRUD + dedup + scope
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[1/12] MemoryStore — basic CRUD + scope')
+console.log('\n[1/13] MemoryStore — basic CRUD + scope')
 {
   const storage = new FakeStorage()
   const store = new MemoryStore({ storage })
@@ -78,7 +78,7 @@ console.log('\n[1/12] MemoryStore — basic CRUD + scope')
 // ═══════════════════════════════════════════════════════════════
 // TEST 2: MemoryStore — visiblePool scope filter
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[2/12] MemoryStore — scope filtering')
+console.log('\n[2/13] MemoryStore — scope filtering')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   store.add('global fact', null, { scope: 'global' })
@@ -120,7 +120,7 @@ console.log('\n[2/12] MemoryStore — scope filtering')
 // ═══════════════════════════════════════════════════════════════
 // TEST 3: ProfileStore — store + grouping + system block
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[3/12] ProfileStore — CRUD + grouping + system block')
+console.log('\n[3/13] ProfileStore — CRUD + grouping + system block')
 {
   const storage = new FakeStorage()
   const profile = new ProfileStore({ storage })
@@ -164,7 +164,7 @@ console.log('\n[3/12] ProfileStore — CRUD + grouping + system block')
 // ═══════════════════════════════════════════════════════════════
 // TEST 4: MemoryExtract — regex + candidates
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[4/12] MemoryExtract — patterns + candidates')
+console.log('\n[4/13] MemoryExtract — patterns + candidates')
 {
   const cases = [
     { text: 'My name is Ahmed', expect: 'Name: Ahmed', cat: 'identity', promotes: true },
@@ -199,7 +199,7 @@ console.log('\n[4/12] MemoryExtract — patterns + candidates')
 // ═══════════════════════════════════════════════════════════════
 // TEST 5: MemoryEmbeddings — cosine + backfill
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[5/12] MemoryEmbeddings — cosine + backfill loop')
+console.log('\n[5/13] MemoryEmbeddings — cosine + backfill loop')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -227,7 +227,7 @@ console.log('\n[5/12] MemoryEmbeddings — cosine + backfill loop')
 // ═══════════════════════════════════════════════════════════════
 // TEST 6: MemoryRecall — scoring + profile injection
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[6/12] MemoryRecall — scoring + injection')
+console.log('\n[6/13] MemoryRecall — scoring + injection')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -276,7 +276,7 @@ console.log('\n[6/12] MemoryRecall — scoring + injection')
 // (CJS module; loaded with LABAIK_HOME pointed at a temp dir so the
 // test never touches ~/.labaik.)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
+console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
 {
   const { createRequire } = await import('node:module')
   const fs = await import('node:fs')
@@ -327,7 +327,7 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
   check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
 
   // ═══ TEST 8: routines — cron parse + legacy shape ═══
-  console.log('\n[8/12] routines — cron parsing + legacy skills.json shape')
+  console.log('\n[8/13] routines — cron parsing + legacy skills.json shape')
   const routines = require('../electron/routines.js')
   check('parses standard cron', routines._parseCron('0 8 * * *') !== null)
   check('rejects 4-field cron', routines._parseCron('0 8 * *') === null)
@@ -344,7 +344,7 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
   check('new ids use rt_ prefix', onDisk.routines[1].id.startsWith('rt_'))
 
   // ═══ TEST 9: ChatGPT import converter ═══
-  console.log('\n[9/12] import-chatgpt — mapping linearization')
+  console.log('\n[9/13] import-chatgpt — mapping linearization')
   const { convertChatGPTExport, fingerprint } = require('../electron/import-chatgpt.js')
   const mkExport = () => ([{
     title: 'Test conv', create_time: 1700000000, current_node: 'n3',
@@ -376,7 +376,7 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
     fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'y' }] }))
 
   // ═══ TEST 10: backup round-trip ═══
-  console.log('\n[10/12] backup — export/import round-trip, keys excluded')
+  console.log('\n[10/13] backup — export/import round-trip, keys excluded')
   const backup = require('../electron/backup.js')
   fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [{ id: 1, title: 'keep me' }] }))
   fs.writeFileSync(path.join(testHome, 'credentials.json'), JSON.stringify({ secret: 'sk-DO-NOT-EXPORT' }))
@@ -412,7 +412,7 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
   check('merge reports new session count', merged.mergedSessions === 1)
 
   // ═══ TEST 11: conversation history budget ═══
-  console.log('\n[11/12] history-budget — cap, keep-recent, trim note')
+  console.log('\n[11/13] history-budget — cap, keep-recent, trim note')
   const { capHistory } = await import('../renderer/js/history-budget.js')
   const mk = (n, len) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'x'.repeat(len) }))
   // Under budget → unchanged (new array)
@@ -435,7 +435,7 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
   check('input array not mutated', big.length === 50)
 
   // ═══ TEST 12: MCP tool-name parser ═══
-  console.log('\n[12/12] mcp — tool-name parsing')
+  console.log('\n[12/13] mcp — tool-name parsing')
   const { parseMcpToolName } = require('../electron/mcp.js')
   const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b)
   check('parses simple name', eq(parseMcpToolName('mcp_fs__read_file'), { serverName: 'fs', toolName: 'read_file' }))
@@ -445,6 +445,22 @@ console.log('\n[7/12] folder-skills — discovery + frontmatter + guards')
   check('rejects empty server', parseMcpToolName('mcp___y') === null)
   check('rejects empty tool', parseMcpToolName('mcp_fs__') === null)
   check('rejects non-string', parseMcpToolName(null) === null)
+
+  // ═══ TEST 13: permissions — rm -rf detection across flag spellings ═══
+  console.log('\n[13/13] permissions — dangerous rm detection')
+  const perms = require('../electron/permissions.js')
+  const rmClass = (c) => perms.classifyCommand(c).class
+  check('rm -rf flagged', rmClass('rm -rf /tmp/x') === 'dangerous')
+  check('rm -r -f (split) flagged', rmClass('rm -r -f ./build') === 'dangerous')
+  check('rm --recursive --force flagged', rmClass('rm --recursive --force .') === 'dangerous')
+  check('rm -f -r (reordered) flagged', rmClass('rm -f -r data') === 'dangerous')
+  check('rm -fr (combined alt) flagged', rmClass('rm -fr x') === 'dangerous')
+  check('chained rm -r -f flagged', rmClass('echo hi && rm -r -f ./node_modules') === 'dangerous')
+  check('rm with force only NOT flagged', rmClass('rm --force ./file') !== 'dangerous')
+  check('rm recursive only NOT flagged', rmClass('rm -r ./dir') !== 'dangerous')
+  check('rm of a single file NOT flagged', rmClass('rm file.txt') !== 'dangerous')
+  check('word containing rm NOT flagged', rmClass('confirm-rm script') !== 'dangerous')
+  check('isDangerousRm exported + works', perms.isDangerousRm('rm -r -f x') === true && perms.isDangerousRm('ls') === false)
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

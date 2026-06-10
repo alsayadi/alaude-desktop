@@ -416,3 +416,13 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   deterministic parseMcpToolName (strip prefix, split on first __) that
   correctly handles underscores in server/tool names — 7 unit tests. 111
   checks.
+
+### Cycle 43 — fix rm -rf detection bypass in the permission gate (2026-06-10)
+- The biggest audit find. DANGEROUS_PATTERNS only caught COMBINED rm flags
+  (-rf/-fr), so `rm -r -f`, `rm -f -r`, and `rm --recursive --force`
+  classified as "unknown" — which Autopilot mode AUTO-RUNS with no prompt.
+  An in-workspace `rm --recursive --force ./build` would delete silently.
+  Replaced with isDangerousRm(): splits on shell separators and flags any
+  rm segment carrying both a recursive and a force indicator (any spelling),
+  while leaving force-only, recursive-only, single-file rm, and words like
+  "confirm-rm" untouched. 11 unit tests. 122 checks.

@@ -150,9 +150,33 @@ const SAFE_COMMAND_ALLOWLIST = [
  *  - 'safe'      — allow-listed, may auto-run in Flow.
  *  - 'unknown'   — not matched either way; Flow prompts, Autopilot auto.
  */
+// v0.8 cycle 43: precise `rm -rf` detection. The old single regex only
+// caught COMBINED flags (-rf/-fr), so `rm -r -f`, `rm -f -r`,
+// `rm --recursive --force`, and long/short mixes classified as "unknown" —
+// which Autopilot auto-runs without a prompt. We split the command on shell
+// separators and, for any segment whose program is `rm`, flag it dangerous
+// when it carries BOTH a recursive and a force indicator (any spelling).
+function isDangerousRm(cmd) {
+  for (const seg of String(cmd).split(/[;&|]+/)) {
+    const s = seg.trim()
+    // program is rm (optionally /bin/rm, env-prefixed). First word ends in 'rm'.
+    if (!/^(?:\S*\/)?rm(\s|$)/.test(s) && !/(^|\s)rm\s/.test(s)) continue
+    const m = /(^|\s)(?:\S*\/)?rm\s+([\s\S]*)$/.exec(s)
+    if (!m) continue
+    const args = m[2]
+    const recursive = /(^|\s)-[a-zA-Z]*r[a-zA-Z]*\b/i.test(args) || /(^|\s)--recursive\b/.test(args)
+    const force     = /(^|\s)-[a-zA-Z]*f[a-zA-Z]*\b/.test(args)     || /(^|\s)--force\b/.test(args)
+    if (recursive && force) return true
+  }
+  return false
+}
+
 function classifyCommand(command, { workspaceRoot = '', home = '' } = {}) {
   const cmd = String(command || '').trim()
   if (!cmd) return { class: 'unknown', match: null, why: null }
+
+  // rm -rf in any flag spelling (split / long / combined) — checked first.
+  if (isDangerousRm(cmd)) return { class: 'dangerous', match: 'rm-recursive-force', why: 'recursive force delete' }
 
   // Dangerous first (cheapest wins)
   for (const p of DANGEROUS_PATTERNS) {
@@ -294,6 +318,7 @@ module.exports = {
   nextMode,
   isProtectedPath,
   classifyCommand,
+  isDangerousRm,
   resolveGate,
   // Exported for tests / introspection
   PROTECTED_GLOBS,
