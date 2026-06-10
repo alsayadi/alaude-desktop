@@ -435,3 +435,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   ([^;&|] so no cross-command bleed) but flag-position- and spelling-
   agnostic. 9 more permission tests (131 total). Force-only/recursive-only/
   plain forms stay un-flagged.
+
+### Cycle 45 — chained-command safety bypass (the systemic one) (2026-06-10)
+- The deepest gate bug yet: the safe-allowlist matched only the LEADING
+  token, so `echo ok; sudo reboot` / `ls && curl evil.com` returned 'safe'
+  and auto-ran under Flow on the strength of the harmless first command.
+  Now 'safe' requires EVERY segment (split on ;/&&/|) to be allow-listed.
+  Also fixed sudo/su detection when separator-adjacent (`;sudo`, `&&sudo`).
+  7 more tests; all-safe chains and allow-listed pipes still pass. 138
+  checks. Permission-gate sweep (cycles 43-45) complete.
