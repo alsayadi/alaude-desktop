@@ -139,3 +139,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - ⌘K → "Turn last prompt into a routine" prefills the Routines Add form
   (auto-name, prompt text, daily 8am default). The bridge from a good
   one-off prompt to the week-one retention metric.
+
+### Cycle 10 — wedge copy on the front door (2026-06-10) · CHECKPOINT
+- Login subtitle now states the wedge: "Every frontier AI on your Mac —
+  your keys, private, no subscription." (EN/中文/العربية.)
+- Checkpoint 1 of 10: cycles 1-10 pushed. Score so far: 1 strategy doc,
+  1 test layer (boot smoke), 2 demotions, 1 safety gate (screen tools),
+  1 activation feature (paste-any-key), funnel metrics, 2 retention hooks.
