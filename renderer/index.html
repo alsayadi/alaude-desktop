@@ -2795,6 +2795,21 @@
     }
 
     /* ─── Live file-edit diff cards ──────────────────────────────────────── */
+    /* v0.8: inline ✨ Live preview for written HTML files. */
+    .file-diff-preview-btn {
+      border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+      border-radius: 6px; padding: 2px 9px; font-size: 11.5px; cursor: pointer; white-space: nowrap;
+    }
+    .file-diff-preview-btn:hover, .file-diff-preview-btn.active {
+      border-color: var(--green); color: var(--green);
+      background: color-mix(in srgb, var(--green) 12%, transparent);
+    }
+    .file-diff-preview { display: none; border-top: 1px solid var(--border); background: #fff; }
+    .file-diff.show-preview .file-diff-preview { display: block; }
+    .file-diff.show-preview .file-diff-body { display: none; }
+    .file-diff-preview iframe {
+      width: 100%; height: 480px; border: 0; display: block; background: #fff;
+    }
     .file-diff {
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -13777,6 +13792,22 @@ Title:`
       const badge = isNewFile
         ? `<span class="file-diff-badge new">New file</span>`
         : `<span class="file-diff-badge edit">Edit</span>`
+      // v0.8: ✨ Live preview for written HTML files. When the model builds a
+      // page (write_file foo.html) it used to only open externally / show a
+      // diff; now the card renders it inline in the same sandboxed iframe as
+      // ```html artifacts (allow-scripts, NO allow-same-origin → can't touch
+      // the chat). Off by default; one click reveals it.
+      const isHtmlFile = /\.html?$/i.test(p) && /<[a-z!]/i.test(newContent || '')
+      let previewBtn = '', previewPane = ''
+      if (isHtmlFile) {
+        const focusHook = '<scr' + 'ipt>(function(){function f(){try{window.focus()}catch(_){}}window.addEventListener("load",f);document.addEventListener("pointerdown",f);})();</scr' + 'ipt>'
+        const doc = /<head\b[^>]*>/i.test(newContent)
+          ? newContent.replace(/<head\b[^>]*>/i, (m) => m + focusHook)
+          : focusHook + newContent
+        const srcdoc = doc.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        previewBtn = `<button class="file-diff-preview-btn" onclick="event.stopPropagation(); const c=this.closest('.file-diff'); c.classList.toggle('show-preview'); this.classList.toggle('active')" title="Render this HTML inline">✨ Live preview</button>`
+        previewPane = `<div class="file-diff-preview"><iframe sandbox="allow-scripts" srcdoc="${srcdoc}"></iframe></div>`
+      }
       // v0.7.72 OODA cycle 5: auto-collapse large diffs (>50 changed lines)
       // so a single sprawling refactor doesn't dominate the message bubble.
       // Header + stats stay visible; body opens with one click. Threshold
@@ -13799,9 +13830,11 @@ Title:`
             ${dels ? `<span class="del">−${dels}</span>` : ''}
           </span>
           ${collapsedHint}
+          ${previewBtn}
           <button class="file-diff-toggle" onclick="event.stopPropagation(); this.closest('.file-diff').querySelector('.file-diff-body').classList.toggle('collapsed'); this.closest('.file-diff').classList.toggle('is-collapsed')" title="Toggle">⌃</button>
         </div>
         <div class="${bodyClass}">${lines}</div>
+        ${previewPane}
       </div>`
     }
 
