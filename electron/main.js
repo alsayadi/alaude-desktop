@@ -1214,6 +1214,23 @@ ipcMain.handle('data-inventory', () => {
   return { baseDir: paths.BASE_DIR, items: out }
 })
 
+// v0.8 cycle 26: clear one store. Renames the file to .cleared-<ts> rather
+// than hard-deleting, so an accidental clear is recoverable from the data
+// folder. Allowed keys are pinned to the inventory — no arbitrary paths.
+const CLEARABLE = new Set(['sessions.json', 'memory.json', 'profile.json', 'routines.json', 'routine-history.ndjson', 'spaces.json', 'events.ndjson', 'images', 'skills'])
+ipcMain.handle('data-clear', (_e, key) => {
+  if (!CLEARABLE.has(key)) return { ok: false, reason: 'not clearable' }
+  const fs = require('fs')
+  const fp = require('path').join(paths.BASE_DIR, key)
+  try {
+    if (!fs.existsSync(fp)) return { ok: true, note: 'already empty' }
+    fs.renameSync(fp, `${fp}.cleared-${Date.now().toString(36)}`)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: err.message }
+  }
+})
+
 // v0.8 cycle 22: backup & restore. One portable JSON bundle (sessions,
 // memory, profile, routines, spaces, skills) — credentials excluded by
 // design. Import backs up every file it overwrites.

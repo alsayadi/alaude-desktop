@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('alaude', {
   backupImport: () => ipcRenderer.invoke('backup-import'),
   // v0.8 — read-only inventory of what's stored locally (the private wedge).
   dataInventory: () => ipcRenderer.invoke('data-inventory'),
+  dataClear: (key) => ipcRenderer.invoke('data-clear', key),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

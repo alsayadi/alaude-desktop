@@ -260,3 +260,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   keys, images, skills — each with size + total + the real folder path,
   Reveal-in-Finder, and a jump to Backup. Makes the "private, no
   subscription" wedge tangible instead of a claim. Cycles 21-25 pushed.
+
+### Cycle 26 — clear-per-store from Your data (2026-06-10)
+- The privacy panel can now DELETE, not just display: a × per store
+  (data-clear IPC) renames the file to .cleared-<ts> (recoverable, not
+  hard-deleted), confirms first, then reloads so the UI matches disk.
+  Credentials are deliberately NOT clearable here (logging out belongs in
+  Keys). Completes "see AND control your data" — the private wedge.
