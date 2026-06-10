@@ -18547,6 +18547,55 @@ Title:`
       input.focus()
     }
 
+    // ── v0.8 cycle 6 — Voice capture pipeline (the REAL engine) ─────────
+    // webkitSpeechRecognition has no backend in Electron (the reason for
+    // the v0.7.41 kill-switch). This records mic audio with MediaRecorder
+    // and ships it to main's `voice-transcribe`, which routes to the best
+    // STT backend by key availability. Dev-flagged until the engine lands:
+    // run `voiceDevTest()` in the console to record 3s and see the route.
+    let _vc = null  // { recorder, stream, chunks, mime, startedAt }
+    async function voiceCaptureStart() {
+      if (_vc) return false
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
+      const recorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 32000 })
+      const chunks = []
+      recorder.ondataavailable = (e) => { if (e.data?.size) chunks.push(e.data) }
+      _vc = { recorder, stream, chunks, mime, startedAt: Date.now() }
+      recorder.start(250)
+      return true
+    }
+    function voiceCaptureActive() { return !!_vc }
+    // Stop + transcribe. Returns { text, backend } | { error } | null (cancel).
+    async function voiceCaptureStop({ cancel = false } = {}) {
+      const vc = _vc
+      if (!vc) return null
+      _vc = null
+      const stopped = new Promise(res => { vc.recorder.onstop = res })
+      try { vc.recorder.stop() } catch {}
+      await stopped
+      vc.stream.getTracks().forEach(tr => { try { tr.stop() } catch {} })
+      if (cancel) return null
+      const blob = new Blob(vc.chunks, { type: vc.mime })
+      const durationMs = Date.now() - vc.startedAt
+      if (durationMs < 300 || blob.size < 1000) return { error: 'too-short' }
+      const buf = new Uint8Array(await blob.arrayBuffer())
+      // Chunked btoa — String.fromCharCode on a whole recording overflows
+      // the call stack past ~100KB.
+      let bin = ''
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000))
+      return window.alaude.voiceTranscribe({ audioB64: btoa(bin), mime: vc.mime, durationMs, lang: i18n.lang })
+    }
+    // Dev hook (cycle 6): record 3 seconds, print the engine's verdict.
+    window.voiceDevTest = async () => {
+      console.log('[voice] recording 3s…')
+      await voiceCaptureStart()
+      await new Promise(r => setTimeout(r, 3000))
+      const res = await voiceCaptureStop()
+      console.log('[voice] result:', res)
+      return res
+    }
+
     // ── Voice Input ──────────────────────────────────────────────────────
     // Three modes:
     //  1. Click mic button → toggles normal voice mode (was there before).

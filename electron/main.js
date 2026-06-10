@@ -1507,6 +1507,26 @@ const undoSnaps = require('./undo-snapshots')
 ipcMain.handle('undo-list-turns', async () => undoSnaps.listTurns())
 ipcMain.handle('undo-restore-turn', async (_e, turnId) => undoSnaps.restoreTurn(turnId))
 
+// v0.8 cycle 6 — voice dictation. Renderer records mic audio (webm/opus)
+// and ships it here; electron/voice.js routes to the best STT backend
+// (openai whisper → gemini → on-device, by key availability). Base64 is
+// 4/3 of raw, so the wire cap is MAX_AUDIO_BYTES * 4/3.
+const voice = require('./voice')
+ipcMain.handle('voice-transcribe', async (_e, payload) => {
+  try {
+    if (!payload?.audioB64) return { error: 'empty-audio' }
+    if (payload.audioB64.length > Math.ceil(voice.MAX_AUDIO_BYTES * 4 / 3)) return { error: 'too-large' }
+    return await voice.transcribe({
+      buffer: Buffer.from(payload.audioB64, 'base64'),
+      mime: payload.mime || 'audio/webm',
+      lang: payload.lang,
+      getApiKey,
+    })
+  } catch (err) {
+    return { error: err?.message || 'transcribe-failed' }
+  }
+})
+
 ipcMain.handle('ollama-pull', async (event, model) => {
   if (!model || typeof model !== 'string') throw new Error('Model name required')
   if (activePulls.has(model)) throw new Error(`Already pulling ${model}`)

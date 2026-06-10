@@ -552,6 +552,32 @@ console.log('\n[14/14] undo-snapshots — pre-image record + turn restore')
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 15: voice — STT backend routing + input guards (cycle 6)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[15/15] voice — STT backend routing + input guards')
+{
+  const { createRequire } = await import('node:module')
+  const require = createRequire(import.meta.url)
+  const voice = require('../electron/voice.js')
+
+  const keys = (map) => (provider) => map[provider] || null
+
+  check('openai preferred when both keys', voice.pickBackend(keys({ openai: 'sk-x', google: 'g-x' })) === 'openai')
+  check('google when only google key', voice.pickBackend(keys({ google: 'g-x' })) === 'google')
+  check('null when no keys', voice.pickBackend(keys({})) === null)
+  check('throwing key lookup → null, no crash', voice.pickBackend(() => { throw new Error('boom') }) === null)
+
+  const r1 = await voice.transcribe({ buffer: Buffer.alloc(0), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }) })
+  check('empty audio rejected', r1.error === 'empty-audio')
+  const r2 = await voice.transcribe({ buffer: Buffer.alloc(voice.MAX_AUDIO_BYTES + 1), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }) })
+  check('oversize audio rejected', r2.error === 'too-large')
+  const r3 = await voice.transcribe({ buffer: Buffer.from('x'), mime: 'audio/webm', getApiKey: keys({}) })
+  check('no key → no-backend', r3.error === 'no-backend')
+  const r4 = await voice.transcribe({ buffer: Buffer.from('x'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }) })
+  check('openai route reaches engine layer', r4.error === 'engine-pending')
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

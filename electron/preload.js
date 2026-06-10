@@ -184,6 +184,8 @@ contextBridge.exposeInMainWorld('alaude', {
   // v0.8 cycle 5 — undo agent file changes (pre-image snapshots per turn).
   undoListTurns: () => ipcRenderer.invoke('undo-list-turns'),
   undoRestoreTurn: (turnId) => ipcRenderer.invoke('undo-restore-turn', turnId),
+  // v0.8 cycle 6 — voice dictation: recorded audio → STT engine in main.
+  voiceTranscribe: (payload) => ipcRenderer.invoke('voice-transcribe', payload),
   ollamaPull: (model) => ipcRenderer.invoke('ollama-pull', model),
   ollamaCancel: (model) => ipcRenderer.invoke('ollama-cancel', model),
   ollamaRemove: (model) => ipcRenderer.invoke('ollama-remove', model),
