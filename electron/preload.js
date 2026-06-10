@@ -114,15 +114,15 @@ contextBridge.exposeInMainWorld('alaude', {
     try { return ipcRenderer.sendSync('fs-json-write-sync', name, data) } catch { return false }
   },
 
-  // Routines (v0.5.4 — was "Cron Skills"; renamed in v0.7.67 UI)
-  skillsList: () => ipcRenderer.invoke('skills-list'),
-  skillsUpsert: (skill) => ipcRenderer.invoke('skills-upsert', skill),
-  skillsRemove: (id) => ipcRenderer.invoke('skills-remove', id),
-  skillsSetEnabled: (id, enabled) => ipcRenderer.invoke('skills-set-enabled', id, enabled),
-  onSkillRan: (callback) => {
+  // Routines (v0.5.4 — was "Cron Skills"; fully renamed in v0.8)
+  routinesList: () => ipcRenderer.invoke('routines-list'),
+  routinesUpsert: (routine) => ipcRenderer.invoke('routines-upsert', routine),
+  routinesRemove: (id) => ipcRenderer.invoke('routines-remove', id),
+  routinesSetEnabled: (id, enabled) => ipcRenderer.invoke('routines-set-enabled', id, enabled),
+  onRoutineRan: (callback) => {
     const h = (_e, payload) => callback(payload)
-    ipcRenderer.on('skill-ran', h)
-    return () => ipcRenderer.removeListener('skill-ran', h)
+    ipcRenderer.on('routine-ran', h)
+    return () => ipcRenderer.removeListener('routine-ran', h)
   },
 
   // Folder-skills (v0.7.67) — filesystem-discovered prompt templates from

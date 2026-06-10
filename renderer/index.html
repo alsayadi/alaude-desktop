@@ -6240,7 +6240,7 @@
                  shortcut hint that stays untranslated. -->
             <button class="topbar-menu-item" role="menuitem" onclick="runTopbarAction('search', event)"><span data-i18n="menu.search">🔍 Search all sessions</span> <span style="color:var(--text-faint);font-size:11px;margin-left:auto">⌘F</span></button>
             <button class="topbar-menu-item" id="menu-crew" role="menuitem" data-i18n="menu.crew" onclick="runTopbarAction('crew', event)">👥 Crew</button>
-            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.routines" onclick="runTopbarAction('skills', event)">⏰ Routines</button>
+            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.routines" onclick="runTopbarAction('routines', event)">⏰ Routines</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.keys" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.localModels" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.thinkingMap" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
@@ -6784,70 +6784,70 @@
   </div>
 
   <!-- v0.5.4 Cron Skills modal: create, list, enable/disable scheduled prompts -->
-  <div class="modal-overlay" id="skills-modal">
+  <div class="modal-overlay" id="routines-modal">
     <div class="modal" style="max-width:760px;width:94vw">
       <h2>
-        <span data-i18n="skills.title">⏰ Routines</span>
-        <button class="modal-close" onclick="toggleSkillsModal()">&times;</button>
+        <span data-i18n="routines.title">⏰ Routines</span>
+        <button class="modal-close" onclick="toggleRoutinesModal()">&times;</button>
       </h2>
-      <div data-i18n="skills.intro" style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.</div>
+      <div data-i18n="routines.intro" style="font-size:12px;color:var(--text-dim);margin-bottom:12px">Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.</div>
 
       <div style="margin-bottom:14px">
-        <div data-i18n="skills.starterTemplates" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Starter templates</div>
-        <div id="skills-templates" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        <div data-i18n="routines.starterTemplates" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Starter templates</div>
+        <div id="routines-templates" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
 
       <div style="background:var(--bg-input);padding:12px;border-radius:10px;margin-bottom:16px">
-        <div data-i18n="skills.add.section" style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
-        <input id="skill-name" type="text" data-i18n-attr="placeholder:skills.name.placeholder" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
-        <textarea id="skill-prompt" data-i18n-attr="placeholder:skills.prompt.placeholder" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
+        <div data-i18n="routines.add.section" style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
+        <input id="routine-name" type="text" data-i18n-attr="placeholder:routines.name.placeholder" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
+        <textarea id="routine-prompt" data-i18n-attr="placeholder:routines.prompt.placeholder" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
         <div style="background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px">
-          <div data-i18n="skills.schedule" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
+          <div data-i18n="routines.schedule" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <select id="skill-freq" onchange="onSkillFreqChange()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;flex:1;min-width:180px">
-              <optgroup label="Daily / weekly" data-i18n-attr="label:skills.freq.dailyWeekly">
-                <option value="daily" data-i18n="skills.freq.daily">Every day</option>
-                <option value="weekday" data-i18n="skills.freq.weekday">Every weekday (Mon–Fri)</option>
-                <option value="weekend" data-i18n="skills.freq.weekend">Every weekend (Sat–Sun)</option>
-                <option value="mon" data-i18n="skills.freq.mon">Every Monday</option>
-                <option value="tue" data-i18n="skills.freq.tue">Every Tuesday</option>
-                <option value="wed" data-i18n="skills.freq.wed">Every Wednesday</option>
-                <option value="thu" data-i18n="skills.freq.thu">Every Thursday</option>
-                <option value="fri" data-i18n="skills.freq.fri">Every Friday</option>
-                <option value="sat" data-i18n="skills.freq.sat">Every Saturday</option>
-                <option value="sun" data-i18n="skills.freq.sun">Every Sunday</option>
+            <select id="routine-freq" onchange="onRoutineFreqChange()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;flex:1;min-width:180px">
+              <optgroup label="Daily / weekly" data-i18n-attr="label:routines.freq.dailyWeekly">
+                <option value="daily" data-i18n="routines.freq.daily">Every day</option>
+                <option value="weekday" data-i18n="routines.freq.weekday">Every weekday (Mon–Fri)</option>
+                <option value="weekend" data-i18n="routines.freq.weekend">Every weekend (Sat–Sun)</option>
+                <option value="mon" data-i18n="routines.freq.mon">Every Monday</option>
+                <option value="tue" data-i18n="routines.freq.tue">Every Tuesday</option>
+                <option value="wed" data-i18n="routines.freq.wed">Every Wednesday</option>
+                <option value="thu" data-i18n="routines.freq.thu">Every Thursday</option>
+                <option value="fri" data-i18n="routines.freq.fri">Every Friday</option>
+                <option value="sat" data-i18n="routines.freq.sat">Every Saturday</option>
+                <option value="sun" data-i18n="routines.freq.sun">Every Sunday</option>
               </optgroup>
-              <optgroup label="Intervals" data-i18n-attr="label:skills.freq.intervals">
-                <option value="every-15min" data-i18n="skills.freq.15min">Every 15 minutes</option>
-                <option value="every-30min" data-i18n="skills.freq.30min">Every 30 minutes</option>
-                <option value="every-hour" data-i18n="skills.freq.hour">Every hour</option>
-                <option value="every-2h" data-i18n="skills.freq.2h">Every 2 hours</option>
-                <option value="every-4h" data-i18n="skills.freq.4h">Every 4 hours</option>
-                <option value="every-6h" data-i18n="skills.freq.6h">Every 6 hours</option>
-                <option value="every-12h" data-i18n="skills.freq.12h">Every 12 hours</option>
+              <optgroup label="Intervals" data-i18n-attr="label:routines.freq.intervals">
+                <option value="every-15min" data-i18n="routines.freq.15min">Every 15 minutes</option>
+                <option value="every-30min" data-i18n="routines.freq.30min">Every 30 minutes</option>
+                <option value="every-hour" data-i18n="routines.freq.hour">Every hour</option>
+                <option value="every-2h" data-i18n="routines.freq.2h">Every 2 hours</option>
+                <option value="every-4h" data-i18n="routines.freq.4h">Every 4 hours</option>
+                <option value="every-6h" data-i18n="routines.freq.6h">Every 6 hours</option>
+                <option value="every-12h" data-i18n="routines.freq.12h">Every 12 hours</option>
               </optgroup>
-              <optgroup label="Advanced" data-i18n-attr="label:skills.freq.advanced">
-                <option value="custom" data-i18n="skills.freq.custom">Custom cron…</option>
+              <optgroup label="Advanced" data-i18n-attr="label:routines.freq.advanced">
+                <option value="custom" data-i18n="routines.freq.custom">Custom cron…</option>
               </optgroup>
             </select>
-            <div id="skill-time-wrap" style="display:flex;align-items:center;gap:6px">
-              <span data-i18n="skills.at" style="font-size:12px;color:var(--text-dim)">at</span>
-              <input id="skill-time" type="time" value="08:00" onchange="updateSkillCronPreview()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
+            <div id="routine-time-wrap" style="display:flex;align-items:center;gap:6px">
+              <span data-i18n="routines.at" style="font-size:12px;color:var(--text-dim)">at</span>
+              <input id="routine-time" type="time" value="08:00" onchange="updateRoutineCronPreview()" style="padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px" />
             </div>
-            <input id="skill-cron-custom" type="text" data-i18n-attr="placeholder:skills.cron.placeholder" placeholder="Cron — e.g. 0 8 * * *" oninput="updateSkillCronPreview()" style="display:none;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace);flex:1;min-width:160px" />
+            <input id="routine-cron-custom" type="text" data-i18n-attr="placeholder:routines.cron.placeholder" placeholder="Cron — e.g. 0 8 * * *" oninput="updateRoutineCronPreview()" style="display:none;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:var(--mono,ui-monospace,monospace);flex:1;min-width:160px" />
           </div>
-          <div id="skill-cron-preview" style="font-size:11px;color:var(--text-faint);margin-top:6px;font-family:var(--mono,ui-monospace,monospace)"></div>
-          <input id="skill-cron" type="hidden" />
+          <div id="routine-cron-preview" style="font-size:11px;color:var(--text-faint);margin-top:6px;font-family:var(--mono,ui-monospace,monospace)"></div>
+          <input id="routine-cron" type="hidden" />
         </div>
 
         <div style="display:flex;gap:8px;align-items:center">
-          <select id="skill-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
-          <button class="key-save-btn" data-i18n="skills.add" onclick="addSkill()">Add</button>
+          <select id="routine-model" style="padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;flex:1"></select>
+          <button class="key-save-btn" data-i18n="routines.add" onclick="addRoutine()">Add</button>
         </div>
       </div>
 
-      <div data-i18n="skills.your" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
-      <div id="skills-list"></div>
+      <div data-i18n="routines.your" style="font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Your routines</div>
+      <div id="routines-list"></div>
     </div>
   </div>
 
@@ -8616,12 +8616,12 @@ SUMMARY:`
 
     // ── v0.5.4 Scheduled Skills ──────────────────────────────────────────
     // Cron-driven prompts. UI modal mirrors Keys/Memory — list current
-    // skills, add new ones with { name, prompt, cron, model }, toggle
+    // routines, add new ones with { name, prompt, cron, model }, toggle
     // enabled state. Firing happens in main.js; we just display.
-    // v0.5.22: starter skill templates. Clicking one pre-fills the Add form
+    // v0.5.22: starter routine templates. Clicking one pre-fills the Add form
     // so the user can tweak + save. These aren't automatically scheduled —
     // they're examples to copy and customize.
-    const SKILL_TEMPLATES = [
+    const ROUTINE_TEMPLATES = [
       { icon: '📰', name: 'Morning HN digest', cron: '0 8 * * *',
         prompt: 'Summarize the top 10 Hacker News stories from the last 24 hours. For each: 1-line takeaway + URL. Cluster by theme. Stay terse.' },
       { icon: '🗓️', name: 'Weekday standup prep', cron: '0 9 * * 1-5',
@@ -8643,24 +8643,24 @@ SUMMARY:`
       { icon: '✍️', name: 'Writing prompt', cron: '0 7 * * *',
         prompt: 'Give me one interesting writing prompt for today. Vary the genre (essay, short story, journal, reflection).' },
     ]
-    function renderSkillTemplates() {
-      const container = document.getElementById('skills-templates')
+    function renderRoutineTemplates() {
+      const container = document.getElementById('routines-templates')
       if (!container) return
-      container.innerHTML = SKILL_TEMPLATES.map((t, i) => `
-        <button class="msg-action-btn" onclick="useSkillTemplate(${i})" title="${escapeHtml(t.prompt)}" style="font-size:11.5px">
+      container.innerHTML = ROUTINE_TEMPLATES.map((t, i) => `
+        <button class="msg-action-btn" onclick="useRoutineTemplate(${i})" title="${escapeHtml(t.prompt)}" style="font-size:11.5px">
           ${t.icon} ${escapeHtml(t.name)}
         </button>
       `).join('')
     }
-    function useSkillTemplate(idx) {
-      const t = SKILL_TEMPLATES[idx]
+    function useRoutineTemplate(idx) {
+      const t = ROUTINE_TEMPLATES[idx]
       if (!t) return
-      document.getElementById('skill-name').value = t.name
-      document.getElementById('skill-prompt').value = t.prompt
+      document.getElementById('routine-name').value = t.name
+      document.getElementById('routine-prompt').value = t.prompt
       // Load the template's cron into the friendly picker.
       _loadCronIntoPicker(t.cron)
-      document.getElementById('skill-name').focus()
-      document.getElementById('skill-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+      document.getElementById('routine-name').focus()
+      document.getElementById('routine-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
 
     // ── v0.5.23 friendly cron builder ───────────────────────────────────
@@ -8670,7 +8670,7 @@ SUMMARY:`
     const DOW_MAP = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 }
     const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
     // Turn a cron string back into plain English ("every weekday at 9am").
-    // Used both to render each skill's schedule in the list and as a
+    // Used both to render each routine's schedule in the list and as a
     // fallback when the picker can't parse a shape.
     function _cronToHuman(cron) {
       if (!cron) return ''
@@ -8698,9 +8698,9 @@ SUMMARY:`
       return cron  // unrecognised — show the raw cron
     }
     function _buildCronFromPicker() {
-      const freq = document.getElementById('skill-freq')?.value
+      const freq = document.getElementById('routine-freq')?.value
       if (freq === 'custom') {
-        return document.getElementById('skill-cron-custom')?.value?.trim() || ''
+        return document.getElementById('routine-cron-custom')?.value?.trim() || ''
       }
       if (freq === 'every-15min') return '*/15 * * * *'
       if (freq === 'every-30min') return '*/30 * * * *'
@@ -8710,7 +8710,7 @@ SUMMARY:`
       if (freq === 'every-6h')    return '0 */6 * * *'
       if (freq === 'every-12h')   return '0 */12 * * *'
       // Daily / weekday / weekend / specific-day — need time input
-      const time = document.getElementById('skill-time')?.value || '08:00'
+      const time = document.getElementById('routine-time')?.value || '08:00'
       const [h, m] = time.split(':').map(Number)
       const hh = isFinite(h) ? h : 8
       const mm = isFinite(m) ? m : 0
@@ -8721,8 +8721,8 @@ SUMMARY:`
       return ''
     }
     function _describeFrequency() {
-      const freq = document.getElementById('skill-freq')?.value
-      const timeVal = document.getElementById('skill-time')?.value || '08:00'
+      const freq = document.getElementById('routine-freq')?.value
+      const timeVal = document.getElementById('routine-time')?.value || '08:00'
       const formatTime = () => {
         const [h, m] = timeVal.split(':').map(Number)
         const hr12 = ((h % 12) || 12)
@@ -8745,19 +8745,19 @@ SUMMARY:`
       if (dayNames[freq]) return `every ${dayNames[freq]} at ${at}`
       return ''
     }
-    function onSkillFreqChange() {
-      const freq = document.getElementById('skill-freq')?.value
+    function onRoutineFreqChange() {
+      const freq = document.getElementById('routine-freq')?.value
       const needsTime = ['daily','weekday','weekend','mon','tue','wed','thu','fri','sat','sun'].includes(freq)
       const isCustom = freq === 'custom'
-      document.getElementById('skill-time-wrap').style.display = needsTime ? '' : 'none'
-      document.getElementById('skill-cron-custom').style.display = isCustom ? '' : 'none'
-      updateSkillCronPreview()
+      document.getElementById('routine-time-wrap').style.display = needsTime ? '' : 'none'
+      document.getElementById('routine-cron-custom').style.display = isCustom ? '' : 'none'
+      updateRoutineCronPreview()
     }
-    function updateSkillCronPreview() {
+    function updateRoutineCronPreview() {
       const cron = _buildCronFromPicker()
-      document.getElementById('skill-cron').value = cron
+      document.getElementById('routine-cron').value = cron
       const desc = _describeFrequency()
-      const preview = document.getElementById('skill-cron-preview')
+      const preview = document.getElementById('routine-cron-preview')
       if (preview) {
         preview.textContent = cron ? `${desc}   ·   cron: ${cron}` : 'Pick a schedule above.'
       }
@@ -8765,9 +8765,9 @@ SUMMARY:`
     // Parse a cron string back into the picker state — used when editing
     // or when a starter template is loaded.
     function _loadCronIntoPicker(cron) {
-      const freqEl = document.getElementById('skill-freq')
-      const timeEl = document.getElementById('skill-time')
-      const customEl = document.getElementById('skill-cron-custom')
+      const freqEl = document.getElementById('routine-freq')
+      const timeEl = document.getElementById('routine-time')
+      const customEl = document.getElementById('routine-cron-custom')
       if (!freqEl) return
       const tryMatch = (pattern, freq) => cron === pattern && (freqEl.value = freq, true)
       if (tryMatch('*/15 * * * *', 'every-15min')
@@ -8777,7 +8777,7 @@ SUMMARY:`
         || tryMatch('0 */4 * * *',  'every-4h')
         || tryMatch('0 */6 * * *',  'every-6h')
         || tryMatch('0 */12 * * *', 'every-12h')) {
-        onSkillFreqChange(); return
+        onRoutineFreqChange(); return
       }
       // Time-based pattern: "M H * * DOW"
       const m = cron.match(/^(\d+)\s+(\d+)\s+\*\s+\*\s+(.+)$/)
@@ -8792,32 +8792,32 @@ SUMMARY:`
           freqEl.value = byNum ? byNum[0] : 'custom'
           if (!byNum) customEl.value = cron
         } else { freqEl.value = 'custom'; customEl.value = cron }
-        onSkillFreqChange(); return
+        onRoutineFreqChange(); return
       }
       // Fallback: stuff it in the custom input
       freqEl.value = 'custom'
       customEl.value = cron
-      onSkillFreqChange()
+      onRoutineFreqChange()
     }
 
-    function toggleSkillsModal() {
-      const m = document.getElementById('skills-modal')
+    function toggleRoutinesModal() {
+      const m = document.getElementById('routines-modal')
       const opening = !m.classList.contains('show')
       if (opening) {
-        renderSkillTemplates()
-        refreshSkillsList()
-        populateSkillModelSelect()
+        renderRoutineTemplates()
+        refreshRoutinesList()
+        populateRoutineModelSelect()
         // Initialise the friendly schedule picker (shows/hides the time
         // input + custom-cron field based on the default selection) and
         // renders the human-readable preview.
-        onSkillFreqChange?.()
+        onRoutineFreqChange?.()
         m.classList.add('show')
       } else {
         m.classList.remove('show')
       }
     }
-    function populateSkillModelSelect() {
-      const sel = document.getElementById('skill-model')
+    function populateRoutineModelSelect() {
+      const sel = document.getElementById('routine-model')
       const live = document.getElementById('model-select')
       if (!sel || !live) return
       sel.innerHTML = '<option value="">Current model</option>' +
@@ -8826,15 +8826,15 @@ SUMMARY:`
           .map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.text)}</option>`)
           .join('')
     }
-    async function refreshSkillsList() {
-      const listEl = document.getElementById('skills-list')
+    async function refreshRoutinesList() {
+      const listEl = document.getElementById('routines-list')
       if (!listEl) return
-      const skills = await window.alaude.skillsList()
-      if (!Array.isArray(skills) || skills.length === 0) {
+      const routines = await window.alaude.routinesList()
+      if (!Array.isArray(routines) || routines.length === 0) {
         listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:13px">No routines yet. Add one above.</div>'
         return
       }
-      listEl.innerHTML = skills.map(s => {
+      listEl.innerHTML = routines.map(s => {
         const nextFire = s.nextFireAt ? new Date(s.nextFireAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
         const lastRun = s.lastRunAt ? new Date(s.lastRunAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'never'
         const statusColor = s.lastStatus === 'ok' ? 'var(--green)' : (s.lastStatus === 'error' || s.lastStatus === 'timeout') ? '#e07070' : 'var(--text-faint)'
@@ -8846,10 +8846,10 @@ SUMMARY:`
                 <div style="font-size:11px;color:var(--text-dim)">${escapeHtml(_cronToHuman(s.cron) || s.cron)}${s.model ? ' · ' + escapeHtml(s.model) : ''}</div>
               </div>
               <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-dim);cursor:pointer">
-                <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleSkillEnabled('${s.id}', this.checked)" />
+                <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggleRoutineEnabled('${s.id}', this.checked)" />
                 ${s.enabled ? 'On' : 'Off'}
               </label>
-              <button class="msg-action-btn" onclick="deleteSkill('${s.id}')" style="color:#e07070">×</button>
+              <button class="msg-action-btn" onclick="deleteRoutine('${s.id}')" style="color:#e07070">×</button>
             </div>
             <div style="font-size:12px;color:var(--text-dim);margin-top:8px;line-height:1.4;white-space:pre-wrap;max-height:60px;overflow:hidden">${escapeHtml(s.prompt.slice(0, 200))}${s.prompt.length > 200 ? '…' : ''}</div>
             <div style="display:flex;gap:14px;font-size:10.5px;color:var(--text-faint);margin-top:8px">
@@ -8860,43 +8860,43 @@ SUMMARY:`
         `
       }).join('')
     }
-    async function addSkill() {
-      const name = document.getElementById('skill-name').value.trim()
-      const prompt = document.getElementById('skill-prompt').value.trim()
+    async function addRoutine() {
+      const name = document.getElementById('routine-name').value.trim()
+      const prompt = document.getElementById('routine-prompt').value.trim()
       // Always synthesise fresh from the picker on submit so editing the
       // time/frequency after loading a template takes effect.
-      updateSkillCronPreview()
-      const cron = document.getElementById('skill-cron').value.trim()
-      const model = document.getElementById('skill-model').value
+      updateRoutineCronPreview()
+      const cron = document.getElementById('routine-cron').value.trim()
+      const model = document.getElementById('routine-model').value
       if (!name || !prompt || !cron) {
         showRewindToast?.('Fill name, prompt, and schedule', true)
         return
       }
-      await window.alaude.skillsUpsert({ name, prompt, cron, model })
-      document.getElementById('skill-name').value = ''
-      document.getElementById('skill-prompt').value = ''
-      document.getElementById('skill-cron-custom').value = ''
-      document.getElementById('skill-freq').value = 'daily'
-      document.getElementById('skill-time').value = '08:00'
-      document.getElementById('skill-model').value = ''
-      onSkillFreqChange()
-      await refreshSkillsList()
-      showRewindToast?.(`⏰ Skill "${name}" scheduled`, false)
+      await window.alaude.routinesUpsert({ name, prompt, cron, model })
+      document.getElementById('routine-name').value = ''
+      document.getElementById('routine-prompt').value = ''
+      document.getElementById('routine-cron-custom').value = ''
+      document.getElementById('routine-freq').value = 'daily'
+      document.getElementById('routine-time').value = '08:00'
+      document.getElementById('routine-model').value = ''
+      onRoutineFreqChange()
+      await refreshRoutinesList()
+      showRewindToast?.(`⏰ Routine "${name}" scheduled`, false)
     }
-    async function toggleSkillEnabled(id, enabled) {
-      await window.alaude.skillsSetEnabled(id, enabled)
-      refreshSkillsList()
+    async function toggleRoutineEnabled(id, enabled) {
+      await window.alaude.routinesSetEnabled(id, enabled)
+      refreshRoutinesList()
     }
-    async function deleteSkill(id) {
+    async function deleteRoutine(id) {
       if (!confirm('Delete this routine?')) return
-      await window.alaude.skillsRemove(id)
-      refreshSkillsList()
+      await window.alaude.routinesRemove(id)
+      refreshRoutinesList()
     }
-    // Surface skill runs as toasts so the user knows something fired.
+    // Surface routine runs as toasts so the user knows something fired.
     try {
-      window.alaude.onSkillRan?.((payload) => {
+      window.alaude.onRoutineRan?.((payload) => {
         if (!payload) return
-        const name = payload.skill?.name || 'skill'
+        const name = payload.routine?.name || 'routine'
         if (payload.success) {
           const preview = typeof payload.result === 'string' ? payload.result.slice(0, 120) : ''
           showRewindToast?.(`⏰ ${name} — ${preview}`, false)
@@ -8904,7 +8904,7 @@ SUMMARY:`
           showRewindToast?.(`⏰ ${name} — failed: ${(payload.error || 'unknown').slice(0, 80)}`, true)
         }
         // Refresh the list if the modal is open so stats update live.
-        if (document.getElementById('skills-modal')?.classList.contains('show')) refreshSkillsList()
+        if (document.getElementById('routines-modal')?.classList.contains('show')) refreshRoutinesList()
       })
     } catch {}
 
@@ -11387,38 +11387,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.intro.tail': 'to jump straight in.',
         'whatsin.tryit': 'Try it',
         // Routines modal
-        'skills.title': '⏰ Routines',
-        'skills.intro': 'Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.',
-        'skills.starterTemplates': 'Starter templates',
-        'skills.add.section': 'Add a routine',
-        'skills.name.placeholder': 'Name — e.g. Morning HN digest',
-        'skills.prompt.placeholder': 'Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs.',
-        'skills.schedule': 'Schedule',
-        'skills.at': 'at',
-        'skills.cron.placeholder': 'Cron — e.g. 0 8 * * *',
-        'skills.add': 'Add',
-        'skills.your': 'Your routines',
-        'skills.freq.dailyWeekly': 'Daily / weekly',
-        'skills.freq.intervals': 'Intervals',
-        'skills.freq.advanced': 'Advanced',
-        'skills.freq.daily': 'Every day',
-        'skills.freq.weekday': 'Every weekday (Mon–Fri)',
-        'skills.freq.weekend': 'Every weekend (Sat–Sun)',
-        'skills.freq.mon': 'Every Monday',
-        'skills.freq.tue': 'Every Tuesday',
-        'skills.freq.wed': 'Every Wednesday',
-        'skills.freq.thu': 'Every Thursday',
-        'skills.freq.fri': 'Every Friday',
-        'skills.freq.sat': 'Every Saturday',
-        'skills.freq.sun': 'Every Sunday',
-        'skills.freq.15min': 'Every 15 minutes',
-        'skills.freq.30min': 'Every 30 minutes',
-        'skills.freq.hour': 'Every hour',
-        'skills.freq.2h': 'Every 2 hours',
-        'skills.freq.4h': 'Every 4 hours',
-        'skills.freq.6h': 'Every 6 hours',
-        'skills.freq.12h': 'Every 12 hours',
-        'skills.freq.custom': 'Custom cron…',
+        'routines.title': '⏰ Routines',
+        'routines.intro': 'Routines run a prompt automatically on a schedule. Great for daily digests, standup prep, periodic checks.',
+        'routines.starterTemplates': 'Starter templates',
+        'routines.add.section': 'Add a routine',
+        'routines.name.placeholder': 'Name — e.g. Morning HN digest',
+        'routines.prompt.placeholder': 'Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs.',
+        'routines.schedule': 'Schedule',
+        'routines.at': 'at',
+        'routines.cron.placeholder': 'Cron — e.g. 0 8 * * *',
+        'routines.add': 'Add',
+        'routines.your': 'Your routines',
+        'routines.freq.dailyWeekly': 'Daily / weekly',
+        'routines.freq.intervals': 'Intervals',
+        'routines.freq.advanced': 'Advanced',
+        'routines.freq.daily': 'Every day',
+        'routines.freq.weekday': 'Every weekday (Mon–Fri)',
+        'routines.freq.weekend': 'Every weekend (Sat–Sun)',
+        'routines.freq.mon': 'Every Monday',
+        'routines.freq.tue': 'Every Tuesday',
+        'routines.freq.wed': 'Every Wednesday',
+        'routines.freq.thu': 'Every Thursday',
+        'routines.freq.fri': 'Every Friday',
+        'routines.freq.sat': 'Every Saturday',
+        'routines.freq.sun': 'Every Sunday',
+        'routines.freq.15min': 'Every 15 minutes',
+        'routines.freq.30min': 'Every 30 minutes',
+        'routines.freq.hour': 'Every hour',
+        'routines.freq.2h': 'Every 2 hours',
+        'routines.freq.4h': 'Every 4 hours',
+        'routines.freq.6h': 'Every 6 hours',
+        'routines.freq.12h': 'Every 12 hours',
+        'routines.freq.custom': 'Custom cron…',
         // Task Board
         'tb.title': '✓ Task Board',
         'tb.filter.open': 'Open',
@@ -11631,38 +11631,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.intro.lead': 'v0.2 系列发布的全部功能。点击',
         'whatsin.intro.tail': '即可直达。',
         'whatsin.tryit': '试一试',
-        'skills.title': '⏰ 例程',
-        'skills.intro': '例程会按计划自动运行提示。适合每日摘要、站会准备、定期检查等。',
-        'skills.starterTemplates': '入门模板',
-        'skills.add.section': '添加例程',
-        'skills.name.placeholder': '名称 —— 例如：早间 HN 摘要',
-        'skills.prompt.placeholder': '提示词 —— 例如：总结过去 24 小时 Hacker News 前 10 条新闻并附链接。',
-        'skills.schedule': '计划',
-        'skills.at': '于',
-        'skills.cron.placeholder': 'Cron —— 例如：0 8 * * *',
-        'skills.add': '添加',
-        'skills.your': '你的例程',
-        'skills.freq.dailyWeekly': '每日 / 每周',
-        'skills.freq.intervals': '间隔',
-        'skills.freq.advanced': '高级',
-        'skills.freq.daily': '每天',
-        'skills.freq.weekday': '工作日 (周一至周五)',
-        'skills.freq.weekend': '周末 (周六、周日)',
-        'skills.freq.mon': '每周一',
-        'skills.freq.tue': '每周二',
-        'skills.freq.wed': '每周三',
-        'skills.freq.thu': '每周四',
-        'skills.freq.fri': '每周五',
-        'skills.freq.sat': '每周六',
-        'skills.freq.sun': '每周日',
-        'skills.freq.15min': '每 15 分钟',
-        'skills.freq.30min': '每 30 分钟',
-        'skills.freq.hour': '每小时',
-        'skills.freq.2h': '每 2 小时',
-        'skills.freq.4h': '每 4 小时',
-        'skills.freq.6h': '每 6 小时',
-        'skills.freq.12h': '每 12 小时',
-        'skills.freq.custom': '自定义 cron…',
+        'routines.title': '⏰ 例程',
+        'routines.intro': '例程会按计划自动运行提示。适合每日摘要、站会准备、定期检查等。',
+        'routines.starterTemplates': '入门模板',
+        'routines.add.section': '添加例程',
+        'routines.name.placeholder': '名称 —— 例如：早间 HN 摘要',
+        'routines.prompt.placeholder': '提示词 —— 例如：总结过去 24 小时 Hacker News 前 10 条新闻并附链接。',
+        'routines.schedule': '计划',
+        'routines.at': '于',
+        'routines.cron.placeholder': 'Cron —— 例如：0 8 * * *',
+        'routines.add': '添加',
+        'routines.your': '你的例程',
+        'routines.freq.dailyWeekly': '每日 / 每周',
+        'routines.freq.intervals': '间隔',
+        'routines.freq.advanced': '高级',
+        'routines.freq.daily': '每天',
+        'routines.freq.weekday': '工作日 (周一至周五)',
+        'routines.freq.weekend': '周末 (周六、周日)',
+        'routines.freq.mon': '每周一',
+        'routines.freq.tue': '每周二',
+        'routines.freq.wed': '每周三',
+        'routines.freq.thu': '每周四',
+        'routines.freq.fri': '每周五',
+        'routines.freq.sat': '每周六',
+        'routines.freq.sun': '每周日',
+        'routines.freq.15min': '每 15 分钟',
+        'routines.freq.30min': '每 30 分钟',
+        'routines.freq.hour': '每小时',
+        'routines.freq.2h': '每 2 小时',
+        'routines.freq.4h': '每 4 小时',
+        'routines.freq.6h': '每 6 小时',
+        'routines.freq.12h': '每 12 小时',
+        'routines.freq.custom': '自定义 cron…',
         'tb.title': '✓ 任务板',
         'tb.filter.open': '未完成',
         'tb.filter.done': '已完成',
@@ -11869,38 +11869,38 @@ footer a { color: var(--accent); text-decoration: none; }
         'whatsin.intro.lead': 'كل ميزة شُحنت في إصدارات v0.2. انقر',
         'whatsin.intro.tail': 'للانتقال مباشرة.',
         'whatsin.tryit': 'جرّبها',
-        'skills.title': '⏰ المهام الدورية',
-        'skills.intro': 'تشغّل المهام الدورية تلقائيًا حسب جدول. مفيدة للملخّصات اليومية، التحضير للاجتماعات، الفحوصات الدورية.',
-        'skills.starterTemplates': 'قوالب جاهزة',
-        'skills.add.section': 'إضافة مهمة دورية',
-        'skills.name.placeholder': 'الاسم — مثلًا: ملخّص HN الصباحي',
-        'skills.prompt.placeholder': 'التلقين — مثلًا: لخّص أعلى 10 قصص في Hacker News خلال آخر 24 ساعة، مع الروابط.',
-        'skills.schedule': 'الجدول',
-        'skills.at': 'عند',
-        'skills.cron.placeholder': 'Cron — مثلًا: 0 8 * * *',
-        'skills.add': 'إضافة',
-        'skills.your': 'مهامك الدورية',
-        'skills.freq.dailyWeekly': 'يومي / أسبوعي',
-        'skills.freq.intervals': 'فواصل',
-        'skills.freq.advanced': 'متقدّم',
-        'skills.freq.daily': 'كل يوم',
-        'skills.freq.weekday': 'أيام الأسبوع (الإثنين–الجمعة)',
-        'skills.freq.weekend': 'عطلة الأسبوع (السبت–الأحد)',
-        'skills.freq.mon': 'كل إثنين',
-        'skills.freq.tue': 'كل ثلاثاء',
-        'skills.freq.wed': 'كل أربعاء',
-        'skills.freq.thu': 'كل خميس',
-        'skills.freq.fri': 'كل جمعة',
-        'skills.freq.sat': 'كل سبت',
-        'skills.freq.sun': 'كل أحد',
-        'skills.freq.15min': 'كل 15 دقيقة',
-        'skills.freq.30min': 'كل 30 دقيقة',
-        'skills.freq.hour': 'كل ساعة',
-        'skills.freq.2h': 'كل ساعتين',
-        'skills.freq.4h': 'كل 4 ساعات',
-        'skills.freq.6h': 'كل 6 ساعات',
-        'skills.freq.12h': 'كل 12 ساعة',
-        'skills.freq.custom': 'Cron مخصّص…',
+        'routines.title': '⏰ المهام الدورية',
+        'routines.intro': 'تشغّل المهام الدورية تلقائيًا حسب جدول. مفيدة للملخّصات اليومية، التحضير للاجتماعات، الفحوصات الدورية.',
+        'routines.starterTemplates': 'قوالب جاهزة',
+        'routines.add.section': 'إضافة مهمة دورية',
+        'routines.name.placeholder': 'الاسم — مثلًا: ملخّص HN الصباحي',
+        'routines.prompt.placeholder': 'التلقين — مثلًا: لخّص أعلى 10 قصص في Hacker News خلال آخر 24 ساعة، مع الروابط.',
+        'routines.schedule': 'الجدول',
+        'routines.at': 'عند',
+        'routines.cron.placeholder': 'Cron — مثلًا: 0 8 * * *',
+        'routines.add': 'إضافة',
+        'routines.your': 'مهامك الدورية',
+        'routines.freq.dailyWeekly': 'يومي / أسبوعي',
+        'routines.freq.intervals': 'فواصل',
+        'routines.freq.advanced': 'متقدّم',
+        'routines.freq.daily': 'كل يوم',
+        'routines.freq.weekday': 'أيام الأسبوع (الإثنين–الجمعة)',
+        'routines.freq.weekend': 'عطلة الأسبوع (السبت–الأحد)',
+        'routines.freq.mon': 'كل إثنين',
+        'routines.freq.tue': 'كل ثلاثاء',
+        'routines.freq.wed': 'كل أربعاء',
+        'routines.freq.thu': 'كل خميس',
+        'routines.freq.fri': 'كل جمعة',
+        'routines.freq.sat': 'كل سبت',
+        'routines.freq.sun': 'كل أحد',
+        'routines.freq.15min': 'كل 15 دقيقة',
+        'routines.freq.30min': 'كل 30 دقيقة',
+        'routines.freq.hour': 'كل ساعة',
+        'routines.freq.2h': 'كل ساعتين',
+        'routines.freq.4h': 'كل 4 ساعات',
+        'routines.freq.6h': 'كل 6 ساعات',
+        'routines.freq.12h': 'كل 12 ساعة',
+        'routines.freq.custom': 'Cron مخصّص…',
         'tb.title': '✓ لوحة المهام',
         'tb.filter.open': 'مفتوحة',
         'tb.filter.done': 'منجزة',
@@ -12323,7 +12323,7 @@ footer a { color: var(--accent); text-decoration: none; }
       const targets = {
         search:      () => (typeof openGlobalSearch === 'function') && openGlobalSearch(),
         crew:        () => (typeof toggleCrewMode === 'function') && toggleCrewMode(),
-        skills:      () => (typeof toggleSkillsModal === 'function') && toggleSkillsModal(),
+        routines:      () => (typeof toggleRoutinesModal === 'function') && toggleRoutinesModal(),
         keys:        () => (typeof toggleKeysModal === 'function') && toggleKeysModal(),
         localModels: () => (typeof toggleLocalModelsModal === 'function') && toggleLocalModelsModal(),
         map:         () => (typeof toggleThinkingGraph === 'function') && toggleThinkingGraph(),

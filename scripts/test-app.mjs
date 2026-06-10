@@ -119,16 +119,16 @@ if (RUN_MANUAL) {
 // ═══ Manual Layer 3: data integrity ═══
 section('Manual · On-disk state integrity')
 {
-  // skills.json
+  // routines.json
   try {
-    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.labaik/skills.json'), 'utf8'))
-    check('skills.json parses + has skills array',
-      typeof data.version === 'number' && Array.isArray(data.skills))
-    const bad = (data.skills || []).filter(s => !s.id || !s.name || !s.cron || !s.prompt).length
-    check('all skills well-formed', bad === 0)
+    const data = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.labaik/routines.json'), 'utf8'))
+    check('routines.json parses + has routines array',
+      typeof data.version === 'number' && Array.isArray(data.routines || data.skills))
+    const bad = (data.routines || data.skills || []).filter(s => !s.id || !s.name || !s.cron || !s.prompt).length
+    check('all routines well-formed', bad === 0)
   } catch (err) {
-    if (err.code === 'ENOENT') console.log('  ⚠️  skills.json not present (ok — no skills defined yet)')
-    else { check('skills.json readable', false, err.message) }
+    if (err.code === 'ENOENT') console.log('  ⚠️  routines.json not present (ok — no routines defined yet)')
+    else { check('routines.json readable', false, err.message) }
   }
   // event log
   try {
