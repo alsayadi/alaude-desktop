@@ -15,6 +15,17 @@
  * session shape.
  */
 
+// Stable content fingerprint for a converted conversation — used by the
+// renderer to skip duplicates when the same export is imported twice.
+// Title + first user message (capped) + message count: distinct enough that
+// two real conversations won't collide, stable enough that re-importing the
+// same file matches.
+function fingerprint(conv) {
+  const firstUser = (conv.messages || []).find(m => m.role === 'user')
+  const firstText = (firstUser ? String(firstUser.content || '') : '').slice(0, 200)
+  return `${String(conv.title || '').trim()}|${(conv.messages || []).length}|${firstText}`
+}
+
 function convertChatGPTExport(data) {
   const convs = Array.isArray(data) ? data : (Array.isArray(data?.conversations) ? data.conversations : null)
   if (!convs) return { ok: false, reason: 'Not a ChatGPT conversations.json (expected an array of conversations)' }
@@ -38,14 +49,16 @@ function convertChatGPTExport(data) {
       }
       msgs.reverse()
       if (!msgs.length) { skipped++; continue }
-      sessions.push({
+      const session = {
         title: String(conv.title || 'Imported chat').slice(0, 120),
         createdAt: conv.create_time ? Math.round(conv.create_time * 1000) : Date.now(),
         messages: msgs,
-      })
+      }
+      session.fp = fingerprint(session)  // for re-import dedup
+      sessions.push(session)
     } catch { skipped++ }
   }
   return { ok: true, sessions, skipped }
 }
 
-module.exports = { convertChatGPTExport }
+module.exports = { convertChatGPTExport, fingerprint }

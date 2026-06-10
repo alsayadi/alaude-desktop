@@ -383,3 +383,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   test-app Layer 2c — (a) every preload invoke/send channel has a main
   handler (65/65), (b) every window.alaude.* call-site exists in the
   preload bridge (60/60). Catches the whole class going forward. 100 checks.
+
+### Cycle 39 — dedup ChatGPT re-imports (2026-06-10)
+- Importing the same export twice doubled every conversation. The converter
+  now stamps each session with a content fingerprint (title + msg count +
+  first-user-message); the renderer skips imports whose fp already exists
+  and stores fp on kept sessions, so re-imports add only what's new. Toast
+  distinguishes "N empty" vs "N already imported". 4 fingerprint unit tests
+  (stamped, stable across re-convert, distinct by title, distinct by count).
+  104 checks.

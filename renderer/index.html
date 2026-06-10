@@ -8998,21 +8998,31 @@ SUMMARY:`
       // `Date.now() * 1000 + i` sits ~1000× above any real Date.now() id, so
       // it can't collide now or in future; a Set guard catches any leftover.
       const existingIds = new Set(sessions.map(s => s.id))
+      // v0.8 cycle 39: dedup re-imports. The converter stamps each session
+      // with a content fingerprint (fp); skip any whose fp already exists so
+      // importing the same export twice doesn't double every conversation.
+      const existingFps = new Set(sessions.map(s => s.fp).filter(Boolean))
       const base = Date.now() * 1000
-      const imported = r.sessions.map((c, i) => {
+      let dupes = 0
+      const imported = []
+      r.sessions.forEach((c, i) => {
+        if (c.fp && existingFps.has(c.fp)) { dupes++; return }
+        if (c.fp) existingFps.add(c.fp)
         let id = base + i
         while (existingIds.has(id)) id++
         existingIds.add(id)
-        return {
+        imported.push({
           id,
+          fp: c.fp,
           title: '📥 ' + c.title,
           messages: c.messages.map(m => ({ role: m.role, content: m.content, ...(m.ts ? { ts: m.ts } : {}) })),
-        }
+        })
       })
       sessions.unshift(...imported)
       persistSessions()
       renderSessions()
-      showRewindToast?.(`📥 Imported ${imported.length} conversation${imported.length === 1 ? '' : 's'}${r.skipped ? ` (${r.skipped} skipped)` : ''}`, false)
+      const extra = [r.skipped ? `${r.skipped} empty` : '', dupes ? `${dupes} already imported` : ''].filter(Boolean).join(', ')
+      showRewindToast?.(`📥 Imported ${imported.length} conversation${imported.length === 1 ? '' : 's'}${extra ? ` (${extra} skipped)` : ''}`, false)
     }
 
     // v0.8 retention: promote a good one-off prompt into a scheduled

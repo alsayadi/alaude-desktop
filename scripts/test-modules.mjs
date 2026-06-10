@@ -345,7 +345,7 @@ console.log('\n[7/11] folder-skills — discovery + frontmatter + guards')
 
   // ═══ TEST 9: ChatGPT import converter ═══
   console.log('\n[9/11] import-chatgpt — mapping linearization')
-  const { convertChatGPTExport } = require('../electron/import-chatgpt.js')
+  const { convertChatGPTExport, fingerprint } = require('../electron/import-chatgpt.js')
   const mkExport = () => ([{
     title: 'Test conv', create_time: 1700000000, current_node: 'n3',
     mapping: {
@@ -363,6 +363,17 @@ console.log('\n[7/11] folder-skills — discovery + frontmatter + guards')
   check('empty conversation skipped, counted', conv.skipped === 1)
   check('wrapped {conversations:[...]} accepted', convertChatGPTExport({ conversations: mkExport() }).ok)
   check('garbage input rejected gracefully', convertChatGPTExport({ nope: 1 }).ok === false)
+  // Cycle 39: dedup fingerprints. Same export → identical fps (stable);
+  // different content → different fp; converter stamps fp on each session.
+  check('converter stamps a fingerprint', typeof conv.sessions[0].fp === 'string' && conv.sessions[0].fp.length > 0)
+  check('re-converting the same export yields identical fingerprints',
+    convertChatGPTExport(mkExport()).sessions[0].fp === conv.sessions[0].fp)
+  check('different conversation → different fingerprint',
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }] }) !==
+    fingerprint({ title: 'B', messages: [{ role: 'user', content: 'x' }] }))
+  check('fingerprint reflects message count',
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }] }) !==
+    fingerprint({ title: 'A', messages: [{ role: 'user', content: 'x' }, { role: 'assistant', content: 'y' }] }))
 
   // ═══ TEST 10: backup round-trip ═══
   console.log('\n[10/11] backup — export/import round-trip, keys excluded')
