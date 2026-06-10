@@ -10579,6 +10579,31 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 general-use: one-click install of three bundled starter skills
         // (meeting notes, trip planner, weekly review). Idempotent — existing
         // folders are never overwritten.
+        { kind: 'action', icon: '💾', label: 'Back up Labaik (sessions, memory, routines, skills — no keys)', search: 'backup export save everything bundle portable migrate device', action: async () => {
+          closeCmdPalette()
+          // Snippets + templates live in renderer localStorage — ride along.
+          let extras = null
+          try { extras = { snippets: JSON.parse(localStorage.getItem('alaude:snippets:v1') || 'null'), templates: JSON.parse(localStorage.getItem('alaude:templates:v1') || 'null') } } catch {}
+          let r
+          try { r = await window.alaude.backupExport(extras) } catch (e) { r = { ok: false, reason: e?.message } }
+          if (r?.ok) showRewindToast?.(`💾 Backed up ${r.files} stores + ${r.skills} skills → ${r.path.split('/').pop()}`, false)
+          else if (r?.reason !== 'cancelled') showRewindToast?.('Backup failed: ' + (r?.reason || 'unknown'), true)
+        } },
+        { kind: 'action', icon: '♻️', label: 'Restore from a Labaik backup…', search: 'restore import backup bundle migrate device recover', action: async () => {
+          closeCmdPalette()
+          let r
+          try { r = await window.alaude.backupImport() } catch (e) { r = { ok: false, reason: e?.message } }
+          if (!r?.ok) {
+            if (r?.reason !== 'cancelled') showRewindToast?.('Restore failed: ' + (r?.reason || 'unknown'), true)
+            return
+          }
+          try {
+            if (r.renderer?.snippets) localStorage.setItem('alaude:snippets:v1', JSON.stringify(r.renderer.snippets))
+            if (r.renderer?.templates) localStorage.setItem('alaude:templates:v1', JSON.stringify(r.renderer.templates))
+          } catch {}
+          showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills — reloading…`, false)
+          setTimeout(() => location.reload(), 1200)
+        } },
         { kind: 'action', icon: '🔍', label: 'Deep research (send composer question with sources)', search: 'deep research investigate cited sources web search report verify', action: () => {
           closeCmdPalette()
           if (!input.value.trim()) { showRewindToast?.('🔍 Type your research question in the composer first', true); return }

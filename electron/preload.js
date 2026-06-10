@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('alaude', {
   loginDetectKey: (key) => ipcRenderer.invoke('login-detect-key', key),
   // v0.8 — import conversations.json from a ChatGPT data export.
   importChatGPT: () => ipcRenderer.invoke('import-chatgpt'),
+  // v0.8 — portable backup bundle (keys excluded by design).
+  backupExport: (extras) => ipcRenderer.invoke('backup-export', extras),
+  backupImport: () => ipcRenderer.invoke('backup-import'),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

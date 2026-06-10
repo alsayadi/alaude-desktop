@@ -222,3 +222,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   cross-check → TL;DR + cited findings + source list + caveats. Never
   invent citations. Fixture scenario 6 proves the protocol injection and
   its absence on normal chats. ChatGPT-Pro-style research, every model.
+
+### Cycle 22 — backup & restore bundle (2026-06-10)
+- ⌘K → "Back up Labaik": one portable JSON (sessions, memory, profile,
+  routines, spaces, folder skills + renderer snippets/templates).
+  CREDENTIALS EXCLUDED BY DESIGN. Restore backs up every file it
+  overwrites (.pre-import-<ts>) then reloads. electron/backup.js is a
+  pure module with 8 round-trip unit tests (incl. keys-never-exported).
+  Kills the "my whole AI life is trapped on this Mac" fear.

@@ -1173,6 +1173,41 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8 cycle 22: backup & restore. One portable JSON bundle (sessions,
+// memory, profile, routines, spaces, skills) — credentials excluded by
+// design. Import backs up every file it overwrites.
+ipcMain.handle('backup-export', async (_e, rendererExtras) => {
+  const backup = require('./backup')
+  const res = await dialog.showSaveDialog({
+    title: 'Save Labaik backup',
+    defaultPath: `labaik-backup-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'Labaik backup', extensions: ['json'] }],
+  })
+  if (res.canceled || !res.filePath) return { ok: false, reason: 'cancelled' }
+  try {
+    const bundle = backup.exportBundle(rendererExtras)
+    require('fs').writeFileSync(res.filePath, JSON.stringify(bundle), 'utf8')
+    return { ok: true, path: res.filePath, files: Object.keys(bundle.files).length, skills: bundle.skills.length }
+  } catch (err) {
+    return { ok: false, reason: err.message }
+  }
+})
+ipcMain.handle('backup-import', async () => {
+  const backup = require('./backup')
+  const res = await dialog.showOpenDialog({
+    title: 'Pick a Labaik backup file',
+    filters: [{ name: 'Labaik backup', extensions: ['json'] }],
+    properties: ['openFile'],
+  })
+  if (res.canceled || !res.filePaths?.[0]) return { ok: false, reason: 'cancelled' }
+  try {
+    const bundle = JSON.parse(require('fs').readFileSync(res.filePaths[0], 'utf8'))
+    return backup.importBundle(bundle)
+  } catch (err) {
+    return { ok: false, reason: 'Could not read backup: ' + err.message }
+  }
+})
+
 // v0.8 market-fit: ChatGPT history import. Parses conversations.json from
 // ChatGPT's data export (Settings → Data controls → Export) and converts
 // each conversation to a plain {title, createdAt, messages[]} the renderer
