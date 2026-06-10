@@ -444,3 +444,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   Also fixed sudo/su detection when separator-adjacent (`;sudo`, `&&sudo`).
   7 more tests; all-safe chains and allow-listed pipes still pass. 138
   checks. Permission-gate sweep (cycles 43-45) complete.
+
+### Cycle 46 — harden the worker's command-scope guard (2026-06-10)
+- Audited checkCommandScope (the worker's sandbox boundary, runs before the
+  gate). Holes: `cd ~`, `cd $HOME/.ssh`, bare `cd`, `pushd ..`, and crucially
+  `cat ~/.ssh/id_rsa` all escaped scope because ~/ and $HOME aren't /-absolute
+  paths. Now catches home/$HOME/pushd directory-changes and treats ~/ + $HOME/
+  path mentions like absolute ones (expand → containment check), while still
+  allowing in-scope ~/proj/… paths and system dirs. Extracted to
+  electron/command-scope.js with 11 unit tests. 149 checks.

@@ -461,6 +461,23 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('rm of a single file NOT flagged', rmClass('rm file.txt') !== 'dangerous')
   check('word containing rm NOT flagged', rmClass('confirm-rm script') !== 'dangerous')
   check('isDangerousRm exported + works', perms.isDangerousRm('rm -r -f x') === true && perms.isDangerousRm('ls') === false)
+
+  // ═══ command-scope guard (cycle 46) ═══
+  const { checkCommandScope } = require('../electron/command-scope.js')
+  const home2 = os.homedir()
+  const ws = home2 + '/proj'
+  const blocked = (c) => checkCommandScope(c, ws).ok === false
+  check('cd .. escape blocked', blocked('cd ../etc'))
+  check('cd / blocked', blocked('cd /'))
+  check('cd ~ escape blocked', blocked('cd ~ && cat secret'))
+  check('cd $HOME escape blocked', blocked('cd $HOME/.ssh'))
+  check('pushd .. blocked', blocked('pushd ..'))
+  check('reading ~/.ssh blocked', blocked('cat ~/.ssh/id_rsa'))
+  check('bare cd (→home) blocked', blocked('cd'))
+  check('in-scope ~/proj path allowed', checkCommandScope('cat ~/proj/notes.txt', ws).ok === true)
+  check('system dir /tmp allowed', checkCommandScope('cat /tmp/x', ws).ok === true)
+  check('relative cd allowed', checkCommandScope('cd subdir && ls', ws).ok === true)
+  check('plain command allowed', checkCommandScope('npm run build', ws).ok === true)
   // Cycle 44: force-push + recursive-chmod detection regardless of flag position/spelling
   check('git push --force (flag first) flagged', rmClass('git push --force origin main') === 'dangerous')
   check('git push ... --force (flag last) flagged', rmClass('git push origin main --force') === 'dangerous')

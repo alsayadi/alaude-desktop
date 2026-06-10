@@ -25,43 +25,9 @@ const {
   ENV_MAP,
 } = require('./provider-registry')
 
-// ── v0.7.39 — Scope boundary check for shell commands ─────────────────
-//
-// Tools with `cwd: workspacePath` (run_command, start_dev_server) would
-// otherwise be trivially bypassed by a command string that names an
-// absolute path or `cd ..`s out of scope. This helper does a best-effort
-// check:
-//   1. Reject `cd ..` / `cd /absolute` patterns
-//   2. Reject absolute paths (start with /) that resolve outside workspace
-//      UNLESS they point to system-neutral dirs like /tmp, /usr, /etc,
-//      /var, /bin, /opt, /Library (read-only system locations are fine for
-//      most tool invocations — e.g. `cp /tmp/foo .` is legit).
-// Returns { ok: true } or { ok: false, reason: string }.
-function checkCommandScope(command, workspacePath) {
-  if (!command || !workspacePath) return { ok: true }
-  const root = path.resolve(workspacePath)
-  // 1. cd escape attempts
-  if (/\bcd\s+(?:\.\.(?:\/|$|\s)|\/)/i.test(command)) {
-    return { ok: false, reason: '`cd ..` or `cd /` attempts to escape the scope' }
-  }
-  // 2. Absolute path mentions. Extract anything that starts with `/` preceded
-  //    by word boundary or quote/space. Ignore URLs (http://) and system dirs.
-  const systemDirs = ['/tmp', '/usr', '/etc', '/var', '/bin', '/sbin', '/opt', '/Library', '/System', '/dev', '/private']
-  const absMatches = [...command.matchAll(/(?:^|[\s'"`;|&()<>])(\/(?:[^\s'"`;|&()<>]|\\ )+)/g)]
-  for (const m of absMatches) {
-    const p = m[1]
-    // URL fragments like /api/foo after a hostname — ignore (caller's tool should have validated)
-    if (p.match(/^\/\w+:\/\//)) continue
-    // System dirs are always fine
-    if (systemDirs.some(d => p === d || p.startsWith(d + '/'))) continue
-    // Resolve and check containment
-    let resolved
-    try { resolved = path.resolve(p) } catch { continue }
-    if (resolved === root || resolved.startsWith(root + path.sep)) continue
-    return { ok: false, reason: `absolute path ${p} is outside ${workspacePath}` }
-  }
-  return { ok: true }
-}
+// v0.7.39 / v0.8 cycle 46 — shell scope guard, extracted to a tested module.
+const { checkCommandScope } = require('./command-scope')
+
 
 // ── Crash handlers ─────────────────────────────────────────────────────────
 // The worker is a request loop serving one chat at a time. A single bad
