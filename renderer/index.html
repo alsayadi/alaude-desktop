@@ -13360,25 +13360,11 @@ footer a { color: var(--accent); text-decoration: none; }
     // turns within a generous char budget (~60k tokens); if older turns are
     // dropped, lead with a one-line note so the model knows context was
     // trimmed. Normal sessions are untouched.
-    const HISTORY_CHAR_BUDGET = 240000  // ~60k tokens — only huge sessions trim
+    // Delegates to renderer/js/history-budget.js (loaded as a module below and
+    // attached to window.capHistoryFn). Falls back to identity if a chat fires
+    // before the module loads — safe (uncapped, same as pre-cycle-33).
     function _capHistory(msgs) {
-      let total = 0
-      for (const m of msgs) total += (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length)
-      if (total <= HISTORY_CHAR_BUDGET || msgs.length <= 4) return msgs
-      // Walk from the newest, keeping turns until the budget is spent; always
-      // keep at least the last 4 turns even if individually large.
-      const kept = []
-      let used = 0
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        const sz = (typeof msgs[i].content === 'string' ? msgs[i].content.length : JSON.stringify(msgs[i].content).length)
-        if (used + sz > HISTORY_CHAR_BUDGET && kept.length >= 4) break
-        kept.unshift(msgs[i]); used += sz
-      }
-      const dropped = msgs.length - kept.length
-      if (dropped > 0) {
-        kept.unshift({ role: 'user', content: `[Note: ${dropped} earlier message(s) in this long conversation were trimmed to stay within context limits and save tokens. Ask me to re-share anything older if you need it.]` })
-      }
-      return kept
+      return (typeof window.capHistoryFn === 'function') ? window.capHistoryFn(msgs) : msgs
     }
 
 
@@ -19860,6 +19846,11 @@ Title:`
        scripts are deferred by default, so this runs after the inline script
        parses — any app-init functions declared above are available via
        globals at the time bootMemorySystem() resolves. -->
+  <script type="module">
+    import { capHistory } from './js/history-budget.js'
+    window.capHistoryFn = capHistory
+  </script>
+
   <script type="module">
     import { bootMemorySystem } from './js/bootstrap.js'
     try {

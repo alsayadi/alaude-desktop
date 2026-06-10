@@ -42,7 +42,7 @@ function check(label, cond, extra = '') {
 // ═══════════════════════════════════════════════════════════════
 // TEST 1: MemoryStore — basic CRUD + dedup + scope
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[1/10] MemoryStore — basic CRUD + scope')
+console.log('\n[1/11] MemoryStore — basic CRUD + scope')
 {
   const storage = new FakeStorage()
   const store = new MemoryStore({ storage })
@@ -78,7 +78,7 @@ console.log('\n[1/10] MemoryStore — basic CRUD + scope')
 // ═══════════════════════════════════════════════════════════════
 // TEST 2: MemoryStore — visiblePool scope filter
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[2/10] MemoryStore — scope filtering')
+console.log('\n[2/11] MemoryStore — scope filtering')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   store.add('global fact', null, { scope: 'global' })
@@ -120,7 +120,7 @@ console.log('\n[2/10] MemoryStore — scope filtering')
 // ═══════════════════════════════════════════════════════════════
 // TEST 3: ProfileStore — store + grouping + system block
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[3/10] ProfileStore — CRUD + grouping + system block')
+console.log('\n[3/11] ProfileStore — CRUD + grouping + system block')
 {
   const storage = new FakeStorage()
   const profile = new ProfileStore({ storage })
@@ -164,7 +164,7 @@ console.log('\n[3/10] ProfileStore — CRUD + grouping + system block')
 // ═══════════════════════════════════════════════════════════════
 // TEST 4: MemoryExtract — regex + candidates
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[4/10] MemoryExtract — patterns + candidates')
+console.log('\n[4/11] MemoryExtract — patterns + candidates')
 {
   const cases = [
     { text: 'My name is Ahmed', expect: 'Name: Ahmed', cat: 'identity', promotes: true },
@@ -199,7 +199,7 @@ console.log('\n[4/10] MemoryExtract — patterns + candidates')
 // ═══════════════════════════════════════════════════════════════
 // TEST 5: MemoryEmbeddings — cosine + backfill
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[5/10] MemoryEmbeddings — cosine + backfill loop')
+console.log('\n[5/11] MemoryEmbeddings — cosine + backfill loop')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -227,7 +227,7 @@ console.log('\n[5/10] MemoryEmbeddings — cosine + backfill loop')
 // ═══════════════════════════════════════════════════════════════
 // TEST 6: MemoryRecall — scoring + profile injection
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[6/10] MemoryRecall — scoring + injection')
+console.log('\n[6/11] MemoryRecall — scoring + injection')
 {
   const store = new MemoryStore({ storage: new FakeStorage() })
   const emb = new MemoryEmbeddings({ store, api: mockApi })
@@ -276,7 +276,7 @@ console.log('\n[6/10] MemoryRecall — scoring + injection')
 // (CJS module; loaded with LABAIK_HOME pointed at a temp dir so the
 // test never touches ~/.labaik.)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
+console.log('\n[7/11] folder-skills — discovery + frontmatter + guards')
 {
   const { createRequire } = await import('node:module')
   const fs = await import('node:fs')
@@ -327,7 +327,7 @@ console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
   check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
 
   // ═══ TEST 8: routines — cron parse + legacy shape ═══
-  console.log('\n[8/10] routines — cron parsing + legacy skills.json shape')
+  console.log('\n[8/11] routines — cron parsing + legacy skills.json shape')
   const routines = require('../electron/routines.js')
   check('parses standard cron', routines._parseCron('0 8 * * *') !== null)
   check('rejects 4-field cron', routines._parseCron('0 8 * *') === null)
@@ -344,7 +344,7 @@ console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
   check('new ids use rt_ prefix', onDisk.routines[1].id.startsWith('rt_'))
 
   // ═══ TEST 9: ChatGPT import converter ═══
-  console.log('\n[9/10] import-chatgpt — mapping linearization')
+  console.log('\n[9/11] import-chatgpt — mapping linearization')
   const { convertChatGPTExport } = require('../electron/import-chatgpt.js')
   const mkExport = () => ([{
     title: 'Test conv', create_time: 1700000000, current_node: 'n3',
@@ -365,7 +365,7 @@ console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
   check('garbage input rejected gracefully', convertChatGPTExport({ nope: 1 }).ok === false)
 
   // ═══ TEST 10: backup round-trip ═══
-  console.log('\n[10/10] backup — export/import round-trip, keys excluded')
+  console.log('\n[10/11] backup — export/import round-trip, keys excluded')
   const backup = require('../electron/backup.js')
   fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [{ id: 1, title: 'keep me' }] }))
   fs.writeFileSync(path.join(testHome, 'credentials.json'), JSON.stringify({ secret: 'sk-DO-NOT-EXPORT' }))
@@ -399,6 +399,29 @@ console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
   check('merge adds backup-only session', after.some(s => s.id === 3))
   check('merge takes the more-complete shared copy', after.find(s => s.id === 1)?.messages.length === 2)
   check('merge reports new session count', merged.mergedSessions === 1)
+
+  // ═══ TEST 11: conversation history budget ═══
+  console.log('\n[11/11] history-budget — cap, keep-recent, trim note')
+  const { capHistory } = await import('../renderer/js/history-budget.js')
+  const mk = (n, len) => Array.from({ length: n }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: 'x'.repeat(len) }))
+  // Under budget → unchanged (new array)
+  const small = mk(6, 100)
+  const r1 = capHistory(small, 240000)
+  check('under-budget history passes through unchanged', r1.length === 6 && r1 !== small && r1[0].content === small[0].content)
+  // ≤ minKeep always passes
+  check('<=minKeep history never trimmed', capHistory(mk(3, 999999), 10).length === 3)
+  // Over budget → trims oldest, prepends note, keeps newest
+  const big = mk(50, 10000)  // 500k chars
+  big[49].content = 'NEWEST'
+  const r2 = capHistory(big, 100000, 4)
+  check('over-budget history is trimmed', r2.length < 50)
+  check('trim keeps the newest message', r2[r2.length - 1].content === 'NEWEST')
+  check('trim prepends a note', r2[0].role === 'user' && r2[0].content.includes('trimmed'))
+  check('note reports a plausible dropped count', /\d+ earlier message/.test(r2[0].content))
+  // Always keeps at least minKeep even if each is oversize
+  check('keeps >= minKeep huge messages', capHistory(mk(10, 500000), 100000, 4).filter(m => m.content.length === 500000).length >= 4)
+  // Never mutates input
+  check('input array not mutated', big.length === 50)
 
   fs.rmSync(testHome, { recursive: true, force: true })
 }

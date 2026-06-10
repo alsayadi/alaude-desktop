@@ -334,3 +334,13 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - Prompt-trim live dogfood deferred (static review only — the compressed
   ask block retains capability + schema + every hard rule; behavior risk
   low) in favor of this larger lever.
+
+### Cycle 34 — extract + test the history budget (2026-06-10)
+- _capHistory (cycle 33) could drop user messages from the API call, so it
+  earned tests. Extracted to renderer/js/history-budget.js (pure ESM);
+  index.html loads it as a module → window.capHistoryFn, and the inline
+  sanitizeHistoryForApi delegates (identity fallback if a chat fires before
+  the module loads). 8 unit tests: pass-through under budget, never-trim
+  ≤minKeep, trims oldest + keeps newest, prepends note, keeps ≥minKeep huge
+  messages, no input mutation. Same discipline that turned the boot crashes
+  into a permanent test. 98 checks total.
