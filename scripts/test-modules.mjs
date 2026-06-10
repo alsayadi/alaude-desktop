@@ -311,6 +311,18 @@ console.log('\n[7/8] folder-skills — discovery + frontmatter + guards')
   check('get() rejects path traversal', folderSkills.get('../outside') === null)
   check('get() unknown slug → null', folderSkills.get('nope') === null)
 
+  // Starter skills (v0.8 general-use)
+  const first = folderSkills.installStarters()
+  check('installStarters installs all bundled skills',
+    first.installed.length === folderSkills.STARTER_SKILLS.length && first.skipped.length === 0)
+  check('starter skill discoverable with parsed frontmatter',
+    folderSkills.get('meeting-notes')?.description.includes('action items'))
+  // Idempotency: user edits must survive a re-install.
+  fs.writeFileSync(path.join(testHome, 'skills', 'trip-planner', 'SKILL.md'), '---\nname: Mine\n---\nedited')
+  const second = folderSkills.installStarters()
+  check('re-install skips everything (idempotent)', second.installed.length === 0)
+  check('user-edited starter not overwritten', folderSkills.get('trip-planner')?.name === 'Mine')
+
   const { meta, body } = folderSkills._parseFrontmatter('---\nName: "Quoted"\n---\nbody')
   check('frontmatter keys lowercase + quotes stripped', meta.name === 'Quoted' && body === 'body')
 

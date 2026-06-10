@@ -7546,7 +7546,7 @@
     const LS_SNIPPETS = 'alaude:snippets:v1'
     const DEFAULT_SNIPPETS = [
       { id: 'review',   trigger: '/review',   icon: '🧐', name: 'Code review', desc: 'Reviews code and flags bugs, perf issues, smells', body: 'Review this code and flag bugs, performance issues, and code smells. Be specific about line numbers.\n\n```{{language}}\n{{code}}\n```' },
-      { id: 'explain',  trigger: '/explain',  icon: '💡', name: 'Explain',     desc: 'Explain code, concept, or error clearly',        body: 'Explain the following like I\'m an experienced developer new to this area. Focus on the non-obvious parts:\n\n{{content}}' },
+      { id: 'explain',  trigger: '/explain',  icon: '💡', name: 'Explain',     desc: 'Explain anything clearly — concept, document, error, jargon', body: 'Explain the following clearly. Assume I\'m smart but completely new to this topic — define terms on first use, use one concrete example or analogy, and focus on the non-obvious parts:\n\n{{content}}' },
       { id: 'debug',    trigger: '/debug',    icon: '🐛', name: 'Debug',       desc: 'Help root-cause a bug',                           body: 'I\'m seeing this error/behavior:\n\n{{symptom}}\n\nHere\'s the relevant code:\n\n```\n{{code}}\n```\n\nHelp me root-cause it. List the top 3 most likely causes in order of probability, and how to verify each.' },
       { id: 'refactor', trigger: '/refactor', icon: '♻️', name: 'Refactor',    desc: 'Suggest a cleaner version',                       body: 'Refactor this code for readability and maintainability, without changing its behavior. Point out trade-offs.\n\n```{{language}}\n{{code}}\n```' },
       { id: 'test',     trigger: '/test',     icon: '🧪', name: 'Write tests', desc: 'Generate test cases',                             body: 'Write tests for the following code. Cover: happy path, edge cases, and one adversarial input. Use {{framework}}.\n\n```\n{{code}}\n```' },
@@ -10398,6 +10398,18 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
+        // v0.8 general-use: one-click install of three bundled starter skills
+        // (meeting notes, trip planner, weekly review). Idempotent — existing
+        // folders are never overwritten.
+        { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
+          closeCmdPalette()
+          try {
+            const r = await window.alaude.folderSkillsInstallStarters()
+            const n = r?.installed?.length || 0
+            showRewindToast?.(n ? `🧩 Installed ${n} starter skill${n === 1 ? '' : 's'} — type / to use them` : '🧩 Starter skills already installed', false)
+            _refreshFolderSkills()
+          } catch (e) { showRewindToast?.('Starter skills install failed: ' + (e?.message || e), true) }
+        } },
         { kind: 'action', icon: '🧘', label: 'Toggle Focus Mode', search: 'focus zen distraction clean minimal', action: () => { closeCmdPalette(); toggleFocusMode() } },
         { kind: 'action', icon: '📥', label: 'Export session as Markdown', search: 'export markdown download save transcript', action: () => { closeCmdPalette(); exportSessionMarkdown() } },
         { kind: 'action', icon: '🌐', label: 'Export session as HTML (share-ready)', search: 'export html share webpage browser standalone', action: () => { closeCmdPalette(); exportSessionHtml() } },

@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld('alaude', {
   // ~/.labaik/skills/<slug>/SKILL.md. Surfaced in the command palette.
   folderSkillsList: () => ipcRenderer.invoke('folder-skills-list'),
   folderSkillsGet: (slug) => ipcRenderer.invoke('folder-skills-get', slug),
+  folderSkillsInstallStarters: () => ipcRenderer.invoke('folder-skills-install-starters'),
 
   // Permission mode (v0.4.0; Careful/Flow approval dialog added v0.4.1)
   permGetMode: (workspacePath) => ipcRenderer.invoke('perm-get-mode', workspacePath),

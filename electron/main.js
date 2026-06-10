@@ -1203,6 +1203,8 @@ ipcMain.handle('folder-skills-list', () => {
   return { skills: folderSkills.discover(), root: folderSkills.getRoot() }
 })
 ipcMain.handle('folder-skills-get', (_e, slug) => folderSkills.get(slug))
+// v0.8 — one-click general-use starter skills (idempotent; never overwrites).
+ipcMain.handle('folder-skills-install-starters', () => folderSkills.installStarters())
 
 // ── IPC: durable JSON store (v0.7.59) ─────────────────────────────────────
 // Renderer-side stores (memory, profile, eventually sessions) used to live

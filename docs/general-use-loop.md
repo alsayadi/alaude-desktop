@@ -15,10 +15,9 @@ Where Labaik is already general:
 
 Coding bias found (backlog, highest leverage first):
 1. ~~Slash snippets: 5 of 8 defaults are code tasks~~ → fixed cycle 1
-2. **Folder skills onboarding is dev-flavored** — README.md speaks in file/frontmatter
-   terms; the empty slash menu / palette could offer one-click starter skills for
-   general users (meeting notes, trip planner, weekly review).
-3. **`/explain` snippet** says "like I'm an experienced developer" — tone assumes a dev.
+2. ~~Folder skills onboarding is dev-flavored — one-click starter skills~~ → fixed cycle 2
+3. ~~`/explain` snippet assumes a dev~~ → fixed cycle 2 (new installs only; body
+   edits don't propagate through the seen-merge, by design)
 4. **Routines modal templates** could add: medication reminder, language practice,
    meal plan, bill/renewal reminders.
 5. **Spaces**: only Health is a rich non-coding space — candidates: Writing,
@@ -35,3 +34,11 @@ Coding bias found (backlog, highest leverage first):
 - Added one-time merge of NEW defaults into existing installs via
   `alaude:snippets:seen:v1` — previously, default updates never reached
   existing users; deliberate deletions stay deleted.
+
+### Cycle 2 — starter skills pack + /explain de-jargoned (2026-06-10)
+- 3 bundled general skills (meeting-notes, trip-planner, weekly-review) in
+  folder-skills.js; installable via command palette → "Install starter
+  skills". Idempotent — user-edited starters never overwritten.
+- /explain rewritten for any topic, not "experienced developer" framing.
+- Next candidates: routine templates (medication reminder, language practice,
+  bills); non-coding Spaces; attachment ergonomics; dev-jargon string sweep.
