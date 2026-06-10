@@ -12765,10 +12765,13 @@ footer a { color: var(--accent); text-decoration: none; }
         showRewindToast?.(n ? `🧹 Cleared ${n} stuck overlay${n === 1 ? '' : 's'}` : '✓ No stuck overlays', false)
         return
       }
-      // Cmd/Ctrl+K → focus message input
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      // Cmd/Ctrl+K → open the command palette. This is the modern
+      // convention and what the in-app coach mark (cycle 8) promises;
+      // previously ⌘K only focused the composer while the palette was on
+      // ⌘P, so the advertised shortcut did nothing. ⌘P stays as an alias.
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        input.focus()
+        openCmdPalette()
       }
       // Cmd/Ctrl+N → new session
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n' && !e.shiftKey) {
