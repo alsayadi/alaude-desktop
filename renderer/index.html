@@ -6153,7 +6153,7 @@
            The path stays literal regardless of locale. -->
       <p style="font-size:11px; color:var(--text-faint); margin-top:24px; line-height:1.5">
         <span data-i18n="login.footer.lead">Keys stay on this device in</span> <code style="font-size:10.5px">~/.labaik/credentials.json</code>.<br/>
-        <span data-i18n="login.footer.tail">Labaik sends messages directly to the provider you chose — no middleman.</span>
+        <span data-i18n="login.footer.tail">Labaik sends messages directly to the AI service you chose — no middleman.</span>
       </p>
     </div>
   </div>
@@ -6501,11 +6501,11 @@
         </button>
         <span class="workspace-path" id="folder-path"></span>
         <span class="task-scope-breadcrumb" id="task-scope-breadcrumb" style="display:none"></span>
-        <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="Permission mode — what Labaik is allowed to do without asking. ⌘⇧A to cycle.">
-          <option value="observe" data-i18n="workspace.perm.observe">👁️ Observe · read-only</option>
-          <option value="careful" data-i18n="workspace.perm.careful">🛡️ Careful · ask for writes &amp; commands</option>
-          <option value="flow" data-i18n="workspace.perm.flow">🌊 Flow · auto-edit, ask dangerous</option>
-          <option value="autopilot" selected data-i18n="workspace.perm.autopilot">🚀 Autopilot · run everything</option>
+        <select class="workspace-perm-select" id="perm-mode-select" onchange="setPermMode(this.value)" title="What Labaik may do in your folder without asking. ⌘⇧A to cycle.">
+          <option value="observe" data-i18n="workspace.perm.observe">👁️ Observe — just looks, never changes anything</option>
+          <option value="careful" data-i18n="workspace.perm.careful">🛡️ Careful — asks me before any change</option>
+          <option value="flow" data-i18n="workspace.perm.flow">🌊 Flow — edits freely, asks before risky things</option>
+          <option value="autopilot" selected data-i18n="workspace.perm.autopilot">🚀 Autopilot — does everything without asking</option>
         </select>
         <button class="plan-mode-toggle" id="plan-mode-btn" onclick="togglePlanMode()"
                 data-i18n="workspace.planMode" data-i18n-attr="title:workspace.planMode.title"
@@ -11799,10 +11799,10 @@ footer a { color: var(--accent); text-decoration: none; }
         // Workspace bar
         'workspace.chooseFolder': 'Choose folder',
         'workspace.hint': '← pick a folder so this model can save files and run commands',
-        'workspace.perm.observe': '👁️ Observe · read-only',
-        'workspace.perm.careful': '🛡️ Careful · ask for writes & commands',
-        'workspace.perm.flow': '🌊 Flow · auto-edit, ask dangerous',
-        'workspace.perm.autopilot': '🚀 Autopilot · run everything',
+        'workspace.perm.observe': '👁️ Observe — just looks, never changes anything',
+        'workspace.perm.careful': '🛡️ Careful — asks me before any change',
+        'workspace.perm.flow': '🌊 Flow — edits freely, asks before risky things',
+        'workspace.perm.autopilot': '🚀 Autopilot — does everything without asking',
         'workspace.planMode': '📋 Plan mode',
         'workspace.planMode.on': '📋 Plan mode · ON',
         'workspace.planMode.title': 'Plan mode — Labaik writes a step-by-step plan first, no tool calls, no file changes. Approve to execute.',
@@ -11895,13 +11895,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.rec.best': 'best overall',
         'model.rec.fast': 'fastest',
         'model.rec.local': 'private (runs on this Mac)',
-        'err.key': "🔑 Your API key was rejected by the provider. Open the Keys modal (⌘⇧K) and check it — it may have expired or been pasted with a typo.",
-        'err.credits': '💳 The provider says your account is out of credits or quota. Top up your account, or switch to another model from the picker.',
-        'err.rate': '⏳ The provider is rate-limiting you. Wait a moment and try again, or switch models.',
+        'err.key': "🔑 Your API key was rejected by the AI service. Open the Keys modal (⌘⇧K) and check it — it may have expired or been pasted with a typo.",
+        'err.credits': '💳 The AI service says your account is out of credits. Top up, or switch to another model from the picker.',
+        'err.rate': '⏳ The AI service is asking you to slow down. Wait a moment and try again, or switch models.',
         'err.context': '📜 This conversation is too long for the model. Start a new session (⌘N) or switch to a model with a bigger context window.',
-        'err.network': '🌐 Could not reach the provider — looks like a network problem. Check your connection (or VPN) and try again.',
-        'err.timeout': '⏱️ The provider took too long to answer. Try again — or switch models if it keeps happening.',
-        'err.provider': '🛠️ The provider is having trouble right now (server error). Try again in a minute, or switch models.',
+        'err.network': '🌐 Could not reach the AI service — looks like a network problem. Check your connection (or VPN) and try again.',
+        'err.timeout': '⏱️ The AI service took too long to answer. Try again — or switch models if it keeps happening.',
+        'err.provider': '🛠️ The AI service is having trouble right now (their server, not you). Try again in a minute, or switch models.',
         'slash.skillDesc': 'Skill (SKILL.md)',
         'slash.match': 'match',
         'slash.matches': 'matches',
@@ -11932,7 +11932,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'login.local.badge': 'FREE · PRIVATE',
         'login.local.desc': 'Free AI that runs on this Mac. No account, no key — nothing you type leaves your computer.',
         'login.footer.lead': 'Keys stay on this device in',
-        'login.footer.tail': 'Labaik sends messages directly to the provider you chose — no middleman.',
+        'login.footer.tail': 'Labaik sends messages directly to the AI service you chose — no middleman.',
         'login.close.title': 'Close',
         // Findbar (in-session search)
         'findbar.placeholder': 'Find in this session…',
@@ -12149,10 +12149,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'menu.uxInsights': '📊 体验洞察',
         'workspace.chooseFolder': '选择文件夹',
         'workspace.hint': '← 选择文件夹，让模型可以保存文件并执行命令',
-        'workspace.perm.observe': '👁️ 观察 · 只读',
-        'workspace.perm.careful': '🛡️ 谨慎 · 写入和命令前询问',
-        'workspace.perm.flow': '🌊 流畅 · 自动编辑，危险操作询问',
-        'workspace.perm.autopilot': '🚀 自动驾驶 · 全部执行',
+        'workspace.perm.observe': '👁️ 观察——只看，不做任何改动',
+        'workspace.perm.careful': '🛡️ 谨慎——任何改动都先问我',
+        'workspace.perm.flow': '🌊 流畅——可以编辑，危险操作先问',
+        'workspace.perm.autopilot': '🚀 自动驾驶——全部执行，不再询问',
         'workspace.planMode': '📋 方案模式',
         'workspace.planMode.on': '📋 方案模式 · 已开启',
         'workspace.planMode.title': '方案模式 —— Labaik 先写出分步方案，不调用工具、不改文件。批准后执行。',
@@ -12478,10 +12478,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'menu.uxInsights': '📊 تحليلات الاستخدام',
         'workspace.chooseFolder': 'اختر مجلدًا',
         'workspace.hint': '← اختر مجلدًا حتى يحفظ النموذج الملفات ويشغّل الأوامر',
-        'workspace.perm.observe': '👁️ مراقبة · قراءة فقط',
-        'workspace.perm.careful': '🛡️ حذِر · يسأل قبل الكتابة والأوامر',
-        'workspace.perm.flow': '🌊 انسياب · تعديل تلقائي، يسأل للخطير',
-        'workspace.perm.autopilot': '🚀 طيار آلي · ينفّذ كل شيء',
+        'workspace.perm.observe': '👁️ مراقبة — يطّلع فقط ولا يغيّر شيئًا',
+        'workspace.perm.careful': '🛡️ حذِر — يسألني قبل أي تغيير',
+        'workspace.perm.flow': '🌊 انسياب — يحرّر بحرية ويسأل قبل الخطير',
+        'workspace.perm.autopilot': '🚀 طيار آلي — ينفّذ كل شيء دون سؤال',
         'workspace.planMode': '📋 وضع التخطيط',
         'workspace.planMode.on': '📋 وضع التخطيط · مفعَّل',
         'workspace.planMode.title': 'وضع التخطيط — يكتب لبيك خطة خطوة بخطوة أولًا، دون استدعاء أدوات أو تعديل ملفات. وافق للتنفيذ.',

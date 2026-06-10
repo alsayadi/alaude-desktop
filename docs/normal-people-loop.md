@@ -245,3 +245,15 @@
   — slow models can take a while. Esc stops it." — and hides the moment
   life resumes. Cowork's top complaint (silence reads as broken) closed.
 - EN/中文/العربية. 209 checks green.
+
+### Cycle 18 — plain-words rename pass (2026-06-11)
+- Permission modes now state their consequence as a human sentence in
+  all 3 locales: "👁️ Observe — just looks, never changes anything" /
+  "🛡️ Careful — asks me before any change" / "🌊 Flow — edits freely,
+  asks before risky things" / "🚀 Autopilot — does everything without
+  asking". Picker tooltip: "What Labaik may do in your folder without
+  asking."
+- EN "provider" → "AI service" across every user-visible error and the
+  login footer (zh 服务商 / ar مزوّد were already everyday words and
+  stay). "workspace" was already "folder" in all visible strings —
+  verified, not re-shipped. 209 checks green.
