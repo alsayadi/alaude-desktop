@@ -1,0 +1,89 @@
+# Market-Fit Loop — rethink Labaik: simple, focused, findable fit
+
+Loop target (set 2026-06-10): **100 cycles** on product simplification and
+market fit. Same rules as the general-use loop: one real improvement per
+cycle, no padding, honest course-corrections, ship checkpoint every ~10.
+Predecessor: docs/general-use-loop.md (10 cycles, shipped separately).
+
+## Cycle 1 — The Rethink
+
+### What Labaik actually is (the wedge)
+
+One sentence: **the fastest way to use any frontier AI on your Mac with your
+own keys — private, no subscription.**
+
+That sentence is the entire product. Evidence it's the right wedge:
+- 11 providers + local Ollama behind one dropdown is genuinely rare done well.
+- BYOK + no backend + keys-on-disk is a real privacy/cost story vs. five
+  $20/month subscriptions.
+- The macOS-native, consumer-polished shell differentiates from dev-tools
+  (Claude Code, Codex) and from rough local-first clients (Jan, LM Studio).
+
+### Who it's for
+
+The **AI power-consumer**: uses AI daily, has (or will get) an API key,
+resents subscription stacking, cares where their data goes. Often technical
+but NOT necessarily a programmer — the general-use loop already proved the
+app serves writers, analysts, teachers, marketers.
+
+NOT the target: enterprises (no admin/SSO), hardcore devs (Claude Code owns
+that), people who will never touch an API key (they need OAuth or bundled
+credits — a later experiment, not now).
+
+### The simplicity problem (measured)
+
+- 34 modal overlays, 11 toggle*Modal functions, ~24k lines in 3 files.
+- Surface inventory: Spaces, Crew, Council, Screen Vision, browser agent,
+  health toolset, voice (disabled), thinking map, UX insights, heatmap,
+  digest, model perf, memory lens, task scope, quick window, future console,
+  plan mode, routines, skills, snippets, subagents, @ mentions…
+- A new user meets ALL of this chrome while the wedge needs exactly:
+  key → model → chat. Everything else is progressive disclosure.
+
+**Doctrine for all 99 remaining cycles: the wedge gets chrome; everything
+else lives in ⌘K.** Visible UI surface must justify itself by serving
+first-session value; power features are palette-reachable, not topbar-furniture.
+
+### Feature triage (initial; revisit at checkpoints)
+
+- **CORE (visible chrome):** chat, model picker (+✨ Recommended), keys,
+  attachments/drop, sessions sidebar, stop button, routines (the retention
+  hook), memory (silent, with one promote affordance).
+- **POWER (⌘K only):** crew/council, spaces, browser agent, skills install,
+  snippets manager, thinking map, plan mode, subagents (model-invoked anyway).
+- **DEMOTE/CUT candidates (audit each in its own cycle):** Future Console
+  (ships dark — cut from menus until designed), UX insights/heatmap/digest/
+  model-perf modals (4 analytics modals nobody asked for — merge or hide),
+  Screen Vision entry points (high wow, high risk — opt-in deep setting),
+  quick window (validate or cut), health tools (keep but space-gated, as is).
+
+### Market-fit definition (what "finding fit" means here)
+
+Activation: fresh install → first model reply in **under 60 seconds**.
+Retention hook: ≥1 routine or ≥1 reused skill/snippet in week one — the
+reasons Labaik opens tomorrow. The local OODA telemetry already measures
+turn success/latency; cycles will add (local-only) activation funnel marks.
+
+### Roadmap (feeds cycles 2–100)
+
+- **Phase A — First hour (cycles ~2–15):** boot smoke test (carried over —
+  two boot crashes proved the need); first-run audit + time-to-first-reply
+  measurement; login screen → single "paste any key, we'll detect the
+  provider" field; demote the DEMOTE list out of topbar/menus; one Settings
+  hub to collapse the modal zoo.
+- **Phase B — Core loop sharpness (16–40):** chat ergonomics polish, model
+  switching mid-conversation, attachment flows, memory promote UX, routine
+  creation from any message ("make this a routine").
+- **Phase C — Tell the story (41–70):** README/site copy aligned to the
+  wedge sentence; in-app "what's possible" tour rebuilt around 5 wedge
+  moments; default templates per persona; App-quality pass (icons, motion).
+- **Phase D — Retention + distribution experiments (71–100):** routine
+  outcome notifications, weekly digest routine pre-armed, import from
+  ChatGPT/Claude export, share-a-session artifact.
+
+## Cycle log
+
+### Cycle 1 — this document (2026-06-10)
+- Wedge defined, target user named, simplicity doctrine set
+  ("wedge gets chrome; everything else lives in ⌘K"), triage lists drawn,
+  activation/retention metrics defined, 4-phase roadmap laid out.
