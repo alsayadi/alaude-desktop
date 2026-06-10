@@ -344,3 +344,13 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   ≤minKeep, trims oldest + keeps newest, prepends note, keeps ≥minKeep huge
   messages, no input mutation. Same discipline that turned the boot crashes
   into a permanent test. 98 checks total.
+
+### Cycle 35 — model cost tiers in the picker (2026-06-10)
+- The "pay per use" wedge means cost matters, but the picker gave zero
+  price signal. modelCostTier() buckets models coarsely by family into
+  🟢 cheap / 🟡 mid / 🔴 premium (🟢 free for local) — robust at the tier
+  level where exact $/token goes stale — and prefixes the ✨ Recommended
+  entries so users don't burn a flagship on a one-liner. Display-only,
+  low-risk. (Live-API dogfood still deferred: spending real credits to
+  verify the prompt trim isn't clearly authorized; changes kept schema +
+  rules, low behavior risk.)

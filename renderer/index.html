@@ -16914,6 +16914,20 @@ Title:`
     // round-trips for zero UX gain. If the registry changes, update
     // both. Order matters — `kimi-intl/` must come BEFORE `kimi-` so the
     // global (kimi.ai) option doesn't fall through to moonshot (CN).
+    // v0.8 cycle 35: coarse per-message cost tier for the picker. Exact $/token
+    // goes stale fast, so we bucket by family into 🟢 cheap / 🟡 mid / 🔴
+    // premium — robust at the tier level and enough to stop a user burning a
+    // flagship on a one-liner. Local models are free.
+    function modelCostTier(modelId, isLocal) {
+      if (isLocal) return { dots: '🟢', label: 'free · local' }
+      const m = (modelId || '').toLowerCase()
+      // Premium flagships
+      if (/claude-opus|gpt-5(\.5)?-pro|gpt-5(\.5)?($|[^-])|grok-.*reasoning|gemini-3\.?1?-pro|^o[13]/.test(m)) return { dots: '🔴', label: 'premium' }
+      // Cheap / mini / flash / distilled
+      if (/haiku|flash|mini|-air|deepseek-chat|qwen.*(flash|turbo)|gpt-5(\.5)?-mini|nano/.test(m)) return { dots: '🟢', label: 'cheap' }
+      // Everything else (sonnet, deepseek-v4, glm-5, kimi, minimax, hunyuan…)
+      return { dots: '🟡', label: 'mid' }
+    }
     function providerOf(modelId) {
       const m = (modelId || '').toLowerCase()
       if (m.startsWith('ollama/') || m.includes(':')) return 'ollama'
@@ -16981,7 +16995,8 @@ Title:`
             for (const [opt, tag] of recs) {
               const o = document.createElement('option')
               o.value = opt.value
-              o.text = `${opt.text.replace(/^[⚡🔒]\s+/, '')} — ${tag}`
+              const tier = modelCostTier(opt.value, opt.parentElement?.id === 'model-select-local')
+              o.text = `${tier.dots} ${opt.text.replace(/^[⚡🔒]\s+/, '')} — ${tag}`
               o.dataset.connected = '1'
               grp.appendChild(o)
             }
