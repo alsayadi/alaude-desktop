@@ -195,3 +195,8 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   never implemented. Successful runs now append (prompt-label + full
   result) to a starred "⏰ Routine runs" session. The morning digest is
   finally readable in the evening.
+
+### Cycle 18 — notification → result, one click (2026-06-10)
+- Clicking a routine's macOS notification now focuses the app AND switches
+  to the "⏰ Routine runs" session. The retention chain is complete:
+  schedule → fire → notify → click → read.

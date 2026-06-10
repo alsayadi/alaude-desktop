@@ -2135,7 +2135,13 @@ app.whenReady().then(() => {
             try {
               if (Notification.isSupported() && !mainWindow?.isFocused()) {
                 const n = new Notification({ title: `⏰ ${routine.name}`, body: preview.slice(0, 140) })
-                n.on('click', () => { try { mainWindow?.show(); mainWindow?.focus() } catch {} })
+                n.on('click', () => {
+                  try {
+                    mainWindow?.show(); mainWindow?.focus()
+                    // v0.8 cycle 18: land directly on the full result.
+                    mainWindow?.webContents?.send('open-routines-log')
+                  } catch {}
+                })
                 n.show()
               }
             } catch {}

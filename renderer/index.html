@@ -9086,6 +9086,11 @@ SUMMARY:`
     }
     // Surface routine runs as toasts so the user knows something fired.
     try {
+      // v0.8 cycle 18: notification click → jump straight to the full result.
+      window.alaude.onOpenRoutinesLog?.(() => {
+        const logSession = sessions.find(x => x.routinesLog)
+        if (logSession) switchSession(logSession.id)
+      })
       window.alaude.onRoutineRan?.((payload) => {
         if (!payload) return
         const name = payload.routine?.name || 'routine'
