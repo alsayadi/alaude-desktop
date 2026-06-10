@@ -139,3 +139,25 @@
   failure (hotkey taken) degrades with a console note, never a crash.
 - VOICE ARC CORE COMPLETE (cycles 6-10): capture → Whisper → gate lift
   → Gemini → global hotkey. 180 checks green. Next: Paperwork Desk.
+
+### Checkpoint — v0.7.74 RELEASED + live QA (2026-06-11)
+- "Labaik listens" shipped: notarized + stapled arm64/x64 DMGs, GitHub
+  release live (first attempt rolled back on an upload 404; recreated
+  release then uploaded assets individually — more resilient pattern),
+  labaik.ai auto-updates within 60s.
+- Live CDP-driven QA on a hermetic dev instance verified: login screen
+  (free-local primary card, collapsed key form), voice gate lift (mic
+  appears with honest provider tooltip the moment a key lands), undo
+  chip + "Nothing to undo" path, and zero-key unblock via local Ollama.
+
+### Cycle 11 — Paperwork Desk v1 (2026-06-11)
+- New 📄 "Explain this letter" quick-start (4th template): clicking it
+  opens the file picker immediately; once a letter/bill/form (photo,
+  PDF, or doc) is attached, a structured prompt auto-sends — the answer
+  arrives with zero typing, in the user's UI language even when the
+  document is in another language.
+- Card structure: What this is · Who sent it · What they want ·
+  Deadline · What to do next. Cancelling the picker stages the prompt
+  with a drop-hint toast (drag&drop + 📎 still work).
+- `pickFile` is a general template capability (future document-first
+  flows reuse it). EN/中文/العربية.
