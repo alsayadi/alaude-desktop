@@ -10578,7 +10578,7 @@ footer a { color: var(--accent); text-decoration: none; }
             if (r.renderer?.templates) localStorage.setItem('alaude:templates:v1', JSON.stringify(r.renderer.templates))
             if (r.renderer?.prefs?.focusMode != null) localStorage.setItem('alaude:focus:v1', r.renderer.prefs.focusMode ? '1' : '0')
           } catch {}
-          showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills — reloading…`, false)
+          showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills${r.mergedSessions ? ` · +${r.mergedSessions} merged sessions` : ''} — reloading…`, false)
           setTimeout(() => location.reload(), 1200)
         } },
         { kind: 'action', icon: '🔍', label: 'Deep research (send composer question with sources)', search: 'deep research investigate cited sources web search report verify', action: () => {

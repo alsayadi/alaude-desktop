@@ -382,6 +382,24 @@ console.log('\n[7/10] folder-skills — discovery + frontmatter + guards')
   check('garbage bundle rejected', backup.importBundle({ nope: 1 }).ok === false)
   check('future-version bundle rejected', backup.importBundle({ kind: 'labaik-backup', version: 99 }).ok === false)
 
+  // Cycle 29: non-destructive merge. Local has a session the bundle lacks +
+  // an older copy of a shared one; restore must keep the local-only session
+  // and take the bundle's more-complete copy of the shared one.
+  fs.writeFileSync(path.join(testHome, 'sessions.json'), JSON.stringify({ v: 1, sessions: [
+    { id: 1, title: 'keep me', messages: [{ role: 'user', content: 'a' }] },
+    { id: 2, title: 'local only', messages: [{ role: 'user', content: 'mine' }] },
+  ] }))
+  const mergeBundle = { kind: 'labaik-backup', version: 1, files: { 'sessions.json': { v: 1, sessions: [
+    { id: 1, title: 'keep me', messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] },
+    { id: 3, title: 'from backup', messages: [{ role: 'user', content: 'c' }] },
+  ] } }, skills: [] }
+  const merged = backup.importBundle(mergeBundle)
+  const after = JSON.parse(fs.readFileSync(path.join(testHome, 'sessions.json'), 'utf8')).sessions
+  check('merge keeps local-only session', after.some(s => s.id === 2 && s.title === 'local only'))
+  check('merge adds backup-only session', after.some(s => s.id === 3))
+  check('merge takes the more-complete shared copy', after.find(s => s.id === 1)?.messages.length === 2)
+  check('merge reports new session count', merged.mergedSessions === 1)
+
   fs.rmSync(testHome, { recursive: true, force: true })
 }
 

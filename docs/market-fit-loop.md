@@ -287,3 +287,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - FLAGGED for a future cycle: the cycle-22 restore OVERWRITES whole files;
   the deleted importFullBackup merged sessions by id (keeping the longer
   copy). Restore should adopt that non-destructive merge — real safety win.
+
+### Cycle 29 — non-destructive restore (the cycle-28 follow-up) (2026-06-10)
+- importBundle now MERGES the array stores (sessions, spaces) by id instead
+  of overwriting: local-only items survive, backup-only items are added, and
+  on a shared id the more-complete copy wins (sessions: more messages) —
+  restoring a backup on an active machine no longer wipes whatever's newer.
+  Scalar stores still overwrite, always after a .pre-import snapshot. 4 new
+  unit tests cover keep-local / add-remote / take-longer / count. Closes the
+  safety regression flagged in cycle 28.

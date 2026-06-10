@@ -50,14 +50,44 @@ function importBundle(bundle) {
   }
   const ts = Date.now().toString(36)
   const restored = []
+  let mergedSessions = 0
   for (const name of FILES) {
-    const data = bundle.files?.[name]
-    if (data === undefined) continue
+    const incoming = bundle.files?.[name]
+    if (incoming === undefined) continue
     try {
       const p = path.join(paths.BASE_DIR, name)
       fs.mkdirSync(paths.BASE_DIR, { recursive: true })
+      // Always snapshot first — even merge can't un-delete a mistake.
       if (fs.existsSync(p)) fs.copyFileSync(p, `${p}.pre-import-${ts}`)
-      fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8')
+      let toWrite = incoming
+      // v0.8 cycle 29: non-destructive restore. For the array-bearing stores
+      // (sessions, spaces), UNION by id instead of overwriting — moving a
+      // backup between two active machines no longer wipes whichever side
+      // restored last. The locally-newer copy wins on conflict; for sessions
+      // "newer" = more messages (matches the deleted importFullBackup's
+      // heuristic). Plain overwrite (with snapshot) for the scalar stores.
+      const mergeKey = name === 'sessions.json' ? 'sessions' : (name === 'spaces.json' ? 'spaces' : null)
+      if (mergeKey && fs.existsSync(p)) {
+        try {
+          const local = JSON.parse(fs.readFileSync(p, 'utf8'))
+          const localArr = Array.isArray(local?.[mergeKey]) ? local[mergeKey] : (Array.isArray(local) ? local : null)
+          const incArr = Array.isArray(incoming?.[mergeKey]) ? incoming[mergeKey] : (Array.isArray(incoming) ? incoming : null)
+          if (localArr && incArr) {
+            const byId = new Map(localArr.map(x => [x.id, x]))
+            for (const item of incArr) {
+              if (item?.id == null) continue
+              const cur = byId.get(item.id)
+              if (!cur) { byId.set(item.id, item); if (mergeKey === 'sessions') mergedSessions++ }
+              else if (mergeKey === 'sessions' && (item.messages?.length || 0) > (cur.messages?.length || 0)) {
+                byId.set(item.id, item)  // imported copy is more complete
+              }
+            }
+            const mergedArr = Array.from(byId.values())
+            toWrite = Array.isArray(incoming) ? mergedArr : { ...incoming, [mergeKey]: mergedArr }
+          }
+        } catch { /* unparseable local — fall back to overwrite (snapshot kept) */ }
+      }
+      fs.writeFileSync(p, JSON.stringify(toWrite, null, 2), 'utf8')
       restored.push(name)
     } catch { /* skip the file, keep going */ }
   }
@@ -73,7 +103,7 @@ function importBundle(bundle) {
       skillsRestored++
     } catch {}
   }
-  return { ok: true, restored, skillsRestored, renderer: bundle.renderer || null }
+  return { ok: true, restored, skillsRestored, mergedSessions, renderer: bundle.renderer || null }
 }
 
 module.exports = { exportBundle, importBundle, BUNDLE_VERSION, FILES }
