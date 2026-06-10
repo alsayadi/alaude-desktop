@@ -14252,7 +14252,6 @@ Title:`
       renderGoalCard?.()
       renderTagAutosuggest?.()
       renderPendingMermaids?.()
-      kickArtifactFrames?.()
       updateSessionCostDisplay?.()
     }
 
@@ -16042,22 +16041,6 @@ Title:`
       return _mermaidPromise
     }
     let _mermaidCounter = 0
-    // v0.8 fix: an <iframe srcdoc="…"> inserted via innerHTML (how renderMessages
-    // writes the chat) is a known Chromium case where the frame does NOT
-    // navigate to its srcdoc — it renders BLANK. The manual ▶ Run path already
-    // works around this by re-assigning srcdoc; this post-render pass applies
-    // the same kick to every freshly-inserted artifact (and file-diff HTML
-    // preview) frame exactly once, so inline "✨ Live preview" actually shows.
-    function kickArtifactFrames() {
-      const frames = document.querySelectorAll('.md-artifact-frame[srcdoc]:not([data-kicked]), .file-diff-preview iframe[srcdoc]:not([data-kicked])')
-      frames.forEach(f => {
-        f.setAttribute('data-kicked', '1')
-        const src = f.getAttribute('srcdoc')
-        f.removeAttribute('srcdoc')
-        requestAnimationFrame(() => { try { f.setAttribute('srcdoc', src) } catch {} })
-      })
-    }
-
     async function renderPendingMermaids() {
       // Exclude nodes already claimed by a prior in-flight render — prevents
       // double-render when renderAll() fires twice before mermaid.render() resolves.
