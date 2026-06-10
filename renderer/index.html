@@ -6938,6 +6938,8 @@
         <div data-i18n="routines.add.section" style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Add a routine</div>
         <input id="routine-name" type="text" data-i18n-attr="placeholder:routines.name.placeholder" placeholder="Name — e.g. Morning HN digest" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
         <textarea id="routine-prompt" data-i18n-attr="placeholder:routines.prompt.placeholder" placeholder="Prompt — e.g. Summarize the top 10 Hacker News stories from the last 24h. Cite URLs." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;min-height:60px;resize:vertical"></textarea>
+        <!-- v0.8 cycle 24 — watcher: only run + notify when this page changes -->
+        <input id="routine-watch-url" type="url" data-i18n-attr="placeholder:routines.watch.placeholder" placeholder="👁 Watch a page (optional) — https://… · runs only when it changes" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;margin-bottom:8px" />
         <div style="background:var(--bg);padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:8px">
           <div data-i18n="routines.schedule" style="font-size:11px;color:var(--text-faint);margin-bottom:6px">Schedule</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -9115,6 +9117,10 @@ SUMMARY:`
     // so the user can tweak + save. These aren't automatically scheduled —
     // they're examples to copy and customize.
     const ROUTINE_TEMPLATES = [
+      // v0.8 cycle 24 — watcher template: notify-on-change-only.
+      { icon: '👁️', name: 'Watch a page for changes', cron: '0 */3 * * *',
+        watch: 'https://',
+        prompt: 'The watched page changed. In 2-3 sentences, tell me exactly WHAT changed and whether it needs my attention (price drop, new date, new announcement). Be specific.' },
       { icon: '📰', name: 'Morning HN digest', cron: '0 8 * * *',
         prompt: 'Summarize the top 10 Hacker News stories from the last 24 hours. For each: 1-line takeaway + URL. Cluster by theme. Stay terse.' },
       { icon: '🗓️', name: 'Weekday standup prep', cron: '0 9 * * 1-5',
@@ -9159,6 +9165,9 @@ SUMMARY:`
       if (!t) return
       document.getElementById('routine-name').value = t.name
       document.getElementById('routine-prompt').value = t.prompt
+      // v0.8 cycle 24 — watcher templates pre-fill (or clear) the URL field.
+      const _rw = document.getElementById('routine-watch-url')
+      if (_rw) _rw.value = t.watch || ''
       // Load the template's cron into the friendly picker.
       _loadCronIntoPicker(t.cron)
       document.getElementById('routine-name').focus()
@@ -9457,9 +9466,15 @@ SUMMARY:`
         return
       }
       const notify = document.getElementById('routine-notify')?.checked !== false
-      await window.alaude.routinesUpsert({ name, prompt, cron, model, notify })
+      const watchUrl = document.getElementById('routine-watch-url')?.value.trim() || ''
+      if (watchUrl && !/^https:\/\//i.test(watchUrl)) {
+        showRewindToast?.(t('routines.watch.httpsOnly'), true)
+        return
+      }
+      await window.alaude.routinesUpsert({ name, prompt, cron, model, notify, watch: { url: watchUrl } })
       document.getElementById('routine-name').value = ''
       document.getElementById('routine-prompt').value = ''
+      const _rw = document.getElementById('routine-watch-url'); if (_rw) _rw.value = ''
       document.getElementById('routine-cron-custom').value = ''
       document.getElementById('routine-freq').value = 'daily'
       document.getElementById('routine-time').value = '08:00'
@@ -11907,6 +11922,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 Nothing to share yet',
         'share.making': '📤 Making your picture…',
         'share.done': '🖼️ Picture copied — paste it into WhatsApp or Messages',
+        'routines.watch.placeholder': '👁 Watch a page (optional) — https://… · runs only when it changes',
+        'routines.watch.httpsOnly': '👁 Watched pages must start with https://',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12293,6 +12310,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 还没有可分享的内容',
         'share.making': '📤 正在生成图片……',
         'share.done': '🖼️ 图片已复制——粘贴到微信或 WhatsApp 即可',
+        'routines.watch.placeholder': '👁 盯一个网页（可选）——https://… · 仅在页面变化时运行',
+        'routines.watch.httpsOnly': '👁 盯的网页必须以 https:// 开头',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12655,6 +12674,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 لا يوجد ما يُشارَك بعد',
         'share.making': '📤 يجهّز الصورة…',
         'share.done': '🖼️ نُسخت الصورة — ألصقها في واتساب أو الرسائل',
+        'routines.watch.placeholder': '👁 راقب صفحة (اختياري) — https://… · لا يعمل إلا عند تغيُّرها',
+        'routines.watch.httpsOnly': '👁 الصفحات المراقبة يجب أن تبدأ بـ https://',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',

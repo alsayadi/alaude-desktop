@@ -74,6 +74,12 @@ function upsert(routine) {
     cron: String(routine.cron || ''),  // e.g. "0 8 * * *" or "*/15 * * * *"
     enabled: routine.enabled !== false,
     notify: routine.notify !== false,  // v0.8 cycle 24: per-routine desktop notifications
+    // v0.8 cycle 24 — watcher: when set, the routine only proceeds (and
+    // notifies) if this page's text actually changed since last check.
+    // Passing watch explicitly (even empty) overwrites; omitting keeps.
+    watch: routine.watch !== undefined
+      ? ((routine.watch && routine.watch.url) ? { url: String(routine.watch.url).slice(0, 500) } : null)
+      : (existing?.watch || null),
     lastRunAt: existing?.lastRunAt || null,
     lastStatus: existing?.lastStatus || null,
     lastResult: existing?.lastResult || null,

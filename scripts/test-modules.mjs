@@ -737,6 +737,35 @@ console.log('\n[19/19] routines — catch-up for missed fires')
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 20: watchers — page text + change detection (cycle 24)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[20/20] watchers — page text + change detection')
+{
+  const { createRequire } = await import('node:module')
+  const fsw = await import('node:fs')
+  const require = createRequire(import.meta.url)
+  const watchers = require('../electron/watchers.js')
+
+  const html = '<html><head><style>.x{color:red}</style><script>alert(1)</script></head>' +
+    '<body><h1>Price:&nbsp;$99</h1>\n\n  <p>In   stock</p></body></html>'
+  check('pageText strips tags/scripts/styles + collapses ws',
+    watchers.pageText(html) === 'Price: $99 In stock')
+
+  const ID = 'test-watch-' + process.pid
+  watchers.reset(ID)
+  const c1 = watchers.checkChange(ID, 'Price: $99 In stock')
+  check('first check saves baseline', c1.first === true && c1.changed === false)
+  const c2 = watchers.checkChange(ID, 'Price: $99 In stock')
+  check('same text → no change', c2.changed === false && !c2.first)
+  const c3 = watchers.checkChange(ID, 'Price: $79 In stock')
+  check('different text → changed with before-excerpt', c3.changed === true && c3.prevHead.includes('$99'))
+  const c4 = watchers.checkChange(ID, 'Price: $79 In stock')
+  check('change persists as new baseline', c4.changed === false)
+  check('hostile id sanitized', (watchers.checkChange('../../evil', 'x'), fsw.existsSync(watchers.DIR + '/______evil.json')))
+  watchers.reset(ID); watchers.reset('../../evil')
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

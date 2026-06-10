@@ -324,3 +324,15 @@
   footer) in an offscreen window, is captured, and lands on the
   clipboard as a PNG — paste straight into WhatsApp/Messages/微信.
   New share-image IPC with size caps. EN/中文/العربية. 228 checks.
+
+### Cycle 24 — Watchers v1: notify only when it changes (2026-06-11)
+- A routine can now carry a 👁 watch URL: on each scheduled fire the
+  page is fetched (https-only, ledger-logged, 3MB/15s caps), reduced to
+  text, and hash-diffed against a snapshot. No change → quiet "👁 no
+  change" history line, NO notification (the anti-feed-creep rule).
+  Real change → the routine's prompt runs with before/after excerpts
+  injected, and the normal notification fires.
+- First check saves a baseline ("will notify when the page changes").
+  UI: optional URL field in the routines form + a "Watch a page for
+  changes" template (every 3h). Catch-up runs (cycle 21) make watchers
+  sleep-proof too. 6 unit tests; 234 checks green. EN/中文/العربية.

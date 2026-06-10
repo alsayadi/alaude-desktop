@@ -1566,6 +1566,7 @@ ipcMain.handle('share-image', async (_e, html) => {
 // 4/3 of raw, so the wire cap is MAX_AUDIO_BYTES * 4/3.
 const voice = require('./voice')
 const netLedger = require('./net-ledger')
+const watchers = require('./watchers')
 ipcMain.handle('voice-transcribe', async (_e, payload) => {
   try {
     if (!payload?.audioB64) return { error: 'empty-audio' }
@@ -2329,9 +2330,56 @@ app.whenReady().then(() => {
   }).catch(err => console.warn('[mcp] startAll failed:', err.message))
 
   try {
+    // v0.8 cycle 24 — watcher pre-check: fetch the watched page, diff its
+    // text against the snapshot, and only let the routine proceed (and
+    // notify) on a REAL change. Quiet "no change" runs land in history
+    // only. Returns null to skip, or a context string to prepend.
+    async function checkWatchedPage(routine) {
+      const url = routine.watch?.url || ''
+      try {
+        if (!/^https:\/\//i.test(url)) {
+          routines.recordRun(routine.id, { status: 'error', resultPreview: '👁 watch URL must start with https://' })
+          return null
+        }
+        netLedger.log(netLedger.hostOf(url), 'watcher check')
+        const res = await fetch(url, {
+          redirect: 'follow',
+          signal: AbortSignal.timeout(15000),
+          headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' },
+        })
+        if (!res.ok) {
+          routines.recordRun(routine.id, { status: 'error', resultPreview: `👁 watch fetch HTTP ${res.status}` })
+          return null
+        }
+        let html = await res.text()
+        if (html.length > 3 * 1024 * 1024) html = html.slice(0, 3 * 1024 * 1024)
+        const text = watchers.pageText(html)
+        const chk = watchers.checkChange(routine.id, text)
+        if (chk.first) {
+          routines.recordRun(routine.id, { status: 'ok', resultPreview: '👁 baseline saved — will notify when the page changes' })
+          return null
+        }
+        if (!chk.changed) {
+          routines.recordRun(routine.id, { status: 'ok', resultPreview: '👁 no change' })
+          return null
+        }
+        return `The watched page (${url}) CHANGED since the last check.\n\nBEFORE (excerpt):\n${chk.prevHead}\n\nNOW (excerpt):\n${text.slice(0, 1500)}\n\nTask: `
+      } catch (err) {
+        routines.recordRun(routine.id, { status: 'error', resultPreview: ('👁 ' + (err?.message || 'watch failed')).slice(0, 400) })
+        return null
+      }
+    }
+
     // Extracted so both the cron scheduler and the "Run now" IPC share the
     // exact same fire path (v0.8 cycle 13).
     async function fireRoutine(routine, meta = {}) {
+      // Watchers: skip quietly unless the page really changed.
+      let watchContext = ''
+      if (routine.watch?.url) {
+        const ctx = await checkWatchedPage(routine)
+        if (ctx === null) return
+        watchContext = ctx
+      }
       const worker = getWorker()
       const id = ++requestId
       const messageId = `routine_${routine.id}_${Date.now()}`
@@ -2373,7 +2421,7 @@ app.whenReady().then(() => {
             resolve()
           },
         })
-        const messagesRaw = [{ role: 'user', content: routine.prompt }]
+        const messagesRaw = [{ role: 'user', content: watchContext + routine.prompt }]
         const mode = getCurrentMode(null) // routines run with global default mode
         const req = JSON.stringify({ id, messageId, messages: messagesRaw, model: routine.model || '', workspacePath: '', spacePrompt: '', mode }) + '\n'
         try { worker.stdin.write(req, 'utf8') } catch (err) {
