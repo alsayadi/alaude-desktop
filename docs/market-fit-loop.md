@@ -365,3 +365,13 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   streamed read with a hard ceiling). Fixture scenario 7 proves a
   redirect→localhost is blocked end to end. The earlier-logged DNS-rebind
   limitation remains (hostname-based; acceptable for a single-operator app).
+
+### Cycle 37 — fix session-id collision in ChatGPT import (2026-06-10)
+- Audited the import path (cycle 11). Bug: imported sessions got
+  `id: Date.now() + i`, which collides with any real session created in the
+  same time window (and with a second import) — two sessions sharing an id
+  breaks switchSession, persist, and delete. Fixed with `Date.now() * 1000
+  + i` (sits ~1000× above any real Date.now() id, collision-free now and
+  for centuries) plus a Set guard. Converter module + its 5 tests unchanged
+  (the bug was renderer-side id assignment, not the parse). Logged: import
+  doesn't dedup re-imports — minor, future cycle.

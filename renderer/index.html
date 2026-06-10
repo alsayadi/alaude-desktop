@@ -8992,12 +8992,23 @@ SUMMARY:`
         if (r?.reason !== 'cancelled') showRewindToast?.('Import failed: ' + (r?.reason || 'unknown'), true)
         return
       }
-      const base = Date.now()
-      const imported = r.sessions.map((c, i) => ({
-        id: base + i,
-        title: '📥 ' + c.title,
-        messages: c.messages.map(m => ({ role: m.role, content: m.content, ...(m.ts ? { ts: m.ts } : {}) })),
-      }))
+      // v0.8 cycle 37 fix: ids must not collide with existing sessions. The
+      // old `Date.now() + i` could equal a session created in the same time
+      // window (two sessions sharing an id breaks switchSession/persist).
+      // `Date.now() * 1000 + i` sits ~1000× above any real Date.now() id, so
+      // it can't collide now or in future; a Set guard catches any leftover.
+      const existingIds = new Set(sessions.map(s => s.id))
+      const base = Date.now() * 1000
+      const imported = r.sessions.map((c, i) => {
+        let id = base + i
+        while (existingIds.has(id)) id++
+        existingIds.add(id)
+        return {
+          id,
+          title: '📥 ' + c.title,
+          messages: c.messages.map(m => ({ role: m.role, content: m.content, ...(m.ts ? { ts: m.ts } : {}) })),
+        }
+      })
       sessions.unshift(...imported)
       persistSessions()
       renderSessions()
