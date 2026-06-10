@@ -119,3 +119,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   the latest user message — same pattern as browser/image tools — in all
   three provider loops. Fixture asserts normal chats carry zero screen_*
   tools. (Screen Vision UI chrome was already hidden; ⌘⇧V still works.)
+
+### Cycle 7 — activation funnel marks (2026-06-10)
+- Settings hub SKIPPED honestly: after cycle 4 the ⋯ menu already is the
+  hub (search/crew/routines/keys/local models) — a gear redesign would be
+  churn. Instead: local-only funnel marks funnel_install → funnel_key_saved
+  → funnel_first_reply (with sinceInstallMs) into the existing OODA event
+  log. The <60s activation metric is now measurable on real installs.

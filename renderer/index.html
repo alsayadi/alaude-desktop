@@ -7426,6 +7426,22 @@
     function newMessageId() {
       return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6)
     }
+    // v0.8 market-fit: local-only activation funnel. Three marks tell us
+    // whether a fresh install reaches its first reply inside 60 seconds:
+    // funnel_install (first boot) → funnel_key_saved → funnel_first_reply.
+    // Events land in the existing OODA log (~/.labaik/events.ndjson) —
+    // nothing leaves the machine.
+    function funnelMark(kind) {
+      try {
+        const KEY = 'alaude:funnel:' + kind
+        if (localStorage.getItem(KEY)) return  // each mark fires once per install
+        localStorage.setItem(KEY, String(Date.now()))
+        const t0 = Number(localStorage.getItem('alaude:funnel:install') || Date.now())
+        logUx({ kind: 'funnel_' + kind, sinceInstallMs: kind === 'install' ? 0 : Date.now() - t0 })
+      } catch {}
+    }
+    funnelMark('install')
+
     async function logUx(event) {
       try { await window.alaude.logUxEvent({ ...event }) } catch {}
     }
@@ -13334,6 +13350,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // can cite it as a positive signal.
         if (uxMeta?.messageId) ux.lastAIResponseMessageId = uxMeta.messageId
         console.log('[callAI] response type:', typeof response, 'value:', JSON.stringify(response)?.slice(0, 200))
+        funnelMark('first_reply')  // activation metric: install → first reply
         const prev = target[target.length - 1]
         if (prev) finalizeStats(prev)
         target[target.length - 1] = {
@@ -17192,6 +17209,7 @@ Title:`
         return
       }
       if (ok) {
+        funnelMark('key_saved')
         status.textContent = '✓ Key saved — loading app…'
         status.className = 'login-status success'
         // Don't wait — dismiss the login screen immediately, then re-verify
