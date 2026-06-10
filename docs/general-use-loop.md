@@ -1,8 +1,12 @@
-# General-Use Loop — make Labaik useful beyond coding
+# General-Use Loop — make Labaik useful beyond coding, and easier to use
 
-Working log for the `/loop make labaik work for more general use not only for coding`
-sessions. One cycle = one audit-pick-implement-test-commit pass on branch
-`feature/general-use`.
+Working log for the improvement loop. One cycle = one audit-pick-implement-
+test-commit pass on branch `feature/general-use`.
+
+**Target (set 2026-06-10): 100 cycles**, run back-to-back. Expanded scope:
+general use + ease of use. Quality floor: a cycle must ship a real
+improvement — if the well runs dry, the loop reports that instead of padding.
+Ship checkpoint suggested every ~10 cycles. Progress: see cycle log below.
 
 ## Audit (cycle 1, 2026-06-10)
 
@@ -67,4 +71,17 @@ Coding bias found (backlog, highest leverage first):
   stack-trace pastes (contextual, not bias), composer placeholder is neutral.
 - Added 🥗 weekly meal plan routine template (Sunday 5pm).
 - "Learning" space skipped — the Education space already covers tutor use.
-- **Backlog exhausted.** Five cycles total; branch ready to ship.
+- General-use backlog exhausted; loop re-opened with 100-cycle ease-of-use target.
+
+### Cycle 6 — composer discoverability (2026-06-10)
+- Placeholder now hints the two hidden superpowers in all 3 locales:
+  "Message Labaik...  ( / snippets · @ files )". Previously / and @ were
+  invisible unless you already knew them.
+
+Ease-of-use backlog (working list):
+- One-time coach mark for ⌘K (palette is the app's hub but undiscoverable)
+- Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
+- Esc-to-stop streaming hint while generating
+- Model picker: surface "which model should I pick?" guidance
+- Error messages: provider errors → plain-language + one-click fix action
+- Session organization: auto-title quality, archive old sessions
