@@ -789,14 +789,54 @@ async function runWebSearch(query) {
   return { results }
 }
 
+// v0.8 cycle 36 — SSRF-safe fetch. `redirect: 'follow'` (the old default)
+// re-checked nothing after the first hop, so a public page could 30x-redirect
+// to http://localhost/… or a private IP and bypass _blockedUrl entirely.
+// We follow redirects MANUALLY, re-validating each Location, and cap the body
+// read so a multi-GB response can't OOM the worker.
+const FETCH_MAX_BYTES = 3 * 1024 * 1024  // 3 MB hard cap on the response body
+async function safeFetch(rawUrl, maxHops = 4) {
+  let url = rawUrl
+  for (let hop = 0; hop <= maxHops; hop++) {
+    const blocked = _blockedUrl(url)
+    if (blocked) throw new Error(blocked)
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' },
+      redirect: 'manual',
+    })
+    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+      url = new URL(res.headers.get('location'), url).href  // re-validated next loop
+      continue
+    }
+    return res
+  }
+  throw new Error('too many redirects')
+}
+async function readCapped(res) {
+  const len = Number(res.headers.get('content-length') || 0)
+  if (len && len > FETCH_MAX_BYTES) throw new Error(`response too large (${Math.round(len / 1e6)}MB)`)
+  if (!res.body) return await res.text()
+  const reader = res.body.getReader()
+  const chunks = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.length
+    if (total > FETCH_MAX_BYTES) { try { reader.cancel() } catch {}; break }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks.map(c => Buffer.from(c))).toString('utf8')
+}
+
 async function runFetchPage(rawUrl) {
   const blocked = _blockedUrl(rawUrl)
   if (blocked) return { error: `Blocked: ${blocked}` }
   let res, html
   try {
-    res = await fetch(rawUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Labaik' }, redirect: 'follow' })
+    res = await safeFetch(rawUrl)
     if (!res.ok) return { error: `Fetch failed: HTTP ${res.status}` }
-    html = await res.text()
+    html = await readCapped(res)
   } catch (err) {
     return { error: `Fetch failed: ${err.message}` }
   }

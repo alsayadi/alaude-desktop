@@ -354,3 +354,14 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   low-risk. (Live-API dogfood still deferred: spending real credits to
   verify the prompt trim isn't clearly authorized; changes kept schema +
   rules, low behavior risk.)
+
+### Cycle 36 — fix SSRF + DoS in fetch_page (2026-06-10)
+- Audited the cycle-20 web-fetch subsystem. Two real bugs:
+  (1) SSRF: fetch_page used redirect:'follow', so _blockedUrl only checked
+  the FIRST hop — a public page could 30x-redirect to localhost/private IPs
+  and bypass the guard. Now follows redirects MANUALLY, re-validating each
+  Location (max 4 hops). (2) DoS: the body was read unbounded — a multi-GB
+  response could OOM the worker. Now capped at 3MB (content-length check +
+  streamed read with a hard ceiling). Fixture scenario 7 proves a
+  redirect→localhost is blocked end to end. The earlier-logged DNS-rebind
+  limitation remains (hostname-based; acceptable for a single-operator app).

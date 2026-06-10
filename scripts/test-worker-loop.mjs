@@ -84,6 +84,11 @@ function decideReply(body) {
   if (userText.startsWith('Plain question with research mode')) {
     return contentChunks('RESEARCH-ACK')
   }
+  if (userText.startsWith('Fetch the redirect')) {
+    if (!toolMsgs.length) return toolCallChunks('fetch_page', { url: process.env.LABAIK_SEARCH_BASE + '/redirect-to-localhost' })
+    const got = String(toolMsgs[0].content || '')
+    return contentChunks(/blocked|local addresses/i.test(got) ? 'SSRF-BLOCKED' : `SSRF-LEAK: ${got.slice(0,120)}`)
+  }
   if (userText.startsWith('Search the web')) {
     if (!toolMsgs.length) return toolCallChunks('web_search', { query: 'labaik news' })
     const got = String(toolMsgs[0].content || '')
@@ -114,6 +119,9 @@ const server = http.createServer((req, res) => {
     let body = {}
     try { body = JSON.parse(raw) } catch {}
     requests.push({ url: req.url, body })
+    if (req.url.startsWith('/redirect-to-localhost')) {
+      res.writeHead(302, { Location: 'http://localhost:9/secret' }); res.end(); return
+    }
     if (req.url.startsWith('/html/')) {
       // DDG-style search results page for the web_search tool
       res.writeHead(200, { 'Content-Type': 'text/html' })
@@ -243,12 +251,12 @@ try {
   check('browser-restraint prompt block absent without intent', !anyBrowserBlock)
 
   // ═══ Scenario 5: web search tool ═══
-  console.log('\n[5/6] web search — DDG parse + result round-trip')
+  console.log('\n[5/7] web search — DDG parse + result round-trip')
   const r5 = await chat(5, 'Search the web for labaik news please')
   check('model received parsed search results', typeof r5.result === 'string' && r5.result.startsWith('SEARCH-OK'), JSON.stringify(r5).slice(0, 300))
 
   // ═══ Scenario 6: deep research mode flag ═══
-  console.log('\n[6/6] deep research — protocol lands in the system prompt')
+  console.log('\n[6/7] deep research — protocol lands in the system prompt')
   const r6 = await chat(6, 'Plain question with research mode on', { researchMode: true })
   check('research chat completes', typeof r6.result === 'string')
   const rReq = requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Plain question with research mode'))
@@ -256,6 +264,11 @@ try {
   check('DEEP RESEARCH protocol in system prompt', rSys.includes('DEEP RESEARCH MODE'))
   check('non-research chats do NOT carry the protocol',
     !String(requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Search the web'))?.body?.messages?.[0]?.content || '').includes('DEEP RESEARCH MODE'))
+
+  // ═══ Scenario 7: SSRF — redirect to localhost must be blocked (cycle 36) ═══
+  console.log('\n[7/7] fetch_page — redirect to localhost is blocked')
+  const r7 = await chat(7, 'Fetch the redirect please')
+  check('redirect to a private address is blocked', typeof r7.result === 'string' && r7.result.startsWith('SSRF-BLOCKED'), JSON.stringify(r7).slice(0,200))
 
   // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
   console.log('\n[4/5] stop generation — chat-cancel mid-stream')
