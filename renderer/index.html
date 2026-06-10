@@ -7574,9 +7574,11 @@
         el.innerHTML = `<span>📄</span>
           <button class="nudge-yes" id="pw-reply">${escapeHtml(t('paperwork.draftBtn'))}</button>
           <button class="nudge-yes" id="pw-print" style="background:var(--bg-sidebar); color:var(--text)">${escapeHtml(t('paperwork.printBtn'))}</button>
+          <button class="nudge-yes" id="pw-remind" style="background:var(--bg-sidebar); color:var(--text)">${escapeHtml(t('paperwork.remindBtn'))}</button>
           <span class="nudge-close">×</span>`
         el.querySelector('#pw-reply').onclick = () => { el.remove(); paperworkDraftReply() }
         el.querySelector('#pw-print').onclick = () => { el.remove(); paperworkPrintLast() }
+        el.querySelector('#pw-remind').onclick = () => { el.remove(); paperworkRemind() }
         el.querySelector('.nudge-close').onclick = () => el.remove()
         document.body.appendChild(el)
         requestAnimationFrame(() => el.classList.add('show'))
@@ -7609,6 +7611,30 @@
       } catch (e) {
         showRewindToast?.('🖨️ ' + (e?.message || 'Print failed'), true)
       }
+    }
+
+    // v0.8 cycle 13 — deadline → reminder in two clicks. Extracts the date
+    // from the card's Deadline section (renderer/js/paperwork-dates.js,
+    // unit-tested) and pre-fills the existing Routines Add form: 3 days
+    // before the deadline at 9am, or tomorrow 9am when no date parses.
+    // The user confirms with one click on Add — nothing is created behind
+    // their back.
+    function paperworkRemind() {
+      const last = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content)
+      const s = sessions.find(x => x.id === currentSessionId)
+      const title = (s?.title || 'document').slice(0, 40)
+      const dl = window.paperworkDates?.extractDeadlineDate?.(last?.content || '') || null
+      const when = window.paperworkDates?.reminderDateFor?.(dl?.date) || new Date(Date.now() + 86400000)
+      const modal = document.getElementById('routines-modal')
+      if (!modal.classList.contains('show')) toggleRoutinesModal()
+      document.getElementById('routine-name').value = ('📄 ' + t('paperwork.remindName').replace('{title}', title)).slice(0, 60)
+      document.getElementById('routine-prompt').value = t('paperwork.remindPrompt')
+        .replace('{title}', title)
+        .replace('{deadline}', dl ? dl.iso : t('paperwork.remindNoDate'))
+      _loadCronIntoPicker(`0 9 ${when.getDate()} ${when.getMonth() + 1} *`)
+      document.getElementById('routine-name').focus()
+      document.getElementById('routine-name').scrollIntoView({ behavior: 'smooth', block: 'center' })
+      showRewindToast?.(t('paperwork.remindReady'), false)
     }
 
     async function undoLastAgentTurn() {
@@ -11657,6 +11683,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'paperwork.printBtn': '🖨️ Print',
         'paperwork.nothingToPrint': '🖨️ Nothing to print yet',
         'paperwork.draftPrompt': 'Draft a reply letter to the document above on my behalf. Keep it short, polite, and formal — ready to sign. Write the letter in the language the recipient expects (the document\'s language); if that isn\'t my language, add a translation below it. Use placeholders like [MY NAME] and [DATE] for anything personal.',
+        'paperwork.remindBtn': '🔔 Remind me',
+        'paperwork.remindName': 'Reply before deadline: {title}',
+        'paperwork.remindPrompt': 'Remind me about "{title}" (deadline: {deadline}). In 2-3 sentences: what was this document, what must I do, and has the deadline passed?',
+        'paperwork.remindNoDate': 'see the letter',
+        'paperwork.remindReady': '🔔 Reminder pre-filled — check the date, then press Add',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -11987,6 +12018,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'paperwork.printBtn': '🖨️ 打印',
         'paperwork.nothingToPrint': '🖨️ 还没有可打印的内容',
         'paperwork.draftPrompt': '请代我起草一封回复上述文件的信。简短、礼貌、正式——可以直接签名使用。用收件方期望的语言（文件的语言）书写；如果那不是我的语言，请在信件下方附上翻译。个人信息用占位符表示，如 [我的姓名]、[日期]。',
+        'paperwork.remindBtn': '🔔 提醒我',
+        'paperwork.remindName': '截止前回复：{title}',
+        'paperwork.remindPrompt': '提醒我关于「{title}」（截止日期：{deadline}）。用两三句话说明：这份文件是什么、我必须做什么、截止日期是否已过。',
+        'paperwork.remindNoDate': '见信件',
+        'paperwork.remindReady': '🔔 提醒已预填——确认日期后点「添加」',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12293,6 +12329,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'paperwork.printBtn': '🖨️ اطبع',
         'paperwork.nothingToPrint': '🖨️ لا يوجد ما يُطبع بعد',
         'paperwork.draftPrompt': 'صِغ لي رسالة ردّ على المستند أعلاه بالنيابة عني. اجعلها قصيرة ومهذّبة ورسمية — جاهزة للتوقيع. اكتب الرسالة باللغة التي يتوقعها المستلم (لغة المستند)؛ وإن لم تكن لغتي فأضف ترجمة أسفلها. استخدم عناصر نائبة مثل [اسمي] و[التاريخ] لأي معلومات شخصية.',
+        'paperwork.remindBtn': '🔔 ذكّرني',
+        'paperwork.remindName': 'ردّ قبل الموعد: {title}',
+        'paperwork.remindPrompt': 'ذكّرني بخصوص «{title}» (الموعد النهائي: {deadline}). في جملتين أو ثلاث: ما هذا المستند، وماذا يجب أن أفعل، وهل انقضى الموعد؟',
+        'paperwork.remindNoDate': 'انظر الرسالة',
+        'paperwork.remindReady': '🔔 جُهِّز التذكير — تحقَّق من التاريخ ثم اضغط «إضافة»',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -20364,6 +20405,11 @@ Title:`
   <script type="module">
     import { capHistory } from './js/history-budget.js'
     window.capHistoryFn = capHistory
+  </script>
+
+  <script type="module">
+    import { extractDeadlineDate, reminderDateFor } from './js/paperwork-dates.js'
+    window.paperworkDates = { extractDeadlineDate, reminderDateFor }
   </script>
 
   <script type="module">

@@ -605,6 +605,35 @@ console.log('\n[15/15] voice — STT backend routing + input guards')
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 16: paperwork-dates — deadline extraction + reminder timing
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[16/16] paperwork-dates — deadline extraction + reminder timing')
+{
+  const { extractDeadlineDate, reminderDateFor } = await import('../renderer/js/paperwork-dates.js')
+
+  const iso = (r) => r?.iso
+  check('ISO date in Deadline section', iso(extractDeadlineDate('**Deadline** — pay by 2026-07-01.')) === '2026-07-01')
+  check('English month-first', iso(extractDeadlineDate('**Deadline**: July 1, 2026')) === '2026-07-01')
+  check('English day-first', iso(extractDeadlineDate('**Deadline** — 1 July 2026')) === '2026-07-01')
+  check('Chinese date', iso(extractDeadlineDate('**截止日期** —— 2026年7月1日前缴费')) === '2026-07-01')
+  check('Arabic heading + ISO', iso(extractDeadlineDate('**الموعد النهائي** — 2026-08-15')) === '2026-08-15')
+  check('slashed D/M/Y (day>12)', iso(extractDeadlineDate('**Deadline**: 15/7/2026')) === '2026-07-15')
+  check('slashed M/D/Y (second slot>12)', iso(extractDeadlineDate('**Deadline**: 7/15/2026')) === '2026-07-15')
+  check('ambiguous slashes default D/M/Y', iso(extractDeadlineDate('**Deadline**: 5/7/2026')) === '2026-07-05')
+  check('date outside section still found', iso(extractDeadlineDate('Reply before 2026-09-30 please.')) === '2026-09-30')
+  check('no date → null', extractDeadlineDate('**Deadline** — none found.') === null)
+  check('invalid Feb 30 rejected', extractDeadlineDate('**Deadline**: 2026-02-30') === null)
+
+  const now = new Date(2026, 5, 11, 12, 0, 0) // 2026-06-11
+  const far = reminderDateFor(new Date(2026, 6, 1), now)   // deadline Jul 1
+  check('reminder = 3 days before deadline, 9am', far.getMonth() === 5 && far.getDate() === 28 && far.getHours() === 9)
+  const near = reminderDateFor(new Date(2026, 5, 12), now) // deadline tomorrow
+  check('past 3-day mark clamps to tomorrow', near.getDate() === 12 && near.getMonth() === 5)
+  const none = reminderDateFor(null, now)
+  check('no deadline → tomorrow 9am', none.getDate() === 12 && none.getHours() === 9)
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

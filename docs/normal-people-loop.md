@@ -175,3 +175,14 @@
 - Chip reuses undo-chip styling; 30s auto-hide; reappears after each
   reply (so after drafting, Print prints the draft). EN/中文/العربية.
   180 checks green.
+
+### Cycle 13 — Paperwork v3: 🔔 remind me before the deadline (2026-06-11)
+- Third chip action: extracts the date from the card's Deadline section
+  (new tested module renderer/js/paperwork-dates.js — ISO, English both
+  orders, Chinese 年月日, slashed with D/M-disambiguation, Feb-30
+  rejection) and pre-fills the existing Routines Add form: reminder 3
+  days before the deadline at 9am (clamped to tomorrow when closer;
+  tomorrow when no date parses). User confirms with one click — nothing
+  is created behind their back.
+- The Paperwork loop is complete: drop → understand → reply → print →
+  never miss the deadline. 14 unit tests; 194 checks green.
