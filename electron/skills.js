@@ -8,7 +8,7 @@
  *   • every 15 minutes → "ping the production status URL and alert if it changed"
  *
  * Runtime behaviour
- *   • Skills live in ~/.alaude/skills.json.
+ *   • Skills live in ~/.labaik/skills.json.
  *   • A polling scheduler wakes once a minute and fires any due skill via
  *     the chat IPC. Results stream into a dedicated "Skills" session so the
  *     user can scroll back through automated runs.
@@ -22,10 +22,13 @@
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
+const paths = require('./paths')
 
-const SKILLS_FILE = path.join(os.homedir(), '.alaude', 'skills.json')
-const HISTORY_FILE = path.join(os.homedir(), '.alaude', 'skill-history.ndjson')
+const SKILLS_FILE = paths.resolveWithMigration(
+  path.join(paths.BASE_DIR, 'skills.json'),
+  [path.join(paths.LEGACY_ALAUDE_DIR, 'skills.json')]
+)
+const HISTORY_FILE = path.join(paths.BASE_DIR, 'skill-history.ndjson')
 
 function _load() {
   try {

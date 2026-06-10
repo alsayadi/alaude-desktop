@@ -24,7 +24,7 @@
  *
  * NAMING
  *   `name` is a short logical key like 'memory' / 'profile' / 'sessions'.
- *   Resolves to `~/.alaude/{name}.json`. Strictly alphanumeric + dashes —
+ *   Resolves to `~/.labaik/{name}.json`. Strictly alphanumeric + dashes —
  *   path-traversal characters are rejected so renderer can't escape the
  *   alaude data directory.
  */

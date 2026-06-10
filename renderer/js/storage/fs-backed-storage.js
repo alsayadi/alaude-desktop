@@ -10,7 +10,7 @@
 //
 // This adapter intercepts getItem/setItem/removeItem for a known set of
 // keys and routes them through `ipcRenderer.sendSync` → main process →
-// `writeFileSync` on `~/.alaude/{name}.json`. By the time setItem
+// `writeFileSync` on `~/.labaik/{name}.json`. By the time setItem
 // returns, the bytes are in the kernel page cache — durable across
 // process kill.
 //

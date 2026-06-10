@@ -34,9 +34,9 @@
 
 const fs = require('fs')
 const path = require('path')
-const os = require('os')
+const paths = require('./paths')
 
-const SKILLS_ROOT = path.join(os.homedir(), '.labaik', 'skills')
+const SKILLS_ROOT = path.join(paths.BASE_DIR, 'skills')
 const MAX_BODY_BYTES = 64 * 1024  // 64KB per skill — same order as AGENTS.md
 
 /**
