@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('alaude', {
   // Chat
   chat: (messages, model, workspacePath, spaceId, uxMeta) => ipcRenderer.invoke('chat', messages, model, workspacePath, spaceId, uxMeta),
   onToolActivity: (callback) => ipcRenderer.on('tool-activity', (_, activity) => callback(activity)),
+  // v0.8 — Stop generation: aborts every in-flight chat; each resolves with
+  // its partial text plus a "⏹ Stopped." marker.
+  chatCancelAll: () => ipcRenderer.invoke('chat-cancel-all'),
 
   // UX OODA loop (local-only dev instrumentation)
   logUxEvent: (event) => ipcRenderer.invoke('ux-event', event),

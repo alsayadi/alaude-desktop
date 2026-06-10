@@ -1165,6 +1165,16 @@ function addAllowRule(workspacePath, tool, args) {
   }
 }
 
+// v0.8: Stop generation. Cancels every in-flight worker chat — the worker
+// aborts its provider stream(s) and each chat resolves with partial text.
+ipcMain.handle('chat-cancel-all', () => {
+  let n = 0
+  for (const id of pendingRequests.keys()) {
+    try { apiWorker?.stdin.write(JSON.stringify({ type: 'chat-cancel', id }) + '\n'); n++ } catch {}
+  }
+  return n
+})
+
 ipcMain.handle('perm-respond', (_e, approvalId, decision) => {
   const pend = pendingApprovals.get(approvalId)
   if (!pend) return false

@@ -4022,6 +4022,8 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
+    .send-btn.stopping { background: #c0392b; }
+    .send-btn.stopping:hover { opacity: 0.85; }
     .send-btn:not(:disabled):hover { opacity: 0.85; }
     .send-btn svg { width: 16px; height: 16px; }
     .send-btn { color: #fff; }
@@ -6393,7 +6395,7 @@
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </button>
-        <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+        <button class="send-btn" id="send-btn" onclick="composerPrimaryAction()" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
           </svg>
@@ -6969,6 +6971,7 @@
     // ── State ─────────────────────────────────────────────────────────────
     let messages = []
     let isStreaming = false
+    updateSendBtnMode()
     let allSpaces = []
     let customSpaces = []
     let currentSpaceId = 'general'
@@ -7442,9 +7445,32 @@
     // ── Input ────────────────────────────────────────────────────────────
     const input = document.getElementById('input')
     const sendBtn = document.getElementById('send-btn')
+    // v0.8 — while streaming, the send button becomes a Stop button.
+    const SEND_BTN_SVG = sendBtn.innerHTML
+    const STOP_BTN_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+    function updateSendBtnMode() {
+      if (isStreaming) {
+        sendBtn.innerHTML = STOP_BTN_SVG
+        sendBtn.disabled = false
+        sendBtn.title = 'Stop generating (Esc)'
+        sendBtn.classList.add('stopping')
+      } else {
+        sendBtn.innerHTML = SEND_BTN_SVG
+        sendBtn.title = ''
+        sendBtn.classList.remove('stopping')
+        updateSendBtnMode()
+      }
+    }
+    function composerPrimaryAction() {
+      if (isStreaming) stopGeneration()
+      else sendMessage()
+    }
+    async function stopGeneration() {
+      try { await window.alaude.chatCancelAll() } catch (e) { console.warn('[stop] cancel failed:', e?.message) }
+    }
 
     input.addEventListener('input', () => {
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       // Auto-resize
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
@@ -7675,7 +7701,7 @@
         closeSlashMenu()
         input.style.height = 'auto'
         input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-        sendBtn.disabled = !input.value.trim() || isStreaming
+        updateSendBtnMode()
         input.focus()
         const pos = input.value.length
         input.setSelectionRange(pos, pos)
@@ -7686,7 +7712,7 @@
       // Resize + focus + jump to first placeholder
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       input.focus()
       jumpToNextPlaceholder()
     }
@@ -7820,7 +7846,7 @@
       closeAtMenu()
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 200) + 'px'
-      sendBtn.disabled = !input.value.trim() || isStreaming
+      updateSendBtnMode()
       input.focus()
       input.setSelectionRange(caret, caret)
     }
@@ -12444,6 +12470,10 @@ footer a { color: var(--accent); text-decoration: none; }
             if (el.style && (el.style.display === 'flex' || el.style.display === 'block')) el.style.display = 'none'
           })
           e.preventDefault()
+        } else if (isStreaming) {
+          // v0.8: nothing to close → Esc stops the in-flight generation.
+          e.preventDefault()
+          stopGeneration()
         }
         return
       }
@@ -12617,7 +12647,8 @@ footer a { color: var(--accent); text-decoration: none; }
         }
       } catch {}
       isStreaming = false
-      try { sendBtn.disabled = !input.value.trim() } catch {}
+      updateSendBtnMode()
+      try { updateSendBtnMode() } catch {}
       try { persistSessions() } catch {}
       try { renderMessages() } catch {}
       try { console.log('[abort] in-flight turn aborted, reason:', reason) } catch {}
@@ -12706,8 +12737,8 @@ footer a { color: var(--accent); text-decoration: none; }
 
       input.value = ''
       input.style.height = 'auto'
-      sendBtn.disabled = true
       isStreaming = true
+      updateSendBtnMode()
 
       // Update session title from first message
       const session = sessions.find(s => s.id === currentSessionId)
@@ -12861,7 +12892,8 @@ footer a { color: var(--accent); text-decoration: none; }
         if (idx >= 0) councilSynthesize(idx)
       }
       isStreaming = false
-      sendBtn.disabled = !input.value.trim()
+      updateSendBtnMode()
+      updateSendBtnMode()
     }
 
     // Fire N parallel chat requests, one per council model, each with a
@@ -12937,7 +12969,8 @@ footer a { color: var(--accent); text-decoration: none; }
       clearInterval(elapsedTimer)
       councilMessage.streaming = false
       isStreaming = false
-      sendBtn.disabled = !input.value.trim()
+      updateSendBtnMode()
+      updateSendBtnMode()
       renderMessages()
       persistSessions()
     }
@@ -13231,7 +13264,8 @@ footer a { color: var(--accent); text-decoration: none; }
       // would be wrong. persistSessions() always runs so the reply is saved.
       if (currentSessionId === targetSessionId) {
         isStreaming = false
-        sendBtn.disabled = !input.value.trim()
+        updateSendBtnMode()
+        updateSendBtnMode()
         renderMessages()
         // Voice conversation mode: read the reply + auto-listen for next turn.
         maybeAutoSpeakReply?.()
@@ -13892,8 +13926,8 @@ Title:`
       // Remove the assistant message and retry from the preceding user turn.
       messages.pop()
       renderMessages()
-      sendBtn.disabled = true
       isStreaming = true
+      updateSendBtnMode()
       messages.push({ role: 'assistant', content: '', streaming: true })
       renderMessages()
 
@@ -16353,6 +16387,7 @@ Title:`
       // streaming flag still lives on its own last message (streaming:true)
       // and re-derives on switch-back.
       isStreaming = false
+      updateSendBtnMode()
       currentSessionId = Date.now()
       sessions.unshift({ id: currentSessionId, title: 'New session', messages: [] })
       // Hard cap total sessions to avoid unbounded growth
@@ -16482,7 +16517,7 @@ Title:`
       // Restore the new session's draft (or clear).
       input.value = session?.inputDraft || ''
       input.dispatchEvent(new Event('input', { bubbles: true }))
-      sendBtn.disabled = isStreaming || !input.value.trim()
+      updateSendBtnMode()
       ux.sessionId = 'sess_' + id
       ux.lastPromptHash = null
       ux.lastMessageId = null

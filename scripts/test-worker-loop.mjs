@@ -107,6 +107,14 @@ const server = http.createServer((req, res) => {
     try { body = JSON.parse(raw) } catch {}
     requests.push({ url: req.url, body })
     if (!req.url.includes('/chat/completions')) { res.writeHead(404); res.end('{}'); return }
+    // Scenario 4 (stop generation): stream one token, then HANG — the
+    // connection only closes when the worker aborts it client-side.
+    const userText = String((body.messages || []).find(m => m.role === 'user')?.content || '')
+    if (userText.startsWith('HANG')) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.write(`data: ${JSON.stringify(chunk({ content: 'partial-before-stop ' }))}\n\n`)
+      return // no [DONE], no end — hangs until aborted
+    }
     sse(res, decideReply(body))
   })
 })
@@ -206,6 +214,18 @@ try {
   check('path-escape mention NOT expanded', !userMsg.includes('### @../escape.txt'))
   const mSys = String(mReq?.body?.messages?.[0]?.content || '')
   check('git context injected (branch + commit)', mSys.includes('## Git status') && mSys.includes('fixture-branch') && mSys.includes('fixture commit'))
+
+  // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
+  console.log('\n[4/4] stop generation — chat-cancel mid-stream')
+  const cancelPromise = chat(4, 'HANG forever please')
+  setTimeout(() => {
+    worker.stdin.write(JSON.stringify({ type: 'chat-cancel', id: 4 }) + '\n')
+  }, 800)
+  const r4 = await cancelPromise
+  check('cancelled chat resolves (not error/timeout)', typeof r4.result === 'string', JSON.stringify(r4).slice(0, 200))
+  check('partial tokens salvaged + Stopped marker',
+    String(r4.result || '').includes('partial-before-stop') && String(r4.result || '').includes('⏹ Stopped'),
+    JSON.stringify(r4.result).slice(0, 200))
 } catch (err) {
   check('fixture ran to completion', false, err.message)
 } finally {

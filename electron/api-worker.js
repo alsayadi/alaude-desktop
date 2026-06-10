@@ -72,6 +72,8 @@ function checkCommandScope(command, workspacePath) {
 // error promptly instead of waiting 30s for the parent-process's `exit`
 // handler to notice a dead worker.
 let _inFlightRequest = null  // { id, rejectOnCrash } — set when handleChat starts
+// v0.8: per-chat AbortControllers so main can stop a generation mid-stream.
+const _activeAborts = new Map()  // chat id -> AbortController
 function formatErrorForUser(err) {
   const base = err?.message || String(err)
   const cause = err?.cause?.message || err?.cause?.code || err?.error?.message
@@ -1364,7 +1366,7 @@ The user will review the plan, then either approve it (which lands you
 back in normal mode with a "Proceed with the plan above" message) or
 ask for changes. Stay in plan mode until they explicitly approve.`
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode }) {
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode, signal }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -1418,7 +1420,7 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   const onActivity = (activity) => emitActivity(id, { ...activity, messageId })
 
   if (provider === 'anthropic') {
-    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode })
+    return await chatAnthropic(messages, model, workspacePath, sysPrompt, { onActivity, mode, planMode, signal })
   } else if (provider === 'google') {
     return await chatGemini(messages, model, sysPrompt)
   } else if (provider === 'ollama') {
@@ -1431,14 +1433,14 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     // endpoint because OpenAI-compat silently drops chat_template_kwargs.
     // Measured: "hi" reply dropped from 48s → 0.7s by switching endpoints.
     if (isThinkingLocalModel(normalised)) {
-      return await chatOllamaNative(messages, normalised, workspacePath, sysPrompt, { skipTools, onActivity, mode })
+      return await chatOllamaNative(messages, normalised, workspacePath, sysPrompt, { skipTools, onActivity, mode, signal })
     }
-    return await chatOpenAI(messages, normalised, provider, workspacePath, sysPrompt, { skipTools, onActivity, mode })
+    return await chatOpenAI(messages, normalised, provider, workspacePath, sysPrompt, { skipTools, onActivity, mode, signal })
   } else {
     // v0.7.61: strip any routing-hint prefix (e.g. `kimi-intl/`) so the
     // SDK sees the raw upstream model id. Case is preserved — MiniMax
     // and other case-sensitive providers need `MiniMax-M2.7` unchanged.
-    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode })
+    return await chatOpenAI(messages, normalizeModelId(model), provider, workspacePath, sysPrompt, { onActivity, mode, skipTools: planMode, signal })
   }
 }
 
@@ -1506,7 +1508,7 @@ async function runImageGen(args) {
 }
 
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0 } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0, signal = null } = opts
   // v0.7.72: route image-gen activity events to this turn's onActivity.
   setImageActivity(onActivity)
   const OpenAI = require('openai').default || require('openai')
@@ -1582,8 +1584,13 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     // tool_calls arrive as deltas too and are accumulated by index so the final
     // assembled message matches the non-streaming shape.
     let msg = null
+    // v0.8: user pressed Stop — return what we have instead of starting
+    // another provider round.
+    if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
+    // Hoisted so the Stop path below can salvage tokens that streamed in
+    // before the abort landed.
+    let iterContent = ''
     try {
-      let iterContent = ''
       // v0.7.65: DeepSeek's thinking-mode responses stream a separate
       // `delta.reasoning_content` channel. We aggregate it here and
       // carry it forward in the multi-turn history — DeepSeek's API
@@ -1603,7 +1610,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
           stream: true,
           tools: useTools,
           suppressThinking,
-        }))
+        }), signal ? { signal } : undefined)
         for await (const chunk of stream) {
           const choice = chunk.choices?.[0]
           if (choice?.finish_reason) lastFinishReason = choice.finish_reason
@@ -1676,6 +1683,11 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
         ...(iterReasoning ? { reasoning_content: iterReasoning } : {}),
       }
     } catch (streamErr) {
+      // v0.8: user pressed Stop — salvage whatever streamed in, no fallback.
+      if (signal?.aborted) {
+        fullText += iterContent + '\n\n⏹ Stopped.'
+        break
+      }
       // Streaming not supported or failed — fall back to non-streaming on this iteration only
       process.stderr.write(`[worker] streaming failed (${streamErr.message}) — falling back to non-streaming\n`)
       const res = await withProviderWaitHeartbeat(provider, model, onActivity, () => client.chat.completions.create(buildChatCompletionParams({
@@ -1742,6 +1754,7 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
     break
   }
   // Screen response for health red flags
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const responseText = (fullText + toolLog) || '(Done)'
   const { screenForRedFlags, formatRedFlagAlert } = require(_path.join(healthDir, 'triage-engine.js'))
   // Screen both last user message and AI response
@@ -1813,7 +1826,7 @@ async function runSubAgent(args, ctx) {
  * one. We implement the same tool-loop as chatOpenAI with up to 10 rounds.
  */
 async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { skipTools = false, onActivity = () => {}, mode = 'autopilot' } = opts
+  const { skipTools = false, onActivity = () => {}, mode = 'autopilot', signal = null } = opts
   setImageActivity(onActivity)
   const baseURL = 'http://localhost:11434'
   // v0.7.65: preserve `reasoning_content` on assistant turns — DeepSeek
@@ -1878,8 +1891,11 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        ...(signal ? { signal } : {}),
       })
     } catch (netErr) {
+      // v0.8: user pressed Stop.
+      if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
       throw new Error(`Ollama /api/chat network error: ${netErr.message}`)
     }
     if (!res.ok) {
@@ -1895,8 +1911,15 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     const reader = res.body.getReader()
     const dec = new TextDecoder()
     let buf = ''
+    let _stopped = false
     while (true) {
-      const { done, value } = await reader.read()
+      let done, value
+      try { ({ done, value } = await reader.read()) }
+      catch (e) {
+        // v0.8: abort mid-stream — keep what we have.
+        if (signal?.aborted) { _stopped = true; break }
+        throw e
+      }
       if (done) break
       buf += dec.decode(value, { stream: true })
       let newlineIdx
@@ -1931,6 +1954,7 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
     if (partialTools.length) assistantMsg.tool_calls = partialTools
     chatMsgs.push(assistantMsg)
     if (assistantMsg.content) fullText += assistantMsg.content
+    if (_stopped) { fullText += '\n\n⏹ Stopped.'; break }
     if (!assistantMsg.tool_calls?.length) break
 
     // Tool-use round: execute each call and feed results back.
@@ -1954,11 +1978,12 @@ async function chatOllamaNative(msgs, model, workspacePath, sysPrompt, opts = {}
       chatMsgs.push({ role: 'tool', tool_name: tc.function.name, content: JSON.stringify(result).slice(0, 50000) })
     }
   }
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   return fullText || '(no response)'
 }
 
 async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
-  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0 } = opts
+  const { onActivity = () => {}, mode = 'autopilot', planMode = false, depth = 0, signal = null } = opts
   setImageActivity(onActivity)
   const Anthropic = require('@anthropic-ai/sdk').default || require('@anthropic-ai/sdk')
   // Anthropic accepts either an API key (x-api-key) or an OAuth Bearer
@@ -2012,19 +2037,25 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     // Stream tokens live via the Anthropic SDK's stream helper, then pull the
     // assembled final message at the end — same shape as non-streaming create().
     // Fall back to non-streaming on any failure.
+    // v0.8: user pressed Stop — don't start another provider round.
+    if (signal?.aborted) { fullText += '\n\n⏹ Stopped.'; break }
     let res
+    let _anthPartial = ''
     try {
       const stream = client.messages.stream({
         model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs,
         ...(anthTools ? { tools: anthTools } : {}),
-      })
+      }, signal ? { signal } : undefined)
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+          _anthPartial += event.delta.text
           onActivity({ phase: 'token', text: event.delta.text })
         }
       }
       res = await stream.finalMessage()
     } catch (streamErr) {
+      // v0.8: abort mid-stream — salvage tokens that already arrived.
+      if (signal?.aborted) { fullText += _anthPartial + '\n\n⏹ Stopped.'; break }
       process.stderr.write(`[worker] anthropic streaming failed (${streamErr.message}) — falling back\n`)
       res = await client.messages.create({ model, max_tokens: 4096, system: sysPrompt, messages: chatMsgs, ...(anthTools ? { tools: anthTools } : {}) })
     }
@@ -2082,6 +2113,7 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     }
     break
   }
+  if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const anthrResponseText = (fullText + toolLog) || '(Done)'
   const triage = require(_path.join(healthDir, 'triage-engine.js'))
   const lastUser = msgs[msgs.length - 1]?.content || ''
@@ -2140,14 +2172,25 @@ process.stdin.on('data', (chunk) => {
         if (resolver) { _pendingApprovals.delete(req.id); resolver({ verdict: req.verdict, message: req.message }) }
         continue
       }
+      // v0.8: stop generation. Abort the in-flight provider stream for this
+      // chat id — the chat then resolves normally with the partial text.
+      if (req.type === 'chat-cancel') {
+        const ac = _activeAborts.get(req.id)
+        if (ac) { try { ac.abort() } catch {} }
+        continue
+      }
       _inFlightRequest = { id: req.id }
-      handleChat(req)
+      const _ac = new AbortController()
+      _activeAborts.set(req.id, _ac)
+      handleChat({ ...req, signal: _ac.signal })
         .then(result => {
           _inFlightRequest = null
+          _activeAborts.delete(req.id)
           process.stdout.write(JSON.stringify({ id: req.id, result }) + '\n')
         })
         .catch(err => {
           _inFlightRequest = null
+          _activeAborts.delete(req.id)
           process.stdout.write(JSON.stringify({ id: req.id, error: formatErrorForUser(err) }) + '\n')
         })
     } catch (err) {

@@ -78,10 +78,17 @@ Coding bias found (backlog, highest leverage first):
   "Message Labaik...  ( / snippets · @ files )". Previously / and @ were
   invisible unless you already knew them.
 
+### Cycle 7 — Stop generation (2026-06-10)
+- There was NO way to stop a runaway generation (users waited out up to
+  15 min). Full cancel plumbing: send button morphs to a red ⏹ Stop while
+  streaming, Esc stops too; renderer → chat-cancel-all IPC → worker
+  AbortController per chat → provider stream abort in all three loops
+  (OpenAI-compat, Anthropic, Ollama native). Partial text is salvaged and
+  marked "⏹ Stopped." Fixture scenario 4 proves it against a hung stream.
+
 Ease-of-use backlog (working list):
 - One-time coach mark for ⌘K (palette is the app's hub but undiscoverable)
 - Settings hub: Keys/Models/Routines/Snippets/Memory are scattered modals
-- Esc-to-stop streaming hint while generating
 - Model picker: surface "which model should I pick?" guidance
 - Error messages: provider errors → plain-language + one-click fix action
 - Session organization: auto-title quality, archive old sessions
