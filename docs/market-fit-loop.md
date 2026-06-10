@@ -275,3 +275,15 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   that? Labaik can do it on a schedule") offers to open the Routines
   modal — then never shows again (localStorage gated, and skipped entirely
   for anyone who already has a routine). Closes the weakest funnel link.
+
+### Cycle 28 — unify the two backup systems (2026-06-10)
+- Cycle 22 added a backup without noticing the app ALREADY had one
+  (exportFullBackup, renderer-only, different schema) — two "Back up" and
+  two "Restore" palette actions, confusing and overlapping. Unified on the
+  cycle-22 bundle (sessions+memory+profile+routines+spaces+skills, keys
+  excluded): folded prefs/focus/theme into its extras, repointed ⌘⇧E and
+  the tour entry to it, removed the duplicate palette pair and ~95 lines of
+  now-dead code (exportFullBackup/importFullBackup). Palette: 42 → 40.
+- FLAGGED for a future cycle: the cycle-22 restore OVERWRITES whole files;
+  the deleted importFullBackup merged sessions by id (keeping the longer
+  copy). Restore should adopt that non-destructive merge — real safety win.

@@ -10175,102 +10175,6 @@ JSON:`
     // Writes ALL local state to a single JSON file: sessions (with branches,
     // tags, message history), memories, prompt snippets, and metadata.
     // Can be re-imported later to restore or migrate between machines.
-    function exportFullBackup() {
-      // Snapshot current session's messages into its session entry first
-      const current = sessions.find(s => s.id === currentSessionId)
-      if (current) current.messages = messages
-      const backup = {
-        schema: 'alaude-backup-v1',
-        exportedAt: new Date().toISOString(),
-        appVersion: (window.alaude?.version) || 'dev',
-        sessions: sessions,
-        memories: memories,
-        snippets: snippets,
-        // Feature flags + preferences
-        prefs: {
-          focusMode: localStorage.getItem('alaude:focus:v1') === '1',
-          theme: document.documentElement.getAttribute('data-theme') || 'dark',
-          activeSessionId: currentSessionId,
-        },
-      }
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const date = new Date().toISOString().slice(0, 10)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `alaude-backup-${date}.json`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-      const stats = `${sessions.length} sessions · ${memories.length} memories · ${snippets.length} snippets`
-      showRewindToast?.(`📦 Backup exported (${stats})`, false)
-    }
-
-    async function importFullBackup() {
-      // Use a native file picker via a hidden <input type=file> since we
-      // don't have an IPC handler for JSON reads.
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'application/json,.json'
-      input.onchange = async () => {
-        const file = input.files?.[0]
-        if (!file) return
-        try {
-          const text = await file.text()
-          const data = JSON.parse(text)
-          if (!data || typeof data !== 'object') throw new Error('Invalid JSON shape')
-          if (data.schema && !String(data.schema).startsWith('alaude-backup')) {
-            if (!confirm(`This looks like a non-Labaik file (schema: ${data.schema}). Try anyway?`)) return
-          }
-          // Merge sessions: new ones added, existing ones keep their local
-          // version unless the imported one has strictly more messages.
-          const before = { sessions: sessions.length, memories: memories.length, snippets: snippets.length }
-          if (Array.isArray(data.sessions)) {
-            const byId = new Map(sessions.map(s => [s.id, s]))
-            for (const imp of data.sessions) {
-              if (!imp?.id) continue
-              const existing = byId.get(imp.id)
-              if (!existing) {
-                sessions.push(imp)
-              } else if ((imp.messages || []).length > (existing.messages || []).length) {
-                // Imported version is more complete — replace
-                const idx = sessions.findIndex(s => s.id === imp.id)
-                if (idx >= 0) sessions[idx] = imp
-              }
-              // else: keep local (more or equal messages)
-            }
-          }
-          if (Array.isArray(data.memories)) {
-            const byId = new Set(memories.map(m => m.id))
-            for (const m of data.memories) {
-              if (!m?.id || byId.has(m.id)) continue
-              memories.push(m)
-            }
-            saveMemories()
-          }
-          if (Array.isArray(data.snippets)) {
-            const byId = new Set(snippets.map(s => s.id))
-            for (const s of data.snippets) {
-              if (!s?.id || byId.has(s.id)) continue
-              snippets.push(s)
-            }
-            saveSnippets()
-          }
-          persistSessions()
-          renderSessions()
-          renderMessages()
-          const added = {
-            sessions: sessions.length - before.sessions,
-            memories: memories.length - before.memories,
-            snippets: snippets.length - before.snippets,
-          }
-          showRewindToast?.(`📥 Imported +${added.sessions} sessions · +${added.memories} memories · +${added.snippets} snippets`, false)
-        } catch (err) {
-          alert('Import failed: ' + (err?.message || String(err)))
-        }
-      }
-      input.click()
-    }
-
     // ── Export current session as Markdown ──────────────────────────────
     // Emits a self-contained markdown transcript. Branches are enumerated
     // as a separate "Branches" section at the top with links to their
@@ -10651,7 +10555,11 @@ footer a { color: var(--accent); text-decoration: none; }
           closeCmdPalette()
           // Snippets + templates live in renderer localStorage — ride along.
           let extras = null
-          try { extras = { snippets: JSON.parse(localStorage.getItem('alaude:snippets:v1') || 'null'), templates: JSON.parse(localStorage.getItem('alaude:templates:v1') || 'null') } } catch {}
+          try { extras = {
+            snippets: JSON.parse(localStorage.getItem('alaude:snippets:v1') || 'null'),
+            templates: JSON.parse(localStorage.getItem('alaude:templates:v1') || 'null'),
+            prefs: { focusMode: localStorage.getItem('alaude:focus:v1') === '1', theme: document.documentElement.getAttribute('data-theme') || 'dark' },
+          } } catch {}
           let r
           try { r = await window.alaude.backupExport(extras) } catch (e) { r = { ok: false, reason: e?.message } }
           if (r?.ok) showRewindToast?.(`💾 Backed up ${r.files} stores + ${r.skills} skills → ${r.path.split('/').pop()}`, false)
@@ -10668,6 +10576,7 @@ footer a { color: var(--accent); text-decoration: none; }
           try {
             if (r.renderer?.snippets) localStorage.setItem('alaude:snippets:v1', JSON.stringify(r.renderer.snippets))
             if (r.renderer?.templates) localStorage.setItem('alaude:templates:v1', JSON.stringify(r.renderer.templates))
+            if (r.renderer?.prefs?.focusMode != null) localStorage.setItem('alaude:focus:v1', r.renderer.prefs.focusMode ? '1' : '0')
           } catch {}
           showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills — reloading…`, false)
           setTimeout(() => location.reload(), 1200)
@@ -10697,8 +10606,6 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '🧠', label: 'Memory Lens', search: 'memory facts remember recall persistent', action: () => { closeCmdPalette(); toggleMemoryModal() } },
         { kind: 'action', icon: '🔎', label: 'Search all sessions', search: 'search find full text global history', action: () => { closeCmdPalette(); openGlobalSearch() } },
         { kind: 'action', icon: '🏷️', label: 'Tag current session', search: 'tag hashtag label organize filter', action: () => { closeCmdPalette(); promptAddTag() } },
-        { kind: 'action', icon: '📦', label: 'Export full backup (JSON)', search: 'backup export all json sessions memories snippets', action: () => { closeCmdPalette(); exportFullBackup() } },
-        { kind: 'action', icon: '📥', label: 'Import backup from JSON', search: 'import restore backup json merge', action: () => { closeCmdPalette(); importFullBackup() } },
         { kind: 'action', icon: '📝', label: 'Summarize this session', search: 'summary summarize recap tldr overview bullets', action: () => { closeCmdPalette(); generateSummary() } },
         { kind: 'action', icon: '✓', label: 'Extract action items (TODOs)', search: 'todo todos tasks action items checklist followup next steps', action: () => { closeCmdPalette(); extractSessionTodos() } },
         { kind: 'action', icon: '✓', label: 'Task Board (all sessions)', search: 'task board todos all cross session combined plate work queue', action: () => { closeCmdPalette(); toggleTaskBoard() } },
@@ -12887,10 +12794,13 @@ footer a { color: var(--accent); text-decoration: none; }
         e.preventDefault()
         exportSessionMarkdown()
       }
-      // Cmd/Ctrl+Shift+E → export FULL backup (all sessions + memories + snippets)
+      // Cmd/Ctrl+Shift+E → unified backup (sessions + memory + routines +
+      // skills + prefs; keys excluded). v0.8 cycle 28: was a separate,
+      // renderer-only backup; now routes to the one true Back up flow.
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault()
-        exportFullBackup()
+        try { buildCmdItems().find(x => /Back up Labaik/.test(x.label))?.action?.() } catch {}
+        return
       }
       // Cmd/Ctrl+Shift+S → generate/refresh session summary card
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
@@ -19199,7 +19109,7 @@ Title:`
       { v: '0.2.16', icon: '📚', name: 'Shortcuts overlay + whatsnew',   desc: 'Refreshed ? overlay + toast on version change.' },
       { v: '0.2.17', icon: '🏷️', name: 'Session Tags (#hashtags)',       desc: 'Tag sessions, filter the sidebar by chip.' },
       { v: '0.2.18', icon: '☁️', name: 'Opus 4.6 + 4.7',                 desc: 'Added the latest Claude Opus variants to the model selector.' },
-      { v: '0.2.19', icon: '📦', name: 'Full Backup export/import',      desc: 'One JSON file with sessions + memories + snippets + prefs.', try: () => exportFullBackup?.() },
+      { v: '0.2.19', icon: '📦', name: 'Full Backup export/import',      desc: 'One portable file — sessions, memory, routines, skills, prefs. Keys excluded.', try: () => { try { buildCmdItems().find(x => /Back up Labaik/.test(x.label))?.action?.() } catch {} } },
       { v: '0.2.20', icon: '📝', name: 'Session Summary Card',           desc: 'Model-generated recap of the current session (⌘⇧S).', try: () => generateSummary?.() },
       { v: '0.2.21', icon: '↑↓', name: 'Prompt History',                desc: '↑/↓ in empty input recalls past user prompts.' },
       { v: '0.2.22', icon: '✨', name: 'Save as Snippet',                desc: '"Save as snippet" button on any user message.' },
