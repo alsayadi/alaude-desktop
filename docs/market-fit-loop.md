@@ -188,3 +188,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - The wedge sentence is now the first bold line of "What is Labaik", and the
   intro paragraph references the activation features that exist (paste-any-
   key detection, mid-conversation switching, routines, ChatGPT import).
+
+### Cycle 17 — routine results stop evaporating (2026-06-10)
+- Full routine output only existed as a 120-char toast + 400-char history
+  preview — the "dedicated session" promised in routines.js's header was
+  never implemented. Successful runs now append (prompt-label + full
+  result) to a starred "⏰ Routine runs" session. The morning digest is
+  finally readable in the evening.

@@ -9092,6 +9092,24 @@ SUMMARY:`
         if (payload.success) {
           const preview = typeof payload.result === 'string' ? payload.result.slice(0, 120) : ''
           showRewindToast?.(`⏰ ${name} — ${preview}`, false)
+          // v0.8 cycle 17: the FULL result used to evaporate with the toast
+          // (only a 400-char preview survived in run history). Append every
+          // successful run to a pinned "⏰ Routine runs" session so the
+          // morning digest is actually readable in the evening.
+          if (typeof payload.result === 'string' && payload.result.trim()) {
+            let logSession = sessions.find(x => x.routinesLog)
+            if (!logSession) {
+              logSession = { id: Date.now(), title: '⏰ Routine runs', routinesLog: true, starred: true, messages: [] }
+              sessions.unshift(logSession)
+            }
+            logSession.messages.push(
+              { role: 'user', content: `⏰ **${name}** · ${new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`, ts: Date.now() },
+              { role: 'assistant', content: payload.result, model: payload.routine?.model || '', ts: Date.now() },
+            )
+            persistSessions()
+            renderSessions()
+            if (currentSessionId === logSession.id) renderMessages()
+          }
         } else {
           showRewindToast?.(`⏰ ${name} — failed: ${(payload.error || 'unknown').slice(0, 80)}`, true)
         }
