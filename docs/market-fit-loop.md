@@ -296,3 +296,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   Scalar stores still overwrite, always after a .pre-import snapshot. 4 new
   unit tests cover keep-local / add-remote / take-longer / count. Closes the
   safety regression flagged in cycle 28.
+
+### Cycle 30 — live dogfood + clean boot logs (2026-06-10) · CHECKPOINT 4
+- Relaunched the real app and verified cycles 11-29 boot with ZERO runtime
+  errors in the console (the unit/boot tests can't see render-time JS
+  errors). One nit fixed: the boot beacon rode the warn/error channel and
+  printed as "[renderer error]" every launch — real log noise that could
+  mask a genuine error. Now logged plainly. Cycles 21-30 summarized into
+  PR #2.

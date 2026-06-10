@@ -185,6 +185,13 @@ function createWindow() {
   })
   mainWindow.webContents.on('console-message', (_e, level, message, line, source) => {
     const lvl = ['log','warn','error'][level] || 'log'
+    // The boot beacon (scripts/test-boot.mjs watches for it) rides the
+    // warn/error channel to reach stderr, but it is NOT an error — log it
+    // plainly so it doesn't masquerade as one in the dev console.
+    if (typeof message === 'string' && message.includes('[boot] main script completed')) {
+      try { process.stderr.write(`${message}\n`) } catch {}
+      return
+    }
     if (lvl === 'error' || lvl === 'warn') {
       // EPIPE-safe: when the parent shell exits (or a background-task
       // wrapper reaps our stderr FD) the next sync write throws EPIPE
