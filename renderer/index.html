@@ -11820,6 +11820,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.fit.no': 'Too big for this Mac',
         'lm.rec.title': 'Recommended for your Mac',
         'lm.rec.why': 'Good everyday answers, speaks your language, runs free on this Mac.',
+        'demo.first': 'Hi! I just installed you. In two or three short sentences: what can you help me with day to day? End with one fun example.',
         'session.defaultTitle': 'New session',
         'tag.suggest.label': '🏷️ Tag this session?',
         'model.optgroup.local': 'Local (Ollama)',
@@ -12097,6 +12098,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.fit.no': '超出这台 Mac 的能力',
         'lm.rec.title': '为你的 Mac 推荐',
         'lm.rec.why': '日常问答好帮手，支持中文，在这台 Mac 上免费运行。',
+        'demo.first': '你好！我刚安装好你。用两三句话告诉我：你每天能帮我做什么？最后举一个有趣的例子。',
         'session.defaultTitle': '新会话',
         'tag.suggest.label': '🏷️ 给会话加标签？',
         'model.optgroup.local': '本地 (Ollama)',
@@ -12374,6 +12376,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'lm.fit.no': 'أكبر من قدرة هذا الجهاز',
         'lm.rec.title': 'موصى به لجهازك',
         'lm.rec.why': 'إجابات يومية جيدة، يتحدث لغتك، ويعمل مجانًا على هذا الجهاز.',
+        'demo.first': 'مرحبًا! ثبَّتُّك للتو. في جملتين أو ثلاث: بمَ يمكنك مساعدتي في حياتي اليومية؟ واختم بمثال واحد ممتع.',
         'session.defaultTitle': 'جلسة جديدة',
         'tag.suggest.label': '🏷️ أتوسم هذه الجلسة؟',
         'model.optgroup.local': 'محلي (Ollama)',
@@ -19260,16 +19263,45 @@ Title:`
         cancelBtn.disabled = true
         await window.alaude.ollamaCancel(model)
       }
+      let pulled = false
       try {
         const res = await window.alaude.ollamaPull(model)
         if (res?.cancelled) statusEl.textContent = 'Cancelled'
+        else pulled = true
       } catch (err) {
         alert('Download failed: ' + err.message)
       } finally {
         lmDownloading = null
         setTimeout(() => { box.classList.remove('show') }, 900)
-        await refreshLocalModels()
+        await refreshLocalModels()  // adds the new tag to the model picker
+        if (pulled) maybeFirstDemo(model)
       }
+    }
+
+    // v0.8 cycle 3 — first-demo auto-prompt. A brand-new user who just
+    // downloaded their first local model shouldn't face a blank composer:
+    // the first reply happens with ZERO typing. Fires once per install,
+    // and only on a true first run (no cloud key ever saved, no real
+    // conversation yet) so it can never interrupt an existing user.
+    function maybeFirstDemo(model) {
+      try {
+        if (localStorage.getItem('alaude:firstDemo:v1')) return
+        if (localStorage.getItem('alaude:funnel:key_saved')) return
+        if (localStorage.getItem('alaude:funnel:first_reply')) return
+        const hasUserMsgs = Array.isArray(sessions) &&
+          sessions.some(s => (s.messages || []).some(m => m.role === 'user'))
+        if (hasUserMsgs || isStreaming) return
+        localStorage.setItem('alaude:firstDemo:v1', '1')
+        const sel = document.getElementById('model-select')
+        if (sel) { sel.value = model; try { changeModel(model) } catch {} }
+        const modal = document.getElementById('local-models-modal')
+        if (modal) modal.style.display = 'none'
+        document.getElementById('login-screen')?.classList.add('hidden')
+        input.value = t('demo.first')
+        input.dispatchEvent(new Event('input'))
+        sendMessage()
+        logUx({ kind: 'first_demo_sent', model })
+      } catch {}
     }
 
     function pullCustomModel() {

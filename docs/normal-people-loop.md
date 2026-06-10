@@ -40,3 +40,15 @@
   gemma3:4b → llama3.2:3b → gemma3:1b.
 - All copy in EN/中文/العربية; login.sub no longer leads with "your
   keys". 154 checks green (bridge-audit covers the new IPC pair).
+
+### Cycle 3 — first-demo auto-prompt (2026-06-11)
+- After a first-time user's model pull completes, `maybeFirstDemo()`
+  selects the model, closes the modal + login screen, and auto-sends a
+  localized demo message ("what can you help me with day to day?") —
+  the first AI reply now happens with ZERO typing.
+- Guards: fires once per install (`alaude:firstDemo:v1`), and only on a
+  true first run — never if a cloud key was ever saved, a first reply
+  already happened, any session has a user message, or a stream is
+  active. Existing users can never be interrupted.
+- Logs `first_demo_sent` to the OODA event log; `funnel_first_reply`
+  then measures install→first-reply end-to-end. EN/中文/العربية.
