@@ -27,6 +27,7 @@ const {
 
 // v0.7.39 / v0.8 cycle 46 — shell scope guard, extracted to a tested module.
 const { checkCommandScope } = require('./command-scope')
+const undoSnaps = require('./undo-snapshots')
 
 
 // ── Crash handlers ─────────────────────────────────────────────────────────
@@ -1087,6 +1088,9 @@ async function executeToolCall(name, args, workspacePath, mode = 'autopilot') {
       // Capture old content BEFORE writing so we can render a real diff
       let oldContent = null
       try { if (fs.existsSync(fp)) oldContent = fs.readFileSync(fp, 'utf8') } catch {}
+      // v0.8 cycle 4 — pre-image snapshot so "undo what the agent did"
+      // can roll this back byte-identically. Never blocks the write.
+      try { undoSnaps.record(_inFlightRequest?.id, fp) } catch {}
       fs.mkdirSync(path.dirname(fp), { recursive: true })
       fs.writeFileSync(fp, args.content, 'utf8')
       return {

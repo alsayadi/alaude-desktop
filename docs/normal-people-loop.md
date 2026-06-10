@@ -52,3 +52,16 @@
   active. Existing users can never be interrupted.
 - Logs `first_demo_sent` to the OODA event log; `funnel_first_reply`
   then measures install→first-reply end-to-end. EN/中文/العربية.
+
+### Cycle 4 — Undo v1: agent-write snapshots (2026-06-11)
+- New `electron/undo-snapshots.js`: before ANY agent `write_file`, the
+  pre-image is copied to `~/.labaik/undo/<turnId>/` (manifest + .bin
+  bodies). First pre-image per file per turn wins; >10MB files are
+  noted as too-large-to-undo rather than slowing the write; turn ids
+  sanitized against traversal; pruned to 20 turns / 7 days.
+- `restoreTurn(turnId)` puts every file back byte-identically (created
+  files are deleted), capturing redo copies first so an accidental
+  undo is itself recoverable from disk.
+- Wired into the worker's write_file (never blocks the write). 7 unit
+  tests — 161 checks total. The Cowork-11GB lesson: reversibility, not
+  approval dialogs, is the trust unlock. UI lands next cycle.

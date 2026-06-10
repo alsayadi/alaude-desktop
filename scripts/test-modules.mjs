@@ -509,6 +509,49 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 14: undo-snapshots — pre-image record + turn restore (cycle 4)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[14/14] undo-snapshots — pre-image record + turn restore')
+{
+  const { createRequire } = await import('node:module')
+  const fs = await import('node:fs')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const require = createRequire(import.meta.url)
+  const undo = require('../electron/undo-snapshots.js')
+
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'labaik-undo-'))
+  const f1 = path.join(work, 'a.txt')
+  const f2 = path.join(work, 'new.txt')
+  fs.writeFileSync(f1, 'original')
+
+  // Turn t1: mutate an existing file, create a new one.
+  undo.record('t1', f1)
+  fs.writeFileSync(f1, 'mutated')
+  undo.record('t1', f2)
+  fs.writeFileSync(f2, 'created by agent')
+  // A second write in the same turn must NOT overwrite the true pre-image.
+  undo.record('t1', f1)
+  fs.writeFileSync(f1, 'mutated twice')
+
+  check('listTurns shows t1 with 2 files', undo.listTurns().some(t => t.turnId === 't1' && t.files === 2))
+
+  const res = undo.restoreTurn('t1')
+  check('restore reports no errors', res.errors.length === 0, JSON.stringify(res.errors))
+  check('existing file restored byte-identical', fs.readFileSync(f1, 'utf8') === 'original')
+  check('agent-created file deleted on undo', !fs.existsSync(f2))
+  check('restore summary counts', res.restored.length === 1 && res.deleted.length === 1)
+  check('unknown turn → error object', !!undo.restoreTurn('no-such-turn').error)
+
+  // Hostile turn ids must not traverse out of the undo dir.
+  undo.record('../../evil', f1)
+  check('hostile turnId sanitized', fs.existsSync(path.join(undo.UNDO_DIR, '______evil', 'manifest.json')))
+
+  fs.rmSync(work, { recursive: true, force: true })
+  fs.rmSync(undo.UNDO_DIR, { recursive: true, force: true })
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))
