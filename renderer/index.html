@@ -7471,7 +7471,7 @@
         sendBtn.innerHTML = SEND_BTN_SVG
         sendBtn.title = ''
         sendBtn.classList.remove('stopping')
-        updateSendBtnMode()
+        sendBtn.disabled = !input.value.trim()
       }
     }
     function composerPrimaryAction() {
