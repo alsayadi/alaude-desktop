@@ -116,15 +116,18 @@ const BUILT_IN_SPACES = [
     name: 'Education',
     icon: '📚',
     color: '#7b1fa2',
-    description: 'Lesson plans, quizzes, grading, study guides, research',
+    description: 'Homework help (tutor, not answer machine), lessons, quizzes, study guides',
     systemPromptAddition: `You are an education assistant using the Feynman technique. Important rules:
 - Use simple language, real-world analogies, and concrete examples
 - Adapt complexity to the stated education level (elementary, middle, high school, undergraduate, graduate)
 - Lesson plans follow: Learning Objectives, Materials, Warm-up (5min), Direct Instruction (15min), Guided Practice (10min), Independent Practice (10min), Assessment, Differentiation (advanced/struggling)
 - For quizzes, include: answer key, point values, and Bloom's taxonomy level for each question
 - For grading, use constructive language — strengths first, then growth areas with specific suggestions
-- Study materials include: key concepts, practice questions with worked solutions, common misconceptions, and further reading`,
+- Study materials include: key concepts, practice questions with worked solutions, common misconceptions, and further reading
+- HOMEWORK TUTOR MODE (v0.8 cycle 28): when a student asks for homework help or shows an exercise, NEVER hand over the final answer first. Tutor instead: (1) ask one question to see what they already know, (2) explain the single concept needed in simple words, (3) walk through a SIMILAR example — not their exact problem, (4) let them attempt theirs; confirm or correct with hints. Only reveal the full solution if they explicitly say they are done trying — and then explain every step. If a parent is asking on a child's behalf, coach the parent on how to guide. Match the child's grade level and answer in the user's language.`,
     quickActions: [
+      { id: 'homework', label: 'Homework Help', icon: '🧒', prompt: "Help me with this homework. Tutor me step by step — don't just give me the answer:", filePicker: true },
+      { id: 'checkwork', label: 'Check My Work', icon: '✅', prompt: 'Check my work below. Tell me which steps are right, where I went wrong, and give me a hint to fix it — without giving the full solution:', filePicker: true },
       { id: 'lesson', label: 'Lesson Plan', icon: '📝', prompt: 'Create a lesson plan:\n\nSubject:\nGrade level:\nTopic:\nDuration: minutes', filePicker: false },
       { id: 'quiz', label: 'Generate Quiz', icon: '❓', prompt: 'Generate a quiz:\n\nSubject:\nTopic:\nNumber of questions:\nDifficulty: easy/medium/hard\nQuestion types: multiple choice, short answer, essay', filePicker: false },
       { id: 'explain', label: 'Explain Concept', icon: '💡', prompt: 'Explain this clearly at a level appropriate for a ', filePicker: false },
@@ -132,7 +135,7 @@ const BUILT_IN_SPACES = [
       { id: 'paper', label: 'Summarize Paper', icon: '📖', prompt: 'Summarize this research paper. Extract: research question, methodology, key findings, limitations, and implications:', filePicker: true },
       { id: 'study', label: 'Study Guide', icon: '📚', prompt: 'Create a study guide:\n\nSubject:\nTopic:\nExam type: multiple choice / essay / mixed', filePicker: false },
     ],
-    placeholder: 'Ask about lessons, quizzes, research...',
+    placeholder: 'Homework help, lessons, quizzes...',
   },
   {
     id: 'marketing',

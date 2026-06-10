@@ -372,3 +372,16 @@
   (4/4 assertions: section count, hidden-when-closed, visible-when-
   open, scoping). Long-standing backlog item closed. EN/中文/العربية.
   234 checks green.
+
+### Cycle 28 — Homework Tutor (2026-06-11)
+- Dedup discipline: the Education space already existed but was
+  TEACHER-facing (lesson plans, quizzes, grading). Instead of a
+  duplicate space, it gains Homework Tutor mode: a Socratic guardrail
+  in the system prompt — never hand over the answer first; probe what
+  the student knows, teach the one concept, walk a SIMILAR example,
+  let them attempt, hint; full solution only on explicit surrender,
+  then explained step by step. Parents get coached on how to guide.
+- Two student/parent quick actions at the top: 🧒 "Homework Help
+  (won't just give answers)" and ✅ "Check My Work" — both accept a
+  photo of the exercise. Space description/placeholder now lead with
+  homework. 234 checks green.
