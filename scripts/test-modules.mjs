@@ -573,8 +573,20 @@ console.log('\n[15/15] voice — STT backend routing + input guards')
   check('oversize audio rejected', r2.error === 'too-large')
   const r3 = await voice.transcribe({ buffer: Buffer.from('x'), mime: 'audio/webm', getApiKey: keys({}) })
   check('no key → no-backend', r3.error === 'no-backend')
-  const r4 = await voice.transcribe({ buffer: Buffer.from('x'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }) })
-  check('openai route reaches engine layer', r4.error === 'engine-pending')
+  // Whisper route (cycle 7) — hermetic via injected fetch.
+  let captured = null
+  const okFetch = async (url, opts) => { captured = { url, opts }; return { ok: true, json: async () => ({ text: '  مرحبا بالعالم  ' }) } }
+  const r4 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', lang: 'ar', getApiKey: keys({ openai: 'sk-k' }), _fetch: okFetch })
+  check('whisper success → trimmed text + backend', r4.text === 'مرحبا بالعالم' && r4.backend === 'openai')
+  check('whisper hits the transcriptions endpoint', captured.url.includes('/v1/audio/transcriptions'))
+  check('multipart carries model + language hint', captured.opts.body.get('model') === 'whisper-1' && captured.opts.body.get('language') === 'ar')
+  check('auth header uses the user key', captured.opts.headers.Authorization === 'Bearer sk-k')
+  const r5 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }), _fetch: async () => ({ ok: false, status: 401, text: async () => '' }) })
+  check('401 → key-rejected', r5.error === 'key-rejected')
+  const r6 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }), _fetch: async () => ({ ok: true, json: async () => ({ text: '   ' }) }) })
+  check('blank transcript → no-speech', r6.error === 'no-speech')
+  const r7 = await voice.transcribe({ buffer: Buffer.from('xx'), mime: 'audio/webm', getApiKey: keys({ openai: 'k' }), _fetch: async () => { throw new Error('ENOTFOUND api.openai.com') } })
+  check('network failure → stt-network', r7.error === 'stt-network')
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -78,3 +78,24 @@
   the bridge audit). Chip reuses the routine-nudge styling. All copy in
   EN/中文/العربية. 161 checks green. Bet 2's undo half is now LIVE
   end-to-end: snapshot → chip → byte-identical restore.
+
+### Checkpoint — v0.7.73 RELEASED (2026-06-11)
+- Cycles 1-5 shipped as v0.7.73: notarized + stapled arm64/x64 DMGs,
+  GitHub release live, labaik.ai auto-updates within 60s. Tweet compose
+  was permission-blocked; text handed to owner in-session.
+
+### Cycle 6 — voice capture pipeline (2026-06-11)
+- The real engine begins (webkitSpeechRecognition has no Electron
+  backend — the v0.7.41 kill-switch reason). Renderer records mic audio
+  via MediaRecorder (webm/opus, chunked-btoa) → new `voice-transcribe`
+  IPC → `electron/voice.js` routes by key availability (openai → google
+  → on-device later) with empty/size guards. Dev hook: `voiceDevTest()`.
+  8 unit tests; 169 checks.
+
+### Cycle 7 — Whisper engine (2026-06-11)
+- `transcribeOpenAI()`: multipart whisper-1 upload on the user's own
+  key, UI-locale 2-letter language hint (better short-clip Arabic and
+  Chinese), 45s timeout, friendly error taxonomy (key-rejected /
+  rate-limited / no-speech / stt-timeout / stt-network). Injectable
+  fetch keeps tests hermetic — 7 more checks (175 total). Next: gate
+  lift (mic button returns, capability-checked).

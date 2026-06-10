@@ -34,22 +34,50 @@ function pickBackend(getApiKey) {
 /**
  * Transcribe a recorded clip. Returns { text, backend } on success or
  * { error } — callers render errors as friendly strings, never throw.
+ * `_fetch` is injectable so tests never touch the network.
  */
-async function transcribe({ buffer, mime, lang, getApiKey }) {
+async function transcribe({ buffer, mime, lang, getApiKey, _fetch }) {
   if (!buffer || !buffer.length) return { error: 'empty-audio' }
   if (buffer.length > MAX_AUDIO_BYTES) return { error: 'too-large' }
   const backend = pickBackend(getApiKey)
   if (!backend) return { error: 'no-backend' }
-  if (backend === 'openai') return transcribeOpenAI({ buffer, mime, lang, key: getApiKey('openai') })
+  if (backend === 'openai') return transcribeOpenAI({ buffer, mime, lang, key: getApiKey('openai'), _fetch })
   if (backend === 'google') return { error: 'backend-pending' } // Gemini route lands in cycle 9
   return { error: 'no-backend' }
 }
 
-// OpenAI whisper-1 — multipart upload. Implemented in cycle 7; the
-// routing/guard layer above ships first so the renderer pipeline can be
-// integration-tested end-to-end with a deterministic response.
-async function transcribeOpenAI(_opts) {
-  return { error: 'engine-pending' }
+// OpenAI whisper-1 — multipart upload on the user's own key (cycle 7).
+// Whisper auto-detects language; a 2-letter hint from the UI locale
+// improves short-clip accuracy for Arabic/Chinese without ever being
+// wrong for mixed speech (it's a hint, not a constraint).
+async function transcribeOpenAI({ buffer, mime, lang, key, _fetch }) {
+  const doFetch = _fetch || fetch
+  try {
+    const form = new FormData()
+    const ext = /webm/.test(mime || '') ? 'webm' : /mp4|m4a/.test(mime || '') ? 'mp4' : 'bin'
+    form.append('file', new Blob([buffer], { type: mime || 'application/octet-stream' }), 'audio.' + ext)
+    form.append('model', 'whisper-1')
+    if (lang && /^[a-z]{2}$/i.test(lang)) form.append('language', lang.toLowerCase())
+    const res = await doFetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + key },
+      body: form,
+      signal: AbortSignal.timeout(45000),
+    })
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) return { error: 'key-rejected' }
+      if (res.status === 429) return { error: 'rate-limited' }
+      const detail = await res.text().then(s => s.slice(0, 200)).catch(() => '')
+      return { error: 'stt-http-' + res.status, detail }
+    }
+    const data = await res.json()
+    const text = String(data?.text || '').trim()
+    if (!text) return { error: 'no-speech' }
+    return { text, backend: 'openai' }
+  } catch (err) {
+    if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return { error: 'stt-timeout' }
+    return { error: 'stt-network', detail: String(err?.message || err).slice(0, 200) }
+  }
 }
 
 module.exports = { transcribe, pickBackend, MAX_AUDIO_BYTES }
