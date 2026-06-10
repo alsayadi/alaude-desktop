@@ -20,12 +20,15 @@ Coding bias found (backlog, highest leverage first):
    edits don't propagate through the seen-merge, by design)
 4. ~~Routines modal templates: everyday-life additions~~ → fixed cycle 3
    (meal plan still a candidate)
-5. **Spaces**: only Health is a rich non-coding space — candidates: Writing,
-   Learning/Tutor, Travel, Finance-literacy (no advice).
-6. **Attachment ergonomics**: @ mentions need an open workspace; general users
-   think "attach a file" — check drag-drop/file-picker parity for PDFs/docs.
+5. ~~Spaces~~ — audit was WRONG: built-in Spaces are already fully general
+   (General, Health, Finance, Real Estate, Legal, Education, Marketing — there
+   is no coding space at all). Nothing to do.
+6. ~~Attachment ergonomics~~ → mostly already solid (picker, PDFs with page
+   counts, multimodal images); the real gap — drop target was only the message
+   list — fixed cycle 4 (window-wide drop).
 7. **Empty-workspace nudges**: composer placeholder and tips reference code tasks
    in places — sweep for dev-jargon strings shown when no workspace is open.
+   (Onboarding done cycle 3; remaining: tips/hints/shortcut surfaces.)
 
 ## Cycle log
 
@@ -50,3 +53,12 @@ Coding bias found (backlog, highest leverage first):
   practice, 💳 weekly bills & renewals check.
 - Next candidates: non-coding Spaces (Writing, Learning/Tutor, Travel);
   attachment ergonomics (PDF/doc without a workspace); meal-plan routine.
+
+### Cycle 4 — window-wide drag & drop (2026-06-10)
+- Audit correction: Spaces were already general (7 built-ins, none coding);
+  attachments already handle PDFs/images/docs well.
+- Real gap found and fixed: files could only be dropped on the message list.
+  Now the whole window accepts drops (composer, sidebar, anywhere) with a
+  drag-depth counter to stop overlay flicker.
+- Remaining backlog: dev-jargon sweep of tips/hints; meal-plan routine
+  template; consider a "Learning" space with tutor persona.

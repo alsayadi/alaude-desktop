@@ -6271,7 +6271,7 @@
         <button class="plan-mode-banner-btn" data-i18n="plan.banner.off" data-i18n-attr="title:plan.banner.off.title" onclick="togglePlanMode()" title="Turn off plan mode">Turn off</button>
       </span>
     </div>
-    <div class="messages" id="messages" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+    <div class="messages" id="messages">
       <div class="welcome" id="welcome">
         <img class="welcome-logo" id="welcome-logo" src="logo.jpg" alt="Labaik" />
         <div class="welcome-title" data-i18n="welcome.title">What can I help you with?</div>
@@ -17533,17 +17533,24 @@ Title:`
     }
 
     // ── Drag & Drop ──────────────────────────────────────────────────────
-    function handleDragOver(e) {
+    // v0.8 general-use: the whole window is the drop target, not just the
+    // message list — people naturally drop onto the composer or sidebar.
+    // A depth counter handles the enter/leave noise from child elements.
+    let _dragDepth = 0
+    document.addEventListener('dragenter', (e) => {
       e.preventDefault()
-      e.stopPropagation()
-      document.getElementById('drop-overlay').classList.add('show')
-    }
-
-    function handleDragLeave(e) {
+      _dragDepth++
+      document.getElementById('drop-overlay')?.classList.add('show')
+    })
+    document.addEventListener('dragover', (e) => { e.preventDefault() })
+    document.addEventListener('dragleave', (e) => {
       e.preventDefault()
-      e.stopPropagation()
-      document.getElementById('drop-overlay').classList.remove('show')
-    }
+      if (--_dragDepth <= 0) {
+        _dragDepth = 0
+        document.getElementById('drop-overlay')?.classList.remove('show')
+      }
+    })
+    document.addEventListener('drop', (e) => { _dragDepth = 0; handleDrop(e) })
 
     async function handleDrop(e) {
       e.preventDefault()
