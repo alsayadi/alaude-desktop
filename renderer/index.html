@@ -4037,19 +4037,19 @@
       transition: opacity 0.15s;
     }
     .send-btn:disabled { opacity: 0.3; cursor: default; }
-    #routine-nudge, #undo-chip {
+    #routine-nudge, #undo-chip, #paperwork-chip {
       position: fixed; bottom: 86px; left: 50%; transform: translateX(-50%) translateY(6px);
       display: flex; align-items: center; gap: 10px; z-index: 800;
       background: var(--bg-input); border: 1px solid var(--green); border-radius: 12px;
       padding: 10px 14px; font-size: 12.5px; color: var(--text); opacity: 0;
       box-shadow: 0 6px 24px rgba(0,0,0,0.22); transition: opacity 0.3s, transform 0.3s; max-width: 90vw;
     }
-    #routine-nudge.show, #undo-chip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-    #routine-nudge .nudge-yes, #undo-chip .nudge-yes {
+    #routine-nudge.show, #undo-chip.show, #paperwork-chip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #routine-nudge .nudge-yes, #undo-chip .nudge-yes, #paperwork-chip .nudge-yes {
       background: var(--green); color: #fff; border: none; border-radius: 7px;
       padding: 4px 12px; font-size: 12px; cursor: pointer; white-space: nowrap;
     }
-    #routine-nudge .nudge-close, #undo-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
+    #routine-nudge .nudge-close, #undo-chip .nudge-close, #paperwork-chip .nudge-close { color: var(--text-faint); cursor: pointer; font-size: 15px; }
     #cmdk-hint {
       position: fixed; bottom: 86px; right: 18px; z-index: 800;
       display: flex; align-items: center; gap: 8px;
@@ -7554,6 +7554,61 @@
         requestAnimationFrame(() => el.classList.add('show'))
         setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400) }, 15000)
       } catch {}
+    }
+
+    // ── v0.8 cycle 12 — Paperwork Desk next actions ─────────────────────
+    // After any reply in a session born from the 📄 template, offer the
+    // two things a person actually does with an explained letter: get a
+    // ready-to-sign reply drafted, and put paper in their hands (print —
+    // elders trust paper). The chip reuses the undo-chip styling.
+    function maybePaperworkActions() {
+      try {
+        const s = sessions.find(x => x.id === currentSessionId)
+        if (!s?.tags?.includes('paperwork')) return
+        const last = messages[messages.length - 1]
+        if (!last || last.role !== 'assistant' || last.streaming) return
+        if (typeof last.content !== 'string' || !last.content || last.content.startsWith('Error:')) return
+        document.getElementById('paperwork-chip')?.remove()
+        const el = document.createElement('div')
+        el.id = 'paperwork-chip'
+        el.innerHTML = `<span>📄</span>
+          <button class="nudge-yes" id="pw-reply">${escapeHtml(t('paperwork.draftBtn'))}</button>
+          <button class="nudge-yes" id="pw-print" style="background:var(--bg-sidebar); color:var(--text)">${escapeHtml(t('paperwork.printBtn'))}</button>
+          <span class="nudge-close">×</span>`
+        el.querySelector('#pw-reply').onclick = () => { el.remove(); paperworkDraftReply() }
+        el.querySelector('#pw-print').onclick = () => { el.remove(); paperworkPrintLast() }
+        el.querySelector('.nudge-close').onclick = () => el.remove()
+        document.body.appendChild(el)
+        requestAnimationFrame(() => el.classList.add('show'))
+        setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 400) }, 30000)
+      } catch {}
+    }
+
+    function paperworkDraftReply() {
+      if (isStreaming) return
+      input.value = t('paperwork.draftPrompt')
+      input.dispatchEvent(new Event('input'))
+      sendMessage()
+    }
+
+    async function paperworkPrintLast() {
+      const last = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string' && m.content)
+      if (!last) { showRewindToast?.(t('paperwork.nothingToPrint'), false); return }
+      // Minimal printable document: serif, generous margins, dir=auto so
+      // Arabic letters print right-to-left regardless of UI language.
+      const body = renderMarkdown(last.content)
+      const html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        body { font-family: Georgia, 'Times New Roman', serif; font-size: 13pt; line-height: 1.6;
+               max-width: 17cm; margin: 2cm auto; color: #111; }
+        * { unicode-bidi: plaintext; }
+        pre, code { font-family: Menlo, monospace; font-size: 11pt; }
+      </style></head><body dir="auto">${body}</body></html>`
+      try {
+        const r = await window.alaude.printHtml(html)
+        if (r?.error) showRewindToast?.('🖨️ ' + r.error, true)
+      } catch (e) {
+        showRewindToast?.('🖨️ ' + (e?.message || 'Print failed'), true)
+      }
     }
 
     async function undoLastAgentTurn() {
@@ -11598,6 +11653,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.paperwork.desc': 'Drop a letter, bill, or form — plain words, the deadline, and what to do next.',
         'template.paperwork.starter': 'I\'m attaching an official document — a letter, bill, or form. Explain it in plain, friendly words using exactly this structure:\n**What this is** — one sentence.\n**Who sent it** — and what kind of organization they are.\n**What they want from me** — in simple words, no jargon.\n**Deadline** — any date, amount due, or time limit ("none found" if there is none).\n**What I should do next** — up to 3 concrete steps.\nAnswer in the same language as this message, even if the document is in another language.',
         'template.paperwork.dropHint': '📄 Attach your document with 📎 or drop it anywhere — then press Enter',
+        'paperwork.draftBtn': '✍️ Draft my reply',
+        'paperwork.printBtn': '🖨️ Print',
+        'paperwork.nothingToPrint': '🖨️ Nothing to print yet',
+        'paperwork.draftPrompt': 'Draft a reply letter to the document above on my behalf. Keep it short, polite, and formal — ready to sign. Write the letter in the language the recipient expects (the document\'s language); if that isn\'t my language, add a translation below it. Use placeholders like [MY NAME] and [DATE] for anything personal.',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -11924,6 +11983,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.paperwork.desc': '拖入信件、账单或表格——大白话解释、截止日期、下一步怎么做。',
         'template.paperwork.starter': '我会附上一份正式文件——信件、账单或表格。请用平实友好的话解释它，严格使用以下结构：\n**这是什么** —— 一句话。\n**谁寄来的** —— 以及这是什么机构。\n**他们要我做什么** —— 用大白话，不要术语。\n**截止日期** —— 任何日期、金额或时限（没有则写「未发现」）。\n**我接下来该做什么** —— 最多 3 个具体步骤。\n即使文件是其他语言，也请用与本条消息相同的语言回答。',
         'template.paperwork.dropHint': '📄 用 📎 附上文件，或直接拖入窗口——然后按回车',
+        'paperwork.draftBtn': '✍️ 替我写回信',
+        'paperwork.printBtn': '🖨️ 打印',
+        'paperwork.nothingToPrint': '🖨️ 还没有可打印的内容',
+        'paperwork.draftPrompt': '请代我起草一封回复上述文件的信。简短、礼貌、正式——可以直接签名使用。用收件方期望的语言（文件的语言）书写；如果那不是我的语言，请在信件下方附上翻译。个人信息用占位符表示，如 [我的姓名]、[日期]。',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12226,6 +12289,10 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.paperwork.desc': 'أسقط رسالة أو فاتورة أو نموذجًا — شرح بكلمات بسيطة، الموعد النهائي، والخطوة التالية.',
         'template.paperwork.starter': 'سأرفق مستندًا رسميًّا — رسالة أو فاتورة أو نموذجًا. اشرحه لي بكلمات بسيطة وودودة وفق هذا الهيكل بالضبط:\n**ما هذا** — جملة واحدة.\n**مَن أرسله** — وما نوع هذه الجهة.\n**ماذا يريدون مني** — بكلمات بسيطة دون مصطلحات.\n**الموعد النهائي** — أي تاريخ أو مبلغ مستحق أو مهلة («لم أجد موعدًا» إن لم يوجد).\n**ما الذي عليّ فعله الآن** — حتى 3 خطوات ملموسة.\nأجب بلغة هذه الرسالة حتى لو كان المستند بلغة أخرى.',
         'template.paperwork.dropHint': '📄 أرفق مستندك بـ 📎 أو أسقطه في أي مكان — ثم اضغط Enter',
+        'paperwork.draftBtn': '✍️ اكتب ردًّا لي',
+        'paperwork.printBtn': '🖨️ اطبع',
+        'paperwork.nothingToPrint': '🖨️ لا يوجد ما يُطبع بعد',
+        'paperwork.draftPrompt': 'صِغ لي رسالة ردّ على المستند أعلاه بالنيابة عني. اجعلها قصيرة ومهذّبة ورسمية — جاهزة للتوقيع. اكتب الرسالة باللغة التي يتوقعها المستلم (لغة المستند)؛ وإن لم تكن لغتي فأضف ترجمة أسفلها. استخدم عناصر نائبة مثل [اسمي] و[التاريخ] لأي معلومات شخصية.',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -13788,6 +13855,9 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 cycle 5 — if the agent changed files this turn, surface
         // one-click undo right where the user is looking.
         if (prev?.fileEdits?.length) maybeOfferUndo(prev.fileEdits.length)
+        // v0.8 cycle 12 — Paperwork sessions get one-tap next actions
+        // (draft a reply letter, print) after each answer.
+        maybePaperworkActions?.()
       } catch (err) {
         console.error('[callAI] error:', err)
         const prev = target[target.length - 1]

@@ -1507,6 +1507,25 @@ const undoSnaps = require('./undo-snapshots')
 ipcMain.handle('undo-list-turns', async () => undoSnaps.listTurns())
 ipcMain.handle('undo-restore-turn', async (_e, turnId) => undoSnaps.restoreTurn(turnId))
 
+// v0.8 cycle 12 — print a clean HTML document (Paperwork reply letters).
+// A hidden window loads the static markup and opens the native print
+// dialog (which includes save-as-PDF on macOS). The window is destroyed
+// after the dialog resolves either way. Size-capped: letters are small.
+ipcMain.handle('print-html', async (_e, html) => {
+  try {
+    if (typeof html !== 'string' || !html.trim()) return { error: 'Nothing to print' }
+    if (html.length > 2 * 1024 * 1024) return { error: 'Document too large to print' }
+    const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } })
+    await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+    win.webContents.print({ silent: false, printBackground: true }, () => {
+      try { win.destroy() } catch {}
+    })
+    return { ok: true }
+  } catch (err) {
+    return { error: err?.message || 'Print failed' }
+  }
+})
+
 // v0.8 cycle 6 — voice dictation. Renderer records mic audio (webm/opus)
 // and ships it here; electron/voice.js routes to the best STT backend
 // (openai whisper → gemini → on-device, by key availability). Base64 is

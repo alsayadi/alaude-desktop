@@ -161,3 +161,17 @@
   with a drop-hint toast (drag&drop + 📎 still work).
 - `pickFile` is a general template capability (future document-first
   flows reuse it). EN/中文/العربية.
+
+### Cycle 12 — Paperwork v2: draft my reply + print (2026-06-11)
+- After any reply in a 📄 paperwork session, a chip offers the two
+  things people actually do with an explained letter: ✍️ "Draft my
+  reply" (one tap → short formal ready-to-sign letter in the
+  RECIPIENT's language, with a translation below when that differs
+  from the user's) and 🖨️ "Print".
+- Print is real: new `print-html` IPC loads a clean serif document
+  (dir=auto so Arabic letters print RTL) in a hidden window and opens
+  the native macOS print dialog — which includes save-as-PDF. Elders
+  trust paper; the loop's reality-check critic demanded this.
+- Chip reuses undo-chip styling; 30s auto-hide; reappears after each
+  reply (so after drafting, Print prints the draft). EN/中文/العربية.
+  180 checks green.
