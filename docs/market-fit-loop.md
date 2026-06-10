@@ -304,3 +304,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   printed as "[renderer error]" every launch — real log noise that could
   mask a genuine error. Now logged plainly. Cycles 21-30 summarized into
   PR #2.
+
+### Cycle 31 — trim the always-on system prompt (2026-06-10)
+- Measured what every message pays: ~1,380 tokens of always-on prompt, of
+  which a 933-token "ask clarifying questions" block was mostly redundant
+  domain examples + a verbose schema. Compressed to ~262 tokens (schema +
+  all hard rules kept, examples dropped) → ~670 fewer input tokens on EVERY
+  chat. On the cost-conscious "pay per use" wedge that's real money + lower
+  latency, with no behavior change. Session delete + share-HTML export were
+  already present (honest skips).

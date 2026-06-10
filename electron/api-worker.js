@@ -523,100 +523,35 @@ just app.py — never as a markdown link to a fake URL. Same for
 sentence-end words: write "scaffold it now. Now let me…" with a real
 sentence break, not a domain-looking pseudo-link.`
 
-  // v0.7.67 — Ask-user-question capability. Any chat can use this; the
-  // renderer turns the block into a single multi-question popup.
+  // v0.7.67 — Ask-user-question capability (compressed v0.8 cycle 31: the
+  // full block was ~930 tokens on EVERY message; this keeps the schema +
+  // the rules that matter and drops the redundant domain examples, saving
+  // ~650 tokens/message with no behavior change).
   sys += `
 
-## Asking the user clarifying questions
+## Asking clarifying questions
 
-You can ask 1-3 clarifying questions when the user's request has a real
-fork in it — different scope / format / approach / tone — that would
-shape the answer meaningfully. The user gets a tidy popup with picker
-options + a "Skip — use defaults" button, so asking is cheap on their
-side. Use it.
-
-Ask when:
-- The decision genuinely changes the shape of the answer (scope, tone,
-  output format, level of depth, target audience, approach).
-- The request is open-ended enough that you'd otherwise be making
-  meaningful assumptions (e.g. "build me an app" → which kind?
-  "summarize this" → how long? for whom?).
-- A wrong guess would waste the user's time or cost them real money.
-
-Don't ask when:
-- The decision is trivial and one-line — just pick reasonably and
-  mention your assumption in passing ("I'll assume Python — say if
-  you want a different stack").
-- The user already specified the answer somewhere in the conversation.
-- You're in autopilot for a tiny task (rename a variable, fix a typo).
-
-When you DO ask, emit a SINGLE structured question block with up to 3
-questions inside it. The user gets ONE popup with all questions stacked
-and answers them in one click of "Submit". Never emit multiple ask-blocks
-across turns — gather every question you need ONCE.
-
-### What to ask about
-
-Anywhere you'd otherwise GUESS at the user's intent. Examples across
-different domains:
-
-- **Scope**: "Should this run on every save or only when I push?"
-- **Behavior**: "On error, should it halt the flow or log and continue?"
-- **Output format**: "Markdown report, CSV, or JSON?"
-- **Trade-offs**: "Optimize for speed or for readability?"
-- **Coverage**: "Just the happy path, or full edge-case handling?"
-- **Tone / register**: "Casual / formal / academic?"
-- **Approach**: "Quick patch on top of the existing code, or refactor it properly?"
-- **Audience**: "Are you new to this topic, or comfortable with the basics?"
-- **Privacy**: "Run locally only, or sync to the cloud?"
-- **Length**: "1-paragraph summary, 1-page brief, or full deep-dive?"
-- **Data source**: "Use the sample CSV, or the live API?"
-- **Tech stack** — when relevant. Don't ask about tools when the task
-  isn't tool-flavored (writing a poem doesn't need a framework choice).
-
-### Format
-
-Fenced \`\`\`ask\`\`\` block with JSON. Below is just an EXAMPLE — use the
-schema for whatever your actual questions are:
+When the request has a real fork (scope / format / approach / tone /
+depth / audience) and a wrong guess would waste the user's time or money,
+ask 1-3 questions via a SINGLE fenced \`\`\`ask\`\`\` block — the UI renders it
+as one popup with pickers and a "Skip — use defaults" button. Don't ask
+when intent is clear, the answer is already in the conversation, the
+decision is trivial (just state your assumption), or you need free-form
+data like a name/path/URL (use prose). Never emit more than one ask-block
+per turn, and don't re-ask after a Skip — proceed with the recommended
+options.
 
 \`\`\`ask
-{
-  "questions": [
-    {
-      "question": "How long should the summary be?",
-      "options": [
-        {"label": "One paragraph", "desc": "Quick gist, ~3-4 sentences", "recommended": true},
-        {"label": "One page", "desc": "Structured with headings, ~500 words"},
-        {"label": "Full deep-dive", "desc": "Everything you'd put in a report"}
-      ]
-    },
-    {
-      "question": "What tone?",
-      "options": [
-        {"label": "Casual", "desc": "Like explaining to a friend", "recommended": true},
-        {"label": "Professional", "desc": "Suitable for a stakeholder email"}
-      ]
-    }
-  ]
-}
+{"questions":[
+  {"question":"How long should the summary be?","options":[
+    {"label":"One paragraph","desc":"Quick gist","recommended":true},
+    {"label":"One page","desc":"Structured, ~500 words"},
+    {"label":"Full deep-dive","desc":"Everything"}]}
+]}
 \`\`\`
 
-### Hard rules
-
-- AT MOST 3 questions per block. 1-2 is better. Pick the decisions where
-  guessing wrong would actually waste the user's time.
-- 2-4 options per question. 3 is usually best.
-- ALWAYS mark exactly ONE option per question with \`"recommended": true\`.
-- Each option's "desc" is ONE short sentence on the trade-off.
-- If the user clicks "Skip — use defaults", proceed with the recommended
-  options as the answer. Do NOT re-ask.
-
-### When NOT to ask
-
-- The intent is unambiguous — just do the work.
-- A yes/no that's obviously yes — just do it.
-- Asking for free-form data (a name, a path, a URL) — use prose.
-- The user has already answered / skipped — don't re-ask.`
+Rules: ≤3 questions; 2-4 options each (3 is best); EXACTLY ONE option per
+question marked \`"recommended": true\`; each \`desc\` one short sentence.`
   // v0.8 — folder skills index. Names + descriptions only; bodies load via
   // the use_skill tool so unused skills cost ~a line of tokens each. Skipped
   // for local models (same latency budget reasoning as the task checklist —
