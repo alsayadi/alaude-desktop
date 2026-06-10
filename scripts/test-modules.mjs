@@ -677,6 +677,35 @@ console.log('\n[17/17] net-ledger — log/recent/clear + host parsing')
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEST 18: schedule-parse — natural-language reminders (cycle 20)
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[18/18] schedule-parse — natural-language reminders EN/中文/العربية')
+{
+  const { parseReminder } = await import('../renderer/js/schedule-parse.js')
+
+  const r1 = parseReminder('remind me every friday at 5pm to pay the bills')
+  check('EN weekly + pm time', r1?.cron === '0 17 * * 5')
+  check('EN task extracted', r1?.task === 'pay the bills')
+  const r2 = parseReminder('Remind me every day at 8:30 to take my medication')
+  check('EN daily + h:mm', r2?.cron === '30 8 * * *')
+  const r3 = parseReminder('remind me every morning to stretch')
+  check('EN every morning defaults 9am', r3?.cron === '0 9 * * *')
+  const r4 = parseReminder('remind me every month on the 1st to check subscriptions')
+  check('EN monthly', r4?.cron === '0 9 1 * *')
+  const z1 = parseReminder('提醒我每周五下午5点交水电费')
+  check('ZH weekly + 下午', z1?.cron === '0 17 * * 5')
+  const z2 = parseReminder('提醒我每天早上9点半喝水')
+  check('ZH daily + 点半', z2?.cron === '30 9 * * *')
+  const a1 = parseReminder('ذكرني كل جمعة الساعة 5 مساء بدفع الفواتير')
+  check('AR weekly + مساء', a1?.cron === '0 17 * * 5')
+  const a2 = parseReminder('ذكّرني كل يوم الساعة ٨ صباحاً بالدواء')
+  check('AR daily + Arabic digits', a2?.cron === '0 8 * * *')
+  check('no trigger word → null', parseReminder('every friday at 5 pay bills') === null)
+  check('no schedule → null (goes to model)', parseReminder('remind me to call mom') === null)
+  check('long text → null', parseReminder('remind me every day ' + 'x'.repeat(450)) === null)
+}
+
+// ═══════════════════════════════════════════════════════════════
 console.log('\n' + '━'.repeat(60))
 console.log(`  RESULTS: ${pass} passed, ${fail} failed`)
 console.log('━'.repeat(60))

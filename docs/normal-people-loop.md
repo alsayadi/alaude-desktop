@@ -268,3 +268,18 @@
   Space, or ⌘⇧Space anywhere" vs "needs a key"), 🎨 theme toggle.
 - v1 is a launcher (cards open the existing modals); v2 migrates panes
   in fully. All names + descriptions ×3 locales. 209 checks green.
+
+### Cycle 20 — natural-language reminders (2026-06-11)
+- RE-SCOPE per quality floor: hub v2/v3 "migration" cycles dropped —
+  cycle 19's launcher already solved discoverability; migrating panes
+  buys a normal person nothing. Higher-impact items pulled forward.
+- "remind me every friday at 5pm to pay the bills" — typed in the
+  composer, in EN / 中文 / العربية — now opens the Routines form
+  pre-filled (cron, task, name) instead of sending a model a request it
+  can't actually schedule. Confident parses only (trigger word AND a
+  recurrence): "remind me to call mom" still goes to the model. Nothing
+  is created until the user presses Add.
+- New tested module renderer/js/schedule-parse.js: weekly/daily/monthly
+  recurrences, am-pm + 24h + 下午5点/点半 + الساعة ٥ مساء times,
+  Arabic-digit normalization, task extraction. 12 unit tests; 217
+  checks green.

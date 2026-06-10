@@ -11812,6 +11812,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.usage.desc': 'This month\'s costs, per-model stats',
         'hub.backup': 'Back up & restore',
         'hub.backup.desc': 'One file with everything — keys excluded',
+        'routine.nlReady': '🔔 Got it — reminder pre-filled. Check the schedule, then press Add.',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12189,6 +12190,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.usage.desc': '本月花费、各模型统计',
         'hub.backup': '备份与恢复',
         'hub.backup.desc': '一个文件包含全部——不含密钥',
+        'routine.nlReady': '🔔 明白了——提醒已预填。确认时间后点「添加」。',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12542,6 +12544,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'hub.usage.desc': 'تكاليف هذا الشهر وإحصاءات النماذج',
         'hub.backup': 'النسخ الاحتياطي والاستعادة',
         'hub.backup.desc': 'ملف واحد يضم كل شيء — دون المفاتيح',
+        'routine.nlReady': '🔔 فهمت — جُهِّز التذكير. تحقَّق من الموعد ثم اضغط «إضافة».',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -13454,6 +13457,28 @@ footer a { color: var(--accent); text-decoration: none; }
       // research/plan trigger that hits a guard can't leak into the NEXT
       // ordinary message.
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { disarmResearch(); return }
+      // v0.8 cycle 20 — natural-language reminders. "remind me every
+      // friday at 5pm to pay the bills" (EN/中文/العربية) opens the
+      // Routines form pre-filled instead of asking a model to pretend it
+      // can schedule things. Only fires on a CONFIDENT parse (trigger
+      // word + schedule); "remind me to call mom" still goes to the
+      // model. Nothing is created until the user presses Add.
+      if (!attachedFiles.length && !attachedImages.length) {
+        const rem = window.scheduleParse?.parseReminder?.(text)
+        if (rem) {
+          const modal = document.getElementById('routines-modal')
+          if (!modal.classList.contains('show')) toggleRoutinesModal()
+          document.getElementById('routine-name').value = generateSessionTitle(rem.task).slice(0, 60)
+          document.getElementById('routine-prompt').value = rem.task
+          _loadCronIntoPicker(rem.cron)
+          document.getElementById('routine-name').focus()
+          input.value = ''
+          input.dispatchEvent(new Event('input'))
+          showRewindToast?.(t('routine.nlReady'), false)
+          logUx({ kind: 'nl_reminder_parsed' })
+          return
+        }
+      }
       // v0.8: a send while a turn is still in flight used to silently do
       // nothing — the user just saw "no response". Two fixes:
       //  1. SELF-HEAL a stale flag: if isStreaming is true but THIS session
@@ -20794,6 +20819,11 @@ Title:`
   <script type="module">
     import { extractDeadlineDate, reminderDateFor } from './js/paperwork-dates.js'
     window.paperworkDates = { extractDeadlineDate, reminderDateFor }
+  </script>
+
+  <script type="module">
+    import { parseReminder } from './js/schedule-parse.js'
+    window.scheduleParse = { parseReminder }
   </script>
 
   <script type="module">
