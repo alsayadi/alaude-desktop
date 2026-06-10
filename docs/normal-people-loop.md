@@ -395,3 +395,13 @@
   and Esc close it. Every action reuses an existing safe path — the
   critic's "what does a confused person do?" gap closed.
   EN/中文/العربية. 234 checks green.
+
+### Cycle 30 — Future-Console entry removed + wedge tour refreshed (2026-06-11)
+- The 🛸 "Future Console (experimental)" palette entry is gone — an
+  unfinished cockpit with a discoverable entry invites confusion
+  (TODOS P3). Window code stays dormant pending a productize/cut call.
+- "What can Labaik do?" now showcases this loop's tell-a-friend set:
+  📄 explain a scary letter (opens the Paperwork flow), 🎤 talk instead
+  of type, ↩︎ undo anything the AI did, ⏰ reminders in plain words
+  (pre-fills a live example), 🔒 free/private/inspectable (opens Your
+  Data). Older wedges remain in the timeline. 234 checks green.

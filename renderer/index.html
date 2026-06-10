@@ -11025,7 +11025,10 @@ footer a { color: var(--accent); text-decoration: none; }
         } },
         { kind: 'action', icon: '📥', label: 'Import ChatGPT history (conversations.json)', search: 'import chatgpt openai history migrate switch export conversations json', action: () => { closeCmdPalette(); importChatGPTFlow() } },
         { kind: 'action', icon: '⏰', label: 'Turn last prompt into a routine', search: 'routine from prompt schedule repeat daily automate this recurring', action: () => { closeCmdPalette(); routineFromLastPrompt() } },
-        { kind: 'action', icon: '🛸', label: 'Future Console (experimental)', search: 'future console experimental cockpit neural agent', action: () => { closeCmdPalette(); window.alaude.openFutureConsole?.() } },
+        // v0.8 cycle 30 — Future Console palette entry removed: an
+        // unfinished cockpit shipping with a discoverable entry invites
+        // confusion (TODOS P3). The window code stays dormant in main
+        // for a future productization decision.
         { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
           closeCmdPalette()
           try {
@@ -20471,12 +20474,15 @@ Title:`
     // timeline. A new user should leave this modal having felt the wedge —
     // not having scrolled a changelog. (FEATURE_TIMELINE stays below as
     // "everything else".)
+    // v0.8 cycle 30 — refreshed to this loop's tell-a-friend set. The
+    // older wedge items (any-model, skills, drop-any-file, import) remain
+    // in the timeline below.
     const WEDGE_MOMENTS = [
-      { icon: '⚡', name: 'Any model, one dropdown', desc: 'Claude, GPT, Gemini, Grok, DeepSeek, local — switch mid-conversation. Start with ✨ Recommended.', try: () => { document.getElementById('model-select')?.focus() } },
-      { icon: '⏰', name: 'Routines — AI on a schedule', desc: 'A morning digest, standup prep, weekly review. Set once, runs forever; ▶ tests it instantly.', try: () => toggleRoutinesModal() },
-      { icon: '🧩', name: 'Skills — reusable instructions', desc: 'Install three starters (meeting notes, trip planner, weekly review), then type /meeting-notes.', try: async () => { try { await window.alaude.folderSkillsInstallStarters() } catch {}; showRewindToast?.('🧩 Type / in the composer to use a skill', false) } },
-      { icon: '📎', name: 'Drop any file, anywhere', desc: 'PDFs, spreadsheets, images — drop them on the window and ask. Or type @ to reference workspace files.', try: () => { document.getElementById('input')?.focus(); showRewindToast?.('📎 Drop a file anywhere in this window', false) } },
-      { icon: '📥', name: 'Bring your ChatGPT history', desc: 'Import conversations.json from your ChatGPT export — your chats come with you.', try: () => importChatGPTFlow() },
+      { icon: '📄', name: 'Explain a scary letter', desc: 'Drop a photo of any official letter, bill, or form — plain words, the deadline, a ready-to-sign reply, and a reminder.', try: () => { closeWhatsInModal?.(); startFromTemplate('paperwork') } },
+      { icon: '🎤', name: 'Talk instead of type', desc: 'Hold Space and speak — Arabic, Chinese, or English. Or press ⌘⇧Space from ANY app and Labaik comes up listening.', try: () => { document.getElementById('input')?.focus(); showRewindToast?.('🎤 Hold Space and speak (needs an OpenAI or Google key)', false) } },
+      { icon: '↩︎', name: 'Undo anything the AI did', desc: 'Every file the AI touches is snapshotted first. One click puts everything back exactly as it was.', try: () => { showRewindToast?.('↩︎ After the AI changes files, an Undo chip appears — or use ⌘K → Undo', false) } },
+      { icon: '⏰', name: 'Reminders in plain words', desc: 'Type "remind me every Friday at 5pm to pay the bills" — Labaik sets it up. Reminders survive sleep.', try: () => { const i = document.getElementById('input'); if (i) { i.value = 'remind me every friday at 5pm to '; i.dispatchEvent(new Event('input')); i.focus() } } },
+      { icon: '🔒', name: 'Free, private, inspectable', desc: 'Run free local AI that never leaves this Mac — and see every network call the app ever makes in Your Data.', try: () => toggleYourDataModal() },
     ]
     function renderWhatsInLabaik() {
       const body = document.getElementById('whats-in-body')
