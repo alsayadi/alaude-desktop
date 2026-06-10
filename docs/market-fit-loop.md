@@ -94,3 +94,8 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   dirs so it can't fight the user's running instance over the LevelDB
   lock), waits ≤30s for the beacon, kills the instance. ~1.3s in practice.
   Chained into npm test. Closes the gap that let two boot crashes ship.
+
+### Cycle 3 — Future Console demoted to ⌘K (2026-06-10)
+- Removed the tray item and File-menu entry (+⌘⇧F accelerator). The
+  experimental cockpit is now reachable only via ⌘K → "Future Console
+  (experimental)". First application of the doctrine.

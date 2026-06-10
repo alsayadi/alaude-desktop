@@ -10470,6 +10470,7 @@ footer a { color: var(--accent); text-decoration: none; }
         // v0.8 general-use: one-click install of three bundled starter skills
         // (meeting notes, trip planner, weekly review). Idempotent — existing
         // folders are never overwritten.
+        { kind: 'action', icon: '🛸', label: 'Future Console (experimental)', search: 'future console experimental cockpit neural agent', action: () => { closeCmdPalette(); window.alaude.openFutureConsole?.() } },
         { kind: 'action', icon: '🧩', label: 'Install starter skills (meeting notes, trip planner, weekly review)', search: 'starter skills install skill pack general meeting notes trip planner weekly review', action: async () => {
           closeCmdPalette()
           try {

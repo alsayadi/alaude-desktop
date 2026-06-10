@@ -1952,7 +1952,6 @@ function createTray() {
         if (!mainWindow || mainWindow.isDestroyed()) createWindow()
         else mainWindow.show()
       }},
-      { label: 'Open Future Console', click: () => createFutureWindow() },
       { type: 'separator' },
       { label: 'Quit Labaik', click: () => app.quit() },
     ])
@@ -1994,7 +1993,6 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'New Session', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('new-session') },
-        { label: 'Future Console', accelerator: 'CmdOrCtrl+Shift+F', click: () => createFutureWindow() },
         { type: 'separator' },
         { role: 'close' },
       ],
