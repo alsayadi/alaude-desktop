@@ -6259,8 +6259,6 @@
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.routines" onclick="runTopbarAction('routines', event)">⏰ Routines</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.keys" onclick="runTopbarAction('keys', event)">🔑 API keys</button>
             <button class="topbar-menu-item" role="menuitem" data-i18n="menu.localModels" onclick="runTopbarAction('localModels', event)">🦙 Local models</button>
-            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.thinkingMap" onclick="runTopbarAction('map', event)">🌳 Thinking map</button>
-            <button class="topbar-menu-item" role="menuitem" data-i18n="menu.uxInsights" onclick="runTopbarAction('insights', event)">📊 UX insights</button>
           </div>
         </div>
       </div>
@@ -12505,8 +12503,6 @@ footer a { color: var(--accent); text-decoration: none; }
         routines:      () => (typeof toggleRoutinesModal === 'function') && toggleRoutinesModal(),
         keys:        () => (typeof toggleKeysModal === 'function') && toggleKeysModal(),
         localModels: () => (typeof toggleLocalModelsModal === 'function') && toggleLocalModelsModal(),
-        map:         () => (typeof toggleThinkingGraph === 'function') && toggleThinkingGraph(),
-        insights:    () => (typeof toggleUxInsightsModal === 'function') && toggleUxInsightsModal(),
       }
       const fn = targets[which]
       if (!fn) { console.warn('[topbar-menu] unknown action:', which); return }

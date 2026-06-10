@@ -99,3 +99,9 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - Removed the tray item and File-menu entry (+⌘⇧F accelerator). The
   experimental cockpit is now reachable only via ⌘K → "Future Console
   (experimental)". First application of the doctrine.
+
+### Cycle 4 — analytics demoted from topbar (2026-06-10)
+- "UX insights" and "Thinking map" left the topbar ⋯ menu (palette entries
+  already existed; heatmap/digest/model-perf were palette-only already).
+  Topbar menu is now: search, crew, routines, keys, local models — all
+  wedge-aligned.
