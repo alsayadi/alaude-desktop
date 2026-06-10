@@ -863,7 +863,8 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // worker uses it to swap in the plan-only system prompt and skip tool
     // offerings so the model can't sneak past the "no execution" rule.
     const planMode = !!uxMeta?.planMode
-    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode }) + '\n'
+    const researchMode = !!uxMeta?.researchMode
+    const req = JSON.stringify({ id, messageId, messages: messagesRaw, model, workspacePath, spacePrompt, mode, planMode, researchMode }) + '\n'
     console.log('[chat] sending to worker, id:', id, 'space:', spaceId || 'general')
     worker.stdin.write(req, 'utf8')
     armIdle()

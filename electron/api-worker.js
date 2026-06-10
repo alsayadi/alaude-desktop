@@ -1380,6 +1380,31 @@ function summarizeArgs(name, args) {
 // renderer requests plan mode. Tells the model to write a plan only and
 // NOT to execute. We also strip the workspace tools below so the model
 // physically cannot call write_file / run_command even if it tried.
+// v0.8 cycle 21 — Deep Research mode. Appended when the renderer sends
+// researchMode: the model runs a multi-search, cross-checked, fully cited
+// investigation using web_search/fetch_page inside its normal tool loop.
+const RESEARCH_PROMPT_ADDITION = `
+
+## DEEP RESEARCH MODE — follow this protocol exactly
+
+The user wants a researched, cited answer — not what you remember.
+
+1. PLAN: break the question into 2-4 sub-questions.
+2. SEARCH: run web_search for each (differently-angled queries, not
+   rephrasings). Batch tool calls where possible.
+3. READ: fetch_page the 2-4 most authoritative results — primary sources
+   over aggregators, recent over stale.
+4. CROSS-CHECK: where sources disagree, say so explicitly.
+5. DELIVER:
+   - **TL;DR** — 2-3 sentences.
+   - **Findings** — with inline [1][2] citations on every load-bearing claim.
+   - **Sources** — numbered list with URLs and publication dates if known.
+   - **Caveats** — what could not be verified, what is contested, how fresh
+     the data is.
+
+Never invent citations. A claim without a source goes in Caveats, labeled
+as your prior knowledge.`
+
 const PLAN_MODE_PROMPT_ADDITION = `
 
 ## PLAN MODE — read this before responding
@@ -1483,7 +1508,7 @@ The user will review the plan, then either approve it (which lands you
 back in normal mode with a "Proceed with the plan above" message) or
 ask for changes. Stay in plan mode until they explicitly approve.`
 
-async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode, signal }) {
+async function handleChat({ messages, model, workspacePath, spacePrompt, id, messageId, mode, planMode, researchMode, signal }) {
   process.stderr.write(`[worker] handleChat called — model="${model}" (type: ${typeof model})\n`)
   let provider = detectProvider(model)
   if (!model) {
@@ -1530,6 +1555,10 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
   if (planMode) {
     sysPrompt += PLAN_MODE_PROMPT_ADDITION
     process.stderr.write(`[worker] plan mode active for messageId=${messageId}\n`)
+  }
+  if (researchMode) {
+    sysPrompt += RESEARCH_PROMPT_ADDITION
+    process.stderr.write(`[worker] deep-research mode active for messageId=${messageId}\n`)
   }
 
   // Wrap every activity event with the renderer messageId so the renderer can

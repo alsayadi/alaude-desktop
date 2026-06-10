@@ -214,3 +214,11 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
   three provider loops. System prompt constrains use to current/external
   info with source citation. Fixture scenario 5 proves the DDG parse +
   round-trip against a mock. Cycles 11-20 pushed to PR #2.
+
+### Cycle 21 — Deep Research mode (2026-06-10)
+- One-shot researchMode flag (plan-mode precedent): ⌘K → "Deep research"
+  sends the composer question with a strict protocol — sub-questions →
+  differently-angled web_search batch → fetch_page primary sources →
+  cross-check → TL;DR + cited findings + source list + caveats. Never
+  invent citations. Fixture scenario 6 proves the protocol injection and
+  its absence on normal chats. ChatGPT-Pro-style research, every model.

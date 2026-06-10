@@ -81,6 +81,9 @@ function decideReply(body) {
     // recorded request; the model just answers.
     return contentChunks('MENTION-DONE')
   }
+  if (userText.startsWith('Plain question with research mode')) {
+    return contentChunks('RESEARCH-ACK')
+  }
   if (userText.startsWith('Search the web')) {
     if (!toolMsgs.length) return toolCallChunks('web_search', { query: 'labaik news' })
     const got = String(toolMsgs[0].content || '')
@@ -173,10 +176,10 @@ worker.stdout.on('data', (d) => {
   }
 })
 
-function chat(id, content) {
+function chat(id, content, extra = {}) {
   worker.stdin.write(JSON.stringify({
     id, messageId: `m${id}`, messages: [{ role: 'user', content }],
-    model: 'gpt-test-1', workspacePath: workspace, spacePrompt: '', mode: 'autopilot',
+    model: 'gpt-test-1', workspacePath: workspace, spacePrompt: '', mode: 'autopilot', ...extra,
   }) + '\n')
   return new Promise((resolve, reject) => {
     const t0 = Date.now()
@@ -235,9 +238,19 @@ try {
   check('screen tools withheld without screen intent', !anyScreenTools)
 
   // ═══ Scenario 5: web search tool ═══
-  console.log('\n[5/5] web search — DDG parse + result round-trip')
+  console.log('\n[5/6] web search — DDG parse + result round-trip')
   const r5 = await chat(5, 'Search the web for labaik news please')
   check('model received parsed search results', typeof r5.result === 'string' && r5.result.startsWith('SEARCH-OK'), JSON.stringify(r5).slice(0, 300))
+
+  // ═══ Scenario 6: deep research mode flag ═══
+  console.log('\n[6/6] deep research — protocol lands in the system prompt')
+  const r6 = await chat(6, 'Plain question with research mode on', { researchMode: true })
+  check('research chat completes', typeof r6.result === 'string')
+  const rReq = requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Plain question with research mode'))
+  const rSys = String(rReq?.body?.messages?.[0]?.content || '')
+  check('DEEP RESEARCH protocol in system prompt', rSys.includes('DEEP RESEARCH MODE'))
+  check('non-research chats do NOT carry the protocol',
+    !String(requests.find(r => String(r.body?.messages?.find(m => m.role === 'user')?.content || '').startsWith('Search the web'))?.body?.messages?.[0]?.content || '').includes('DEEP RESEARCH MODE'))
 
   // ═══ Scenario 4: stop generation (chat-cancel aborts a hung stream) ═══
   console.log('\n[4/5] stop generation — chat-cancel mid-stream')
