@@ -12951,7 +12951,24 @@ footer a { color: var(--accent); text-decoration: none; }
       // research/plan trigger that hits a guard can't leak into the NEXT
       // ordinary message.
       if (!text && attachedFiles.length === 0 && attachedImages.length === 0) { disarmResearch(); return }
-      if (isStreaming) { disarmResearch(); return }
+      // v0.8: a send while a turn is still in flight used to silently do
+      // nothing — the user just saw "no response". Two fixes:
+      //  1. SELF-HEAL a stale flag: if isStreaming is true but THIS session
+      //     has no actually-streaming message, the global flag desynced (e.g.
+      //     a turn that errored/completed off-screen). Clear it and proceed —
+      //     this is the root cause of the "nothing happens forever" report.
+      //  2. If a turn really is in flight, tell the user + point at Stop,
+      //     instead of failing silently.
+      if (isStreaming) {
+        const reallyStreaming = Array.isArray(messages) && messages.some(m => m?.streaming)
+        if (reallyStreaming) {
+          disarmResearch()
+          showRewindToast?.('⏳ Still responding to your last message — press Esc or click ⏹ to stop it first.', true)
+          return
+        }
+        isStreaming = false            // stale flag — heal and continue
+        try { updateSendBtnMode() } catch {}
+      }
       // v0.7.67 — if the user is sending a message while an ask-popup is
       // open AND the message wasn't built by the popup itself, treat it as
       // the user bypassing the popup. Append a "use defaults for the rest"
