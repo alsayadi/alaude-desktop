@@ -174,3 +174,12 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - ChatGPT import flow extracted to importChatGPTFlow() (shared by ⌘K and
   the tour). Boot smoke test gained a one-retry policy after a flaky
   cold-start false alarm under full-suite load.
+
+### Cycle 15 — first-run audit + tour at the activation moment (2026-06-10)
+- Code-traced the fresh-install path: login auto-detect → key save →
+  auto-switch to a connected recommended model → composer hints → ⌘K chip.
+  All sound. Gap found: the wedge tour was ⌘K-only, invisible to the one
+  user who needs it. It now auto-opens exactly once, 1.2s after the FIRST
+  key ever saves — the activation moment.
+- Phase A (first hour) is now complete. Next: Phase B/C leftovers — memory
+  promote polish, README wedge alignment, App-quality pass.

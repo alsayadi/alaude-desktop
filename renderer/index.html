@@ -17295,6 +17295,15 @@ Title:`
       }
       if (ok) {
         funnelMark('key_saved')
+        // v0.8 first-run: the one moment a brand-new user is guaranteed to
+        // exist — right after their first key saves. Open the wedge tour
+        // ("Start here — five things…") exactly once, ever.
+        try {
+          if (!localStorage.getItem('alaude:tour-shown:v1')) {
+            localStorage.setItem('alaude:tour-shown:v1', '1')
+            setTimeout(() => { try { toggleWhatsInLabaik() } catch {} }, 1200)
+          }
+        } catch {}
         status.textContent = '✓ Key saved — loading app…'
         status.className = 'login-status success'
         // Don't wait — dismiss the login screen immediately, then re-verify
