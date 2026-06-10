@@ -10782,6 +10782,13 @@ footer a { color: var(--accent); text-decoration: none; }
         } },
         { kind: 'action', icon: '🔍', label: 'Deep research (cited, multi-source answer)', search: 'deep research investigate cited sources web search report verify', action: () => {
           closeCmdPalette()
+          // v0.8 cycle 15 — confirm-before-expensive: deep research runs
+          // many searches + reads on a cloud model. One confirm per app
+          // run; local-only users never pay anyway but still see scope.
+          if (!window._drConfirmed) {
+            if (!confirm(t('receipts.drConfirm'))) return
+            window._drConfirmed = true
+          }
           // v0.8: works from any state. With a question already typed, send it
           // as research now; otherwise ARM research mode and let the user type
           // the question — sending it then runs the research protocol.
@@ -11691,6 +11698,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.translate.name': 'Translate this',
         'template.translate.desc': 'Paste anything — a message, sign, or document — and get it in English.',
         'template.translate.starter': 'Translate the following into English. Keep the meaning exact and the tone natural; if a phrase has no clean translation, give the closest one and explain it briefly. If I paste a reply I should send back, also translate my reply into the other language.\n\n',
+        'receipts.month': 'This month: {usd}',
+        'receipts.vs': 'Same usage on subscriptions: ≈ ${n}/month',
+        'receipts.replies': '{n} replies this month',
+        'receipts.alert': '💰 AI spend this month passed {usd} — details in the 📈 model dashboard (⌘K)',
+        'receipts.drConfirm': 'Deep Research runs many web searches and reads several pages — on a cloud model it can cost from a few cents up to ~$1. Continue?',
         'input.placeholder': 'Message Labaik...  ( / snippets · @ files )',
         'input.attach.title': 'Attach file',
         'plan.banner.off': 'Turn off',
@@ -12029,6 +12041,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.translate.name': '翻译这个',
         'template.translate.desc': '粘贴任何内容——消息、标识或文件——译成中文。',
         'template.translate.starter': '把下面的内容翻译成中文。意思要准确、语气要自然；遇到无法直译的说法，给出最接近的译法并简单解释。如果我贴的是要回复的内容，请把我的回复也翻译成对方的语言。\n\n',
+        'receipts.month': '本月：{usd}',
+        'receipts.vs': '同样用量若用订阅：约 ${n}/月',
+        'receipts.replies': '本月 {n} 条回复',
+        'receipts.alert': '💰 本月 AI 花费已超过 {usd}——详见 📈 模型仪表盘（⌘K）',
+        'receipts.drConfirm': '深度研究会进行多次网络搜索并阅读多个页面——使用云端模型时可能花费几美分到约 1 美元。继续吗？',
         'input.placeholder': '和 Labaik 聊聊...（ / 片段 · @ 文件 ）',
         'input.attach.title': '附加文件',
         'plan.banner.off': '关闭',
@@ -12343,6 +12360,11 @@ footer a { color: var(--accent); text-decoration: none; }
         'template.translate.name': 'ترجم هذا',
         'template.translate.desc': 'الصق أي شيء — رسالة أو لافتة أو مستندًا — واحصل عليه بالعربية.',
         'template.translate.starter': 'ترجم ما يلي إلى العربية. حافظ على المعنى بدقة وعلى نبرة طبيعية؛ وإن تعذّرت ترجمة عبارة بدقة فقدّم أقرب ترجمة واشرحها باختصار. وإن لصقتُ ردًّا أريد إرساله فترجم ردّي أيضًا إلى لغة الطرف الآخر.\n\n',
+        'receipts.month': 'هذا الشهر: {usd}',
+        'receipts.vs': 'الاستخدام نفسه بالاشتراكات: ≈ ${n} شهريًّا',
+        'receipts.replies': '{n} ردًّا هذا الشهر',
+        'receipts.alert': '💰 تجاوز إنفاقك على الذكاء الاصطناعي هذا الشهر {usd} — التفاصيل في 📈 لوحة النماذج (⌘K)',
+        'receipts.drConfirm': 'البحث المعمّق يجري عدة عمليات بحث ويقرأ صفحات عديدة — وقد يكلّف على نموذج سحابي من سنتات قليلة إلى نحو دولار واحد. أتريد المتابعة؟',
         'input.placeholder': 'تحدّث إلى لبيك...  ( / مقاطع · @ ملفات )',
         'input.attach.title': 'إرفاق ملف',
         'plan.banner.off': 'إيقاف',
@@ -18096,6 +18118,54 @@ Title:`
       }
       return { usd, anyLocal: any, fromMessages: count }
     }
+    // v0.8 cycle 15 — Receipts: month-wide spend across every session,
+    // plus the comparison no subscription vendor can ship ("the same
+    // usage on subscriptions would cost ≈ $20 × providers-you-used").
+    function roughProvider(model) {
+      const lc = (model || '').toLowerCase()
+      if (lc.startsWith('claude')) return 'anthropic'
+      if (lc.startsWith('gpt') || /^o[134]/.test(lc)) return 'openai'
+      if (lc.startsWith('gemini')) return 'google'
+      if (lc.startsWith('grok')) return 'xai'
+      if (lc.startsWith('deepseek')) return 'deepseek'
+      if (lc.startsWith('kimi') || lc.startsWith('moonshot')) return 'kimi'
+      if (lc.startsWith('qwen')) return 'qwen'
+      if (lc.startsWith('glm')) return 'zhipu'
+      if (lc.startsWith('minimax')) return 'minimax'
+      if (lc.startsWith('hunyuan')) return 'hunyuan'
+      return 'other'
+    }
+    function computeMonthSpend() {
+      const now = new Date()
+      const m0 = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+      let usd = 0, replies = 0
+      const providers = new Set()
+      for (const s of (sessions || [])) {
+        for (const msg of (s.messages || [])) {
+          if (msg?.role !== 'assistant' || !msg.ts || msg.ts < m0) continue
+          const c = computeMessageCost(msg)
+          if (!c) continue
+          usd += c.usd
+          replies++
+          if (!c.local) providers.add(roughProvider(msg.model))
+        }
+      }
+      return { usd, replies, providers: providers.size }
+    }
+    // Soft alert when the month total crosses a threshold — once per
+    // threshold per month, quiet and dismissible. Certainty beats fear.
+    function maybeSpendAlert(monthUsd) {
+      try {
+        for (const th of [5, 10, 20, 50, 100]) {
+          if (monthUsd < th) break
+          const key = `alaude:spendAlert:${new Date().getFullYear()}-${new Date().getMonth()}:${th}`
+          if (localStorage.getItem(key)) continue
+          localStorage.setItem(key, '1')
+          showRewindToast?.(t('receipts.alert').replace('{usd}', '$' + th), false)
+        }
+      } catch {}
+    }
+
     function updateSessionCostDisplay() {
       // Topbar session-total pill
       const el = document.getElementById('topbar-cost')
@@ -18113,7 +18183,10 @@ Title:`
           el.textContent = c.anyLocal && c.usd === 0 ? 'free (local)' : formatUsd(c.usd)
           el.style.display = ''
         }
-        el.title = `Session cost: ${formatUsd(c.usd)} across ${c.fromMessages} reply${c.fromMessages === 1 ? '' : 's'}\n(rough estimate — 4 chars ≈ 1 token)`
+        const month = computeMonthSpend()
+        el.title = `Session cost: ${formatUsd(c.usd)} across ${c.fromMessages} reply${c.fromMessages === 1 ? '' : 's'}\n`
+          + t('receipts.month').replace('{usd}', formatUsd(month.usd)) + '\n(rough estimate — 4 chars ≈ 1 token)'
+        maybeSpendAlert(month.usd)
       }
     }
 
@@ -20116,9 +20189,19 @@ Title:`
     function renderModelPerfBody() {
       const body = document.getElementById('model-perf-body')
       if (!body) return
+      // v0.8 cycle 15 — Receipts banner: the month at a glance, with the
+      // honest subscription comparison ($20/mo per provider you used).
+      const month = computeMonthSpend()
+      const subs = 20 * Math.max(1, month.providers)
+      const receiptsHtml = `
+        <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding:10px 12px; margin-bottom:12px; border:1.5px solid var(--green); border-radius:10px; background:var(--green-dim)">
+          <div style="font-size:18px; font-weight:700">${escapeHtml(t('receipts.month').replace('{usd}', month.usd === 0 ? '$0' : formatUsd(month.usd)))}</div>
+          <div style="font-size:12px; color:var(--text-dim)">${escapeHtml(t('receipts.vs').replace('{n}', String(subs)))}</div>
+          <div style="font-size:11px; color:var(--text-faint)">${escapeHtml(t('receipts.replies').replace('{n}', String(month.replies)))}</div>
+        </div>`
       const rows = aggregateModelStats()
       if (!rows.length) {
-        body.innerHTML = `
+        body.innerHTML = receiptsHtml + `
           <div class="ux-empty" style="padding:32px 16px;text-align:center;color:var(--text-faint)">
             <div style="font-size:36px">📈</div>
             <div style="margin-top:8px">No model stats yet. Send a few messages and come back.</div>
@@ -20152,7 +20235,7 @@ Title:`
       const totalCost = rows.reduce((n, r) => n + (r.hasPricing && !r.local ? r.usd : 0), 0)
       const totalOut = rows.reduce((n, r) => n + r.tokens, 0)
       const totalIn = rows.reduce((n, r) => n + r.inputTokens, 0)
-      body.innerHTML = `
+      body.innerHTML = receiptsHtml + `
         <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px;flex-wrap:wrap">
           <span><strong style="color:var(--text)">${rows.length}</strong> model${rows.length === 1 ? '' : 's'}</span>
           <span><strong style="color:var(--text)">${totalCalls}</strong> calls</span>

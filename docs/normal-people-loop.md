@@ -200,3 +200,14 @@
   need the reality-check critic said must not be buried): paste/type/
   drop anything → translated into the UI language, with reply-back
   translation when the user pastes their answer. EN/中文/العربية.
+
+### Cycle 15 — Receipts v1: the spend meter (2026-06-11)
+- `computeMonthSpend()` walks every session's assistant messages this
+  calendar month. Surfaced in two places: the topbar cost pill tooltip
+  ("This month: $X") and a Receipts banner atop the 📈 model dashboard
+  with the line no subscription vendor can ship — "Same usage on
+  subscriptions: ≈ $20 × providers-you-used /month" + reply count.
+- Soft spend alerts: one quiet toast per $5/$10/$20/$50/$100 threshold
+  per month (localStorage-keyed by month).
+- Confirm-before-expensive: Deep Research asks once per app run with a
+  plain-words cost range before arming. EN/中文/العربية. 201 checks.
