@@ -28,14 +28,21 @@ for (const stream of [process.stdout, process.stderr]) {
 // dir (first-run on a fresh install) we fall back to Electron's default.
 try {
   const fsMod = require('fs')
-  const legacyDir = path.join(app.getPath('appData'), 'alaude-desktop')
-  const brandedDir = path.join(app.getPath('appData'), 'Alaude')
-  // Prefer legacy if it exists (keep existing users' data). Use branded
-  // only on a truly fresh install where neither dir has anything.
-  if (fsMod.existsSync(legacyDir)) {
-    app.setPath('userData', legacyDir)
-  } else if (fsMod.existsSync(brandedDir)) {
-    app.setPath('userData', brandedDir)
+  // Test harnesses (scripts/test-boot.mjs) point LABAIK_USERDATA at a temp
+  // dir so a smoke-test instance can't fight the user's running app over
+  // the LevelDB lock — and can't touch real localStorage.
+  if (process.env.LABAIK_USERDATA) {
+    app.setPath('userData', process.env.LABAIK_USERDATA)
+  } else {
+    const legacyDir = path.join(app.getPath('appData'), 'alaude-desktop')
+    const brandedDir = path.join(app.getPath('appData'), 'Alaude')
+    // Prefer legacy if it exists (keep existing users' data). Use branded
+    // only on a truly fresh install where neither dir has anything.
+    if (fsMod.existsSync(legacyDir)) {
+      app.setPath('userData', legacyDir)
+    } else if (fsMod.existsSync(brandedDir)) {
+      app.setPath('userData', brandedDir)
+    }
   }
   // Otherwise leave as-is; setName below will produce /Alaude on first run.
 } catch {}

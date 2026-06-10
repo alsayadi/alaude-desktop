@@ -87,3 +87,10 @@ turn success/latency; cycles will add (local-only) activation funnel marks.
 - Wedge defined, target user named, simplicity doctrine set
   ("wedge gets chrome; everything else lives in ⌘K"), triage lists drawn,
   activation/retention metrics defined, 4-phase roadmap laid out.
+
+### Cycle 2 — boot smoke test (2026-06-10)
+- Boot beacon as the main script's last statement + scripts/test-boot.mjs:
+  launches the REAL app hermetically (LABAIK_HOME + LABAIK_USERDATA temp
+  dirs so it can't fight the user's running instance over the LevelDB
+  lock), waits ≤30s for the beacon, kills the instance. ~1.3s in practice.
+  Chained into npm test. Closes the gap that let two boot crashes ship.

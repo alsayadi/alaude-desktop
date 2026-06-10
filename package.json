@@ -13,11 +13,12 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "npm run test:app && npm run test:worker",
+    "test": "npm run test:app && npm run test:worker && npm run test:boot",
     "test:unit": "node scripts/test-modules.mjs",
     "test:fixtures": "node electron/test-ooda-fixture.js",
     "test:app": "node scripts/test-app.mjs",
     "test:worker": "node scripts/test-worker-loop.mjs",
+    "test:boot": "node scripts/test-boot.mjs",
     "test:manual": "node scripts/test-app.mjs --manual",
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",

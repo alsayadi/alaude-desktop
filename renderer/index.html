@@ -19525,6 +19525,12 @@ Title:`
     loadVoiceMode()
     // Delay council UI setup until models have populated in the dropdown
     setTimeout(() => refreshCouncilUi(), 200)
+    // Boot beacon — the LAST statement of the main script. scripts/test-boot.mjs
+    // launches the real app and waits for this line on stderr; if any
+    // statement above throws, the beacon never fires and the smoke test
+    // fails. Added after two silent boot-crash regressions (TDZ call +
+    // infinite recursion) sat invisible to the unit suites.
+    console.warn('[boot] main script completed ✓')
   </script>
 
   <!-- v0.7.1 refactor: memory + profile subsystems live in renderer/js/*.
