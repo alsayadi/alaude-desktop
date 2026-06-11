@@ -453,3 +453,12 @@
   on surrender). No hidden space-state switching. The space-level
   guardrail stays for whenever spaces return. EN/中文/العربية.
   243 checks green.
+
+### Cycle 35 — the survival guarantee (2026-06-11)
+- "Your data" gains a final section: 🎒 "Take everything & leave — any
+  time": no account, no lock-in; everything lives in ~/.labaik and the
+  plain-JSON backup; the complete exit recipe (backup → delete folder →
+  trash the app) is printed right inside the app. Dot's shutdown and
+  stealth model downgrades elsewhere are the market backdrop — an app
+  that shows you the exit door is one you can trust to stay.
+  EN/中文/العربية. 243 checks green.

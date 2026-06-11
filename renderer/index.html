@@ -6961,6 +6961,12 @@
         <button class="msg-action-btn" onclick="revealDataFolder()" data-i18n="data.reveal">📂 Reveal in Finder</button>
         <button class="msg-action-btn" onclick="closeYourDataModal(); openBackupFromData()" data-i18n="data.backup">💾 Back up…</button>
       </div>
+      <!-- v0.8 cycle 35 — the survival guarantee: no account, no lock-in,
+           and the exit door is printed right inside the app. -->
+      <div style="margin-top:14px;padding:10px 12px;border:1px dashed var(--border);border-radius:10px">
+        <div style="font-size:12.5px;font-weight:700" data-i18n="data.leave.title">🎒 Take everything & leave — any time</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.55;margin-top:4px" data-i18n="data.leave.body">Labaik has no account and no lock-in. Everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains, and nothing follows you.</div>
+      </div>
     </div>
   </div>
 
@@ -12139,6 +12145,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.intro': "Everything Labaik knows lives on this Mac — no cloud account, no server. Here's exactly what's stored.",
         'data.reveal': '📂 Reveal in Finder',
         'data.backup': '💾 Back up…',
+        'data.leave.title': '🎒 Take everything & leave — any time',
+        'data.leave.body': 'Labaik has no account and no lock-in. Everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains, and nothing follows you.',
         'data.total': 'Total on disk',
         'data.clear': 'Clear this',
         'nudge.routine': '💡 Liked that? Labaik can do it on a schedule.',
@@ -12547,6 +12555,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.intro': 'Labaik 所知的一切都存在这台 Mac 上——没有云账户，没有服务器。以下是确切的存储内容。',
         'data.reveal': '📂 在访达中显示',
         'data.backup': '💾 备份…',
+        'data.leave.title': '🎒 随时带走一切离开',
+        'data.leave.body': 'Labaik 没有账号、没有锁定。一切都在上面的文件夹和你的备份文件里（纯 JSON——在任何地方、永远可读）。想彻底离开：保存备份，删除数据文件夹，把 Labaik 拖进废纸篓。什么都不会留下，也没有任何东西跟着你。',
         'data.total': '磁盘占用合计',
         'data.clear': '清除此项',
         'nudge.routine': '💡 喜欢这个？Labaik 可以定时自动完成。',
@@ -12940,6 +12950,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.intro': 'كل ما يعرفه لبيك موجود على هذا الجهاز — دون حساب سحابي ولا خادم. هذا ما يُخزَّن بالضبط.',
         'data.reveal': '📂 إظهار في فايندر',
         'data.backup': '💾 نسخة احتياطية…',
+        'data.leave.title': '🎒 خذ كل شيء وارحل — متى شئت',
+        'data.leave.body': 'لبيك بلا حساب وبلا احتجاز. كل شيء في المجلد أعلاه وفي ملف نسختك الاحتياطية (JSON صِرف — يُقرأ في أي مكان وإلى الأبد). للرحيل تمامًا: احفظ نسخة احتياطية، احذف مجلد البيانات، واسحب لبيك إلى المهملات. لا يبقى شيء، ولا يتبعك شيء.',
         'data.total': 'الإجمالي على القرص',
         'data.clear': 'مسح هذا',
         'nudge.routine': '💡 أعجبك ذلك؟ يمكن للبيك تنفيذه وفق جدول.',
