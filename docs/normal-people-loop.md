@@ -440,3 +440,16 @@
   (mirrors paths.js legacy handling) so fixtures never touch real user
   data. get() traversal guard hardened (.. rejected). 3 unit tests;
   243 checks green.
+
+### Cycle 34 — Homework Tutor made visible (2026-06-11)
+- Honesty catch: SPACES_ENABLED=false means the entire spaces UI
+  (cards, picker, quick actions) is hidden — so cycle 28's Education
+  guardrail was UNREACHABLE, and the planned "localize spaces" cycle
+  would have polished an invisible surface. Both re-scoped.
+- 🧒 "Homework helper" is now the 6th welcome template (grid: 2 clean
+  rows of 3): pickFile flow — photo the exercise → Socratic contract
+  embedded inline in the starter (ask what I know → teach the one
+  concept → similar example → let me try → hints; full solution only
+  on surrender). No hidden space-state switching. The space-level
+  guardrail stays for whenever spaces return. EN/中文/العربية.
+  243 checks green.

@@ -11988,6 +11988,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 Nothing to share yet',
         'share.making': '📤 Making your picture…',
         'share.done': '🖼️ Picture copied — paste it into WhatsApp or Messages',
+        'template.homework.name': 'Homework helper',
+        'template.homework.desc': 'A tutor, not an answer machine — photo the exercise, learn step by step.',
+        'template.homework.starter': 'I\'m attaching a homework exercise (photo or file). Tutor me — do NOT just give the answer:\n1. Ask me ONE question to see what I already know.\n2. Teach the single concept I need, in simple words.\n3. Walk through a SIMILAR example — not my exact problem.\n4. Let me try mine; check my steps and give hints.\nOnly reveal the full solution if I say I give up — then explain every step. Match my grade level.',
         'care.title': '💝 Set up Labaik for someone you love',
         'care.sub': 'Choose what they need — you\'ll get one small setup file. On their Mac: install Labaik, then ⌘K → Restore and pick this file.',
         'care.lang': 'Their language',
@@ -12402,6 +12405,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 还没有可分享的内容',
         'share.making': '📤 正在生成图片……',
         'share.done': '🖼️ 图片已复制——粘贴到微信或 WhatsApp 即可',
+        'template.homework.name': '作业辅导',
+        'template.homework.desc': '是导师不是答案机——拍下题目，一步步学会。',
+        'template.homework.starter': '我会附上一道作业题（照片或文件）。请辅导我——不要直接给答案：\n1. 先问我一个问题，了解我已经会什么。\n2. 用大白话讲清我需要的那一个概念。\n3. 演示一道类似的例题——不是我这道。\n4. 让我自己试；检查我的步骤并给提示。\n只有当我说「我放弃」时才给完整解答——并逐步讲解。难度要符合我的年级。',
         'care.title': '💝 为你爱的人设置 Labaik',
         'care.sub': '选择 TA 需要的——你会得到一个小小的设置文件。在 TA 的 Mac 上：安装 Labaik，然后 ⌘K → 恢复，选择这个文件。',
         'care.lang': 'TA 的语言',
@@ -12792,6 +12798,9 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 لا يوجد ما يُشارَك بعد',
         'share.making': '📤 يجهّز الصورة…',
         'share.done': '🖼️ نُسخت الصورة — ألصقها في واتساب أو الرسائل',
+        'template.homework.name': 'مساعد الواجبات',
+        'template.homework.desc': 'معلّم لا آلة إجابات — صوِّر التمرين وتعلَّم خطوة بخطوة.',
+        'template.homework.starter': 'سأرفق تمرينًا من واجبي (صورة أو ملفًّا). درِّسني — لا تعطني الإجابة مباشرة:\n1. اسألني سؤالًا واحدًا لتعرف ما أتقنه.\n2. اشرح المفهوم الوحيد الذي أحتاجه بكلمات بسيطة.\n3. اعرض مثالًا مشابهًا — لا مسألتي نفسها.\n4. دعني أحاول؛ راجع خطواتي وأعطني تلميحات.\nلا تكشف الحل الكامل إلا إذا قلت إني استسلمت — وحينها اشرح كل خطوة. وافق مستوى صفّي.',
         'care.title': '💝 جهِّز لبيك لشخص تحبه',
         'care.sub': 'اختر ما يحتاجه — وستحصل على ملف إعداد صغير واحد. على جهازه: ثبِّت لبيك ثم ⌘K ← استعادة واختر هذا الملف.',
         'care.lang': 'لغته',
@@ -17498,6 +17507,20 @@ Title:`
         i18nStarter: 'template.translate.starter',
         goal: 'Translate anything into my language',
         tags: ['translate', 'life'],
+      },
+      // v0.8 cycle 34 — Homework Tutor as a visible surface. The Education
+      // space carries the same guardrail (cycle 28) but SPACES_ENABLED is
+      // false, so the welcome template embeds the Socratic contract inline
+      // — no hidden space-state switching.
+      {
+        id: 'homework',
+        icon: '🧒',
+        i18nName: 'template.homework.name',
+        i18nDesc: 'template.homework.desc',
+        i18nStarter: 'template.homework.starter',
+        goal: 'Learn the concept, not just the answer',
+        tags: ['homework', 'life'],
+        pickFile: true,
       },
     ]
     // Resolve a template's user-visible fields. Falls back to the raw
