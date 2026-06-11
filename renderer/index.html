@@ -6919,6 +6919,18 @@
     </div>
   </div>
 
+  <!-- v0.8 cycle 32 — Care wizard: set up Labaik for someone you love -->
+  <div class="modal-overlay" id="care-modal">
+    <div class="modal" style="max-width:480px;width:92vw">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">
+        <span data-i18n="care.title">💝 Set up Labaik for someone you love</span>
+        <button class="modal-close" onclick="toggleCareWizard()">&times;</button>
+      </h2>
+      <p style="font-size:12.5px;color:var(--text-dim);line-height:1.5" data-i18n="care.sub">Choose what they need — you'll get one small setup file. On their Mac: install Labaik, then ⌘K → Restore and pick this file.</p>
+      <div id="care-body"></div>
+    </div>
+  </div>
+
   <!-- Emoji autocomplete popover -->
   <div class="emoji-pop" id="emoji-pop"></div>
 
@@ -10964,6 +10976,7 @@ footer a { color: var(--accent); text-decoration: none; }
         { kind: 'action', icon: '⚙️', label: 'Settings', search: 'settings preferences options config hub gear', action: () => { closeCmdPalette(); toggleSettingsHub() } },
         { kind: 'action', icon: '🎧', label: 'Listen to this — two-host audio overview', search: 'listen audio overview podcast hear read aloud two host', action: () => { closeCmdPalette(); audioOverviewStart() } },
         { kind: 'action', icon: '📤', label: 'Share last reply as image (paste into WhatsApp)', search: 'share image picture whatsapp messages send copy card screenshot', action: () => { closeCmdPalette(); shareLastReplyAsImage() } },
+        { kind: 'action', icon: '💝', label: 'Set up Labaik for someone you love (care setup file)', search: 'care family parent mother father elder setup gift love grandma grandpa', action: () => { closeCmdPalette(); toggleCareWizard() } },
         { kind: 'action', icon: '📊', label: 'UX Insights', search: 'insights ux dashboard', action: () => { closeCmdPalette(); toggleUxInsightsModal() } },
         { kind: 'action', icon: '🌳', label: 'Thinking Graph', search: 'thinking graph map tree branches dag', action: () => { closeCmdPalette(); toggleThinkingGraph() } },
         { kind: 'action', icon: '✨', label: 'Prompt Snippets', search: 'snippets templates prompts slash', action: () => { closeCmdPalette(); toggleSnippetModal() } },
@@ -10997,6 +11010,11 @@ footer a { color: var(--accent); text-decoration: none; }
             if (r.renderer?.snippets) localStorage.setItem('alaude:snippets:v1', JSON.stringify(r.renderer.snippets))
             if (r.renderer?.templates) localStorage.setItem('alaude:templates:v1', JSON.stringify(r.renderer.templates))
             if (r.renderer?.prefs?.focusMode != null) localStorage.setItem('alaude:focus:v1', r.renderer.prefs.focusMode ? '1' : '0')
+            // v0.8 cycle 32 — Care bundles carry the recipient's language
+            // and Easy mode; both are picked up by the reload below.
+            if (r.renderer?.prefs?.easyMode) localStorage.setItem('alaude:easyMode:v1', '1')
+            if (['en', 'zh', 'ar'].includes(r.renderer?.prefs?.lang)) localStorage.setItem('alaude:lang:v1', r.renderer.prefs.lang)
+            if (r.renderer?.care) showRewindToast?.(t('care.applied'), false)
           } catch {}
           showRewindToast?.(`♻️ Restored ${r.restored.length} stores + ${r.skillsRestored} skills${r.mergedSessions ? ` · +${r.mergedSessions} merged sessions` : ''} — reloading…`, false)
           setTimeout(() => location.reload(), 1200)
@@ -11970,6 +11988,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 Nothing to share yet',
         'share.making': '📤 Making your picture…',
         'share.done': '🖼️ Picture copied — paste it into WhatsApp or Messages',
+        'care.title': '💝 Set up Labaik for someone you love',
+        'care.sub': 'Choose what they need — you\'ll get one small setup file. On their Mac: install Labaik, then ⌘K → Restore and pick this file.',
+        'care.lang': 'Their language',
+        'care.easy': '🧓 Easy mode — bigger text, fewer buttons',
+        'care.meds': '💊 Daily medication reminder (9 AM, warm and short)',
+        'care.bills': '💳 Monthly bills & renewals check (1st of the month)',
+        'care.save': '💝 Save the setup file…',
+        'care.saved': '💝 Setup file saved — send it to them with the Labaik download link',
+        'care.applied': '💝 This Labaik was set up with love — everything is ready',
         'routines.watch.placeholder': '👁 Watch a page (optional) — https://… · runs only when it changes',
         'routines.watch.httpsOnly': '👁 Watched pages must start with https://',
         'hub.easy': 'Easy mode',
@@ -12375,6 +12402,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 还没有可分享的内容',
         'share.making': '📤 正在生成图片……',
         'share.done': '🖼️ 图片已复制——粘贴到微信或 WhatsApp 即可',
+        'care.title': '💝 为你爱的人设置 Labaik',
+        'care.sub': '选择 TA 需要的——你会得到一个小小的设置文件。在 TA 的 Mac 上：安装 Labaik，然后 ⌘K → 恢复，选择这个文件。',
+        'care.lang': 'TA 的语言',
+        'care.easy': '🧓 轻松模式——字更大、按钮更少',
+        'care.meds': '💊 每日吃药提醒（早上 9 点，温暖简短）',
+        'care.bills': '💳 每月账单与续费检查（每月 1 号）',
+        'care.save': '💝 保存设置文件……',
+        'care.saved': '💝 设置文件已保存——连同 Labaik 下载链接一起发给 TA',
+        'care.applied': '💝 这份 Labaik 带着爱意设置好了——一切就绪',
         'routines.watch.placeholder': '👁 盯一个网页（可选）——https://… · 仅在页面变化时运行',
         'routines.watch.httpsOnly': '👁 盯的网页必须以 https:// 开头',
         'hub.easy': '轻松模式',
@@ -12756,6 +12792,15 @@ footer a { color: var(--accent); text-decoration: none; }
         'share.nothing': '📤 لا يوجد ما يُشارَك بعد',
         'share.making': '📤 يجهّز الصورة…',
         'share.done': '🖼️ نُسخت الصورة — ألصقها في واتساب أو الرسائل',
+        'care.title': '💝 جهِّز لبيك لشخص تحبه',
+        'care.sub': 'اختر ما يحتاجه — وستحصل على ملف إعداد صغير واحد. على جهازه: ثبِّت لبيك ثم ⌘K ← استعادة واختر هذا الملف.',
+        'care.lang': 'لغته',
+        'care.easy': '🧓 الوضع الميسَّر — خط أكبر وأزرار أقل',
+        'care.meds': '💊 تذكير يومي بالدواء (9 صباحًا، بدفء واختصار)',
+        'care.bills': '💳 فحص شهري للفواتير والتجديدات (أول الشهر)',
+        'care.save': '💝 احفظ ملف الإعداد…',
+        'care.saved': '💝 حُفظ ملف الإعداد — أرسله له مع رابط تنزيل لبيك',
+        'care.applied': '💝 جُهِّز هذا اللبيك بمحبة — كل شيء جاهز',
         'routines.watch.placeholder': '👁 راقب صفحة (اختياري) — https://… · لا يعمل إلا عند تغيُّرها',
         'routines.watch.httpsOnly': '👁 الصفحات المراقبة يجب أن تبدأ بـ https://',
         'hub.easy': 'الوضع الميسَّر',
@@ -20407,6 +20452,55 @@ Title:`
     document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); toggleSettingsHub() }
     })
+
+    // ── v0.8 cycle 32 — Care wizard ─────────────────────────────────────
+    // The adult child setting Labaik up for a parent is the realistic
+    // growth channel. This builds a STARTER bundle (their language, Easy
+    // mode, caring reminders) — none of the owner's own data — that the
+    // recipient applies via the normal merge-safe Restore.
+    function toggleCareWizard() {
+      const m = document.getElementById('care-modal')
+      if (!m) return
+      if (m.classList.contains('show')) { m.classList.remove('show'); return }
+      const body = document.getElementById('care-body')
+      body.innerHTML = `
+        <div class="hub-inline" style="margin-top:8px">
+          <div class="hub-inline-row"><span class="hub-card-name">${escapeHtml(t('care.lang'))}</span>
+            <span style="display:flex;gap:10px;margin-left:auto">
+              ${['en', 'zh', 'ar'].map(c => `<label style="display:flex;align-items:center;gap:4px;font-size:12.5px;cursor:pointer"><input type="radio" name="care-lang" value="${c}" ${c === i18n.lang ? 'checked' : ''}/>${c === 'en' ? 'English' : c === 'zh' ? '中文' : 'العربية'}</label>`).join('')}
+            </span></div>
+          <label class="hub-inline-row" style="cursor:pointer"><input type="checkbox" id="care-easy" checked /> <span style="font-size:13px">${escapeHtml(t('care.easy'))}</span></label>
+          <label class="hub-inline-row" style="cursor:pointer"><input type="checkbox" id="care-meds" checked /> <span style="font-size:13px">${escapeHtml(t('care.meds'))}</span></label>
+          <label class="hub-inline-row" style="cursor:pointer"><input type="checkbox" id="care-bills" /> <span style="font-size:13px">${escapeHtml(t('care.bills'))}</span></label>
+          <button class="key-save-btn" style="margin-top:6px;width:100%" onclick="careExportNow()">${escapeHtml(t('care.save'))}</button>
+        </div>`
+      m.classList.add('show')
+    }
+
+    async function careExportNow() {
+      const lang = document.querySelector('input[name=care-lang]:checked')?.value || 'en'
+      // Reminder text ships in the RECIPIENT's language, not the giver's.
+      const RX = {
+        en: { meds: ['Medication time', 'Remind me warmly to take my medication now. One short, friendly sentence.'], bills: ['Bills & renewals check', 'Help me check: which bills, subscriptions, or renewals usually need attention at this time of month? Give me a short, simple checklist.'] },
+        zh: { meds: ['吃药时间', '请用一句温暖简短的话提醒我现在吃药。'], bills: ['账单与续费检查', '帮我看看：每月这个时候通常有哪些账单、订阅或续费要处理？给我一个简短清单。'] },
+        ar: { meds: ['موعد الدواء', 'ذكّرني بدفء أن آخذ دوائي الآن — جملة واحدة قصيرة وودودة.'], bills: ['فحص الفواتير والتجديدات', 'ساعدني: ما الفواتير أو الاشتراكات أو التجديدات التي تحتاج انتباهًا عادة في هذا الوقت من الشهر؟ أعطني قائمة قصيرة وبسيطة.'] },
+      }[lang]
+      const routines = []
+      if (document.getElementById('care-meds')?.checked) routines.push({ id: 'care-meds', name: '💊 ' + RX.meds[0], prompt: RX.meds[1], cron: '0 9 * * *', enabled: true, notify: true })
+      if (document.getElementById('care-bills')?.checked) routines.push({ id: 'care-bills', name: '💳 ' + RX.bills[0], prompt: RX.bills[1], cron: '0 9 1 * *', enabled: true, notify: true })
+      const bundle = {
+        kind: 'labaik-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        files: routines.length ? { 'routines.json': { version: 1, routines } } : {},
+        skills: [],
+        renderer: { care: true, prefs: { lang, easyMode: !!document.getElementById('care-easy')?.checked } },
+      }
+      let r
+      try { r = await window.alaude.careExport(bundle) } catch (e) { r = { ok: false, reason: e?.message } }
+      if (r?.ok) { toggleCareWizard(); showRewindToast?.(t('care.saved'), false); logUx({ kind: 'care_bundle_saved' }) }
+      else if (r?.reason !== 'cancelled') showRewindToast?.('💝 ' + (r?.reason || 'failed'), true)
+    }
 
     // ── v0.8 cycle 29 — panic path ──────────────────────────────────────
     // The 🛟 menu: what a confused person needs at the moment of

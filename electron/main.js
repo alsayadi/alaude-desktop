@@ -1273,6 +1273,26 @@ ipcMain.handle('backup-import', async () => {
   }
 })
 
+// v0.8 cycle 32 — Care bundle: a STARTER setup file for someone you love
+// (their language, Easy mode, a couple of caring reminders). Unlike
+// backup-export, this writes a renderer-built bundle that contains NONE
+// of the owner's own data — it's a gift, not a clone.
+ipcMain.handle('care-export', async (_e, bundle) => {
+  try {
+    if (!bundle || bundle.kind !== 'labaik-backup') return { ok: false, reason: 'bad bundle' }
+    const res = await dialog.showSaveDialog({
+      title: 'Save the setup file',
+      defaultPath: 'labaik-care-setup.json',
+      filters: [{ name: 'Labaik setup', extensions: ['json'] }],
+    })
+    if (res.canceled || !res.filePath) return { ok: false, reason: 'cancelled' }
+    require('fs').writeFileSync(res.filePath, JSON.stringify(bundle, null, 2), 'utf8')
+    return { ok: true, path: res.filePath }
+  } catch (err) {
+    return { ok: false, reason: err.message }
+  }
+})
+
 // v0.8 market-fit: ChatGPT history import. Parses conversations.json from
 // ChatGPT's data export (Settings → Data controls → Export) and converts
 // each conversation to a plain {title, createdAt, messages[]} the renderer

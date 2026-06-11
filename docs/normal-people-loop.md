@@ -417,3 +417,15 @@
   merge-safe path). 6 unit tests; 240 checks green.
 - NOTE: v0.7.76 tag+release rolled back per owner policy — no releases
   until cycle 100; public latest remains v0.7.75.
+
+### Cycle 32 — Care bundle: set up Labaik for someone you love (2026-06-11)
+- ⌘K → 💝 "Set up Labaik for someone you love": pick their language,
+  Easy mode, and caring reminders (💊 daily meds at 9 AM, 💳 monthly
+  bills check) — reminder text ships in the RECIPIENT's language. Saves
+  one small setup file containing NONE of the giver's data (new
+  care-export IPC validates the bundle shape).
+- Recipient applies it via the normal merge-safe Restore: routines
+  merge in (cycle 31), language + Easy mode apply on reload, and a
+  "💝 set up with love" toast greets them. The adult-child-installs-
+  it-for-a-parent growth channel, productized. EN/中文/العربية.
+  240 checks green.
