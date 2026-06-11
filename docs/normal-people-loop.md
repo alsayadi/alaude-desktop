@@ -429,3 +429,14 @@
   "💝 set up with love" toast greets them. The adult-child-installs-
   it-for-a-parent growth channel, productized. EN/中文/العربية.
   240 checks green.
+
+### Cycle 33 — SKILL.md open-standard interop (2026-06-11)
+- Agent Skills became an open standard with a large ecosystem;
+  folder-skills discovery now also reads other tools' USER-LEVEL skill
+  dirs (Claude Code's ~/.claude/skills) — strictly read-only, tagged
+  source:'claude', Labaik-native wins on slug collision. use_skill and
+  the slash menu resolve interop skills identically.
+- Under LABAIK_HOME the standard root redirects into the sandbox
+  (mirrors paths.js legacy handling) so fixtures never touch real user
+  data. get() traversal guard hardened (.. rejected). 3 unit tests;
+  243 checks green.

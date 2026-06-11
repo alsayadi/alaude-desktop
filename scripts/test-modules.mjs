@@ -311,6 +311,19 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('get() rejects path traversal', folderSkills.get('../outside') === null)
   check('get() unknown slug → null', folderSkills.get('nope') === null)
 
+  // Cycle 33 — SKILL.md open-standard interop: skills in other tools'
+  // standard dirs (redirected into the sandbox under LABAIK_HOME) are
+  // discovered read-only; Labaik-native wins on slug collision.
+  const stdDir = path.join(testHome, '__std_claude_skills__')
+  fs.mkdirSync(path.join(stdDir, 'cc-skill'), { recursive: true })
+  fs.writeFileSync(path.join(stdDir, 'cc-skill', 'SKILL.md'), '---\nname: From Claude Code\ndescription: ecosystem skill\n---\nDo the thing.')
+  fs.mkdirSync(path.join(stdDir, 'pr-polish'), { recursive: true })
+  fs.writeFileSync(path.join(stdDir, 'pr-polish', 'SKILL.md'), '---\nname: SHOULD LOSE\n---\nx')
+  const found2 = folderSkills.discover()
+  check('interop skill discovered with source tag', found2.find(s => s.slug === 'cc-skill')?.source === 'claude')
+  check('labaik wins on slug collision', found2.find(s => s.slug === 'pr-polish')?.name === 'Polish a PR')
+  check('get() resolves interop slug', folderSkills.get('cc-skill')?.body === 'Do the thing.')
+
   // Starter skills (v0.8 general-use)
   const first = folderSkills.installStarters()
   check('installStarters installs all bundled skills',

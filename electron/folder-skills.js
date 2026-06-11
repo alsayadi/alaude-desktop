@@ -40,6 +40,21 @@ const paths = require('./paths')
 const SKILLS_ROOT = path.join(paths.BASE_DIR, 'skills')
 const MAX_BODY_BYTES = 64 * 1024  // 64KB per skill — same order as AGENTS.md
 
+// v0.8 cycle 33 — Agent Skills (SKILL.md) became an open standard with a
+// large ecosystem. Read other tools' USER-LEVEL skills so anything the
+// user already has (e.g. Claude Code's ~/.claude/skills) works in Labaik
+// with zero copying. Strictly read-only: we never write outside our own
+// root, and Labaik-native skills win on slug collision. Under LABAIK_HOME
+// (tests) the standard root is redirected inside the sandbox, mirroring
+// paths.js's legacy-dir handling so a fixture can't read real user data.
+const STD_CLAUDE_ROOT = paths.USING_CUSTOM_HOME
+  ? path.join(paths.BASE_DIR, '__std_claude_skills__')
+  : path.join(paths.HOME, '.claude', 'skills')
+const ROOTS = [
+  { root: SKILLS_ROOT, source: 'labaik' },
+  { root: STD_CLAUDE_ROOT, source: 'claude' },
+]
+
 /**
  * Parse a leading YAML-lite frontmatter block (`---` … `---`).
  * Only handles `key: value` lines — no nesting, no arrays. That's deliberate;
@@ -75,42 +90,48 @@ function _parseFrontmatter(raw) {
  *
  * Returns an array sorted by name (case-insensitive).
  */
+function _readSkillDir(root, slug, source) {
+  const skillPath = path.join(root, slug, 'SKILL.md')
+  let raw = ''
+  try {
+    const stat = fs.statSync(skillPath)
+    if (!stat.isFile()) return null
+    raw = fs.readFileSync(skillPath, 'utf8')
+  } catch { return null }  // no SKILL.md or unreadable — skip
+  const { meta, body } = _parseFrontmatter(raw)
+  let trimmedBody = body.trim()
+  const originalLen = trimmedBody.length
+  if (trimmedBody.length > MAX_BODY_BYTES) {
+    trimmedBody = trimmedBody.slice(0, MAX_BODY_BYTES) +
+      `\n\n[…truncated ${originalLen - MAX_BODY_BYTES} chars on load — keep SKILL.md under ${MAX_BODY_BYTES / 1024}KB]`
+  }
+  return {
+    slug,
+    name: String(meta.name || slug).slice(0, 120),
+    description: String(meta.description || '').slice(0, 240),
+    body: trimmedBody,
+    bytes: originalLen,
+    path: skillPath,
+    source,
+  }
+}
+
 function discover() {
   const out = []
-  let entries = []
-  try {
-    entries = fs.readdirSync(SKILLS_ROOT, { withFileTypes: true })
-  } catch { return [] }  // root dir doesn't exist yet — return empty silently
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const slug = entry.name
-    if (slug.startsWith('.')) continue  // hide dotfiles
-    const skillPath = path.join(SKILLS_ROOT, slug, 'SKILL.md')
-    let raw = ''
+  const seen = new Set()
+  for (const { root, source } of ROOTS) {
+    let entries = []
     try {
-      const stat = fs.statSync(skillPath)
-      if (!stat.isFile()) continue
-      raw = fs.readFileSync(skillPath, 'utf8')
-    } catch { continue }  // no SKILL.md or unreadable — skip
-
-    const { meta, body } = _parseFrontmatter(raw)
-    let trimmedBody = body.trim()
-    const originalLen = trimmedBody.length
-    if (trimmedBody.length > MAX_BODY_BYTES) {
-      trimmedBody = trimmedBody.slice(0, MAX_BODY_BYTES) +
-        `\n\n[…truncated ${originalLen - MAX_BODY_BYTES} chars on load — keep SKILL.md under ${MAX_BODY_BYTES / 1024}KB]`
+      entries = fs.readdirSync(root, { withFileTypes: true })
+    } catch { continue }  // root doesn't exist — fine
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const slug = entry.name
+      if (slug.startsWith('.') || seen.has(slug)) continue  // labaik wins on collision
+      const skill = _readSkillDir(root, slug, source)
+      if (skill) { seen.add(slug); out.push(skill) }
     }
-    out.push({
-      slug,
-      name: String(meta.name || slug).slice(0, 120),
-      description: String(meta.description || '').slice(0, 240),
-      body: trimmedBody,
-      bytes: originalLen,
-      path: skillPath,
-    })
   }
-
   out.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
   return out
 }
@@ -120,22 +141,12 @@ function discover() {
  * body without round-tripping the full list.
  */
 function get(slug) {
-  if (!slug || /[/\\]/.test(slug)) return null  // path-traversal guard
-  const skillPath = path.join(SKILLS_ROOT, slug, 'SKILL.md')
-  let raw = ''
-  try {
-    const stat = fs.statSync(skillPath)
-    if (!stat.isFile()) return null
-    raw = fs.readFileSync(skillPath, 'utf8')
-  } catch { return null }
-  const { meta, body } = _parseFrontmatter(raw)
-  return {
-    slug,
-    name: String(meta.name || slug).slice(0, 120),
-    description: String(meta.description || '').slice(0, 240),
-    body: body.trim().slice(0, MAX_BODY_BYTES),
-    path: skillPath,
+  if (!slug || /[/\\]/.test(slug) || slug.includes('..')) return null  // path-traversal guard
+  for (const { root, source } of ROOTS) {
+    const skill = _readSkillDir(root, slug, source)
+    if (skill) return skill
   }
+  return null
 }
 
 /**
