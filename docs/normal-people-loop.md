@@ -405,3 +405,15 @@
   of type, ↩︎ undo anything the AI did, ⏰ reminders in plain words
   (pre-fills a live example), 🔒 free/private/inspectable (opens Your
   Data). Older wedges remain in the timeline. 234 checks green.
+
+### Cycle 31 — restore-merge complete: restore can ADD, never REMOVE (2026-06-11)
+- The union-by-id restore (cycle 29: sessions+spaces) now covers ALL
+  id-array stores: memory entries, profile entries, routines. Local
+  wins on id conflict; restore between two active machines can only
+  add, never silently wipe. Profile's `onboarded` flag never regresses
+  (a restore must not re-trigger the first-run questionnaire).
+- Closes the long-flagged safety debt and unblocks Care bundles
+  ("set up for someone you love" applies a starter bundle via this
+  merge-safe path). 6 unit tests; 240 checks green.
+- NOTE: v0.7.76 tag+release rolled back per owner policy — no releases
+  until cycle 100; public latest remains v0.7.75.

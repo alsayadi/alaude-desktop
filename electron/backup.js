@@ -60,13 +60,20 @@ function importBundle(bundle) {
       // Always snapshot first — even merge can't un-delete a mistake.
       if (fs.existsSync(p)) fs.copyFileSync(p, `${p}.pre-import-${ts}`)
       let toWrite = incoming
-      // v0.8 cycle 29: non-destructive restore. For the array-bearing stores
-      // (sessions, spaces), UNION by id instead of overwriting — moving a
-      // backup between two active machines no longer wipes whichever side
-      // restored last. The locally-newer copy wins on conflict; for sessions
-      // "newer" = more messages (matches the deleted importFullBackup's
-      // heuristic). Plain overwrite (with snapshot) for the scalar stores.
-      const mergeKey = name === 'sessions.json' ? 'sessions' : (name === 'spaces.json' ? 'spaces' : null)
+      // v0.8 cycle 29 (extended cycle 31): non-destructive restore for ALL
+      // id-array stores — sessions, spaces, memory entries, profile
+      // entries, routines — UNION by id instead of overwriting, so moving
+      // a backup between two active machines never wipes whichever side
+      // restored last. Local wins on id conflict (for sessions, the copy
+      // with more messages wins). Restore can ADD, never silently REMOVE.
+      const MERGE_KEYS = {
+        'sessions.json': 'sessions',
+        'spaces.json': 'spaces',
+        'memory.json': 'entries',
+        'profile.json': 'entries',
+        'routines.json': 'routines',
+      }
+      const mergeKey = MERGE_KEYS[name] || null
       if (mergeKey && fs.existsSync(p)) {
         try {
           const local = JSON.parse(fs.readFileSync(p, 'utf8'))
@@ -84,6 +91,11 @@ function importBundle(bundle) {
             }
             const mergedArr = Array.from(byId.values())
             toWrite = Array.isArray(incoming) ? mergedArr : { ...incoming, [mergeKey]: mergedArr }
+            // Profile scalar: once onboarded, always onboarded — a restore
+            // must never re-trigger the first-run questionnaire.
+            if (name === 'profile.json' && !Array.isArray(toWrite)) {
+              toWrite.onboarded = !!(local?.onboarded || incoming?.onboarded)
+            }
           }
         } catch { /* unparseable local — fall back to overwrite (snapshot kept) */ }
       }

@@ -411,6 +411,25 @@ console.log('\n[7/13] folder-skills — discovery + frontmatter + guards')
   check('merge takes the more-complete shared copy', after.find(s => s.id === 1)?.messages.length === 2)
   check('merge reports new session count', merged.mergedSessions === 1)
 
+  // Cycle 31: the same union-by-id now covers memory, profile, routines.
+  fs.writeFileSync(path.join(testHome, 'memory.json'), JSON.stringify({ entries: [{ id: 'm1', text: 'local memory' }] }))
+  fs.writeFileSync(path.join(testHome, 'profile.json'), JSON.stringify({ entries: [{ id: 'p1', text: 'local pref' }], onboarded: true }))
+  fs.writeFileSync(path.join(testHome, 'routines.json'), JSON.stringify({ version: 1, routines: [{ id: 'r1', name: 'local routine' }] }))
+  const mergeBundle2 = { kind: 'labaik-backup', version: 1, files: {
+    'memory.json': { entries: [{ id: 'm2', text: 'backup memory' }] },
+    'profile.json': { entries: [{ id: 'p2', text: 'backup pref' }], onboarded: false },
+    'routines.json': { version: 1, routines: [{ id: 'r1', name: 'CHANGED elsewhere' }, { id: 'r2', name: 'backup routine' }] },
+  }, skills: [] }
+  check('cycle-31 merge import ok', backup.importBundle(mergeBundle2).ok === true)
+  const mem2 = JSON.parse(fs.readFileSync(path.join(testHome, 'memory.json'), 'utf8')).entries
+  check('memory union keeps local + adds backup', mem2.some(e => e.id === 'm1') && mem2.some(e => e.id === 'm2'))
+  const prof2 = JSON.parse(fs.readFileSync(path.join(testHome, 'profile.json'), 'utf8'))
+  check('profile union keeps local + adds backup', prof2.entries.some(e => e.id === 'p1') && prof2.entries.some(e => e.id === 'p2'))
+  check('onboarded never regresses to false', prof2.onboarded === true)
+  const rout2 = JSON.parse(fs.readFileSync(path.join(testHome, 'routines.json'), 'utf8')).routines
+  check('routine conflict: local wins', rout2.find(r => r.id === 'r1')?.name === 'local routine')
+  check('routine union adds backup-only', rout2.some(r => r.id === 'r2'))
+
   // ═══ TEST 11: conversation history budget ═══
   console.log('\n[11/13] history-budget — cap, keep-recent, trim note')
   const { capHistory } = await import('../renderer/js/history-budget.js')
