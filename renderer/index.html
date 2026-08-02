@@ -1090,8 +1090,20 @@
       transition: opacity 0.2s, transform 0.2s;
       z-index: 100;
       box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+      /* v0.8 cycle 40 — THE COMPOSER-BLOCKER FIX.
+         This toast is hidden with opacity alone, so it stayed in the
+         hit-test layer forever: display:block, visibility:visible,
+         pointer-events:auto, z-index 100, parked at bottom:26px/left:50%
+         — which is exactly on top of the composer. The result was that
+         once ANY toast had been shown and faded, an invisible ~410x35
+         bar permanently swallowed clicks on the middle of the message
+         box, and the app simply could not be typed into until reload.
+         It must be click-through whenever it is not actually showing;
+         `.show` restores pointer events because the toast can contain
+         a link (see the `a` rule below). */
+      pointer-events: none;
     }
-    .rewind-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .rewind-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
     .rewind-toast a { color: var(--green); cursor: pointer; text-decoration: underline; margin-left: 6px; }
 
     .sidebar-search {

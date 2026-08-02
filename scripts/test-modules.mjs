@@ -1186,6 +1186,23 @@ console.log('\n[23/23] chat UI — offline-clean, and inline code stays inline')
     /e\.key === 'Escape'\) closeComposerMenu/.test(html) &&
     /#composer-menu, #composer-plus, #composer-state/.test(html))
 
+  // ── cycle 40: nothing invisible may swallow a click ───────────
+  // .rewind-toast is hidden with opacity alone and lives at
+  // bottom:26px/left:50% — directly over the composer. Without
+  // pointer-events:none it stayed in the hit-test layer after fading,
+  // so once any toast had shown, the middle of the message box became
+  // unclickable and the app could not be typed into until reload.
+  const toastBase = html.slice(html.indexOf('.rewind-toast {'), html.indexOf('.rewind-toast.show'))
+  check('a faded toast is click-through', /pointer-events:\s*none/.test(toastBase))
+  check('a visible toast is still clickable (it can contain a link)',
+    /\.rewind-toast\.show\s*\{[^}]*pointer-events:\s*auto/.test(html))
+  // Any other fixed overlay hidden by opacity must do the same.
+  const fixedOpacityZero = [...html.matchAll(/\.([a-z-]+)\s*\{([^}]*position:\s*fixed[^}]*opacity:\s*0;[^}]*)\}/gi)]
+    .filter(m => !/pointer-events:\s*none/.test(m[2]))
+    .map(m => m[1])
+  check('no other fixed overlay is hidden by opacity yet still hit-testable',
+    fixedOpacityZero.length === 0, fixedOpacityZero.join(', '))
+
   // The three new strings must exist in all three locales.
   for (const key of ['composer.plus.title', 'composer.state.title', 'composer.attach']) {
     check(`  "${key}" translated in all 3 locales`,

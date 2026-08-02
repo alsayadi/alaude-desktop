@@ -637,3 +637,31 @@
   test but not the second, and the active session had changed in between.
   Lesson for any future real-data run: assert the session id immediately
   before every send, never once at the start.
+
+### Cycle 40 — the invisible bar over the message box (2026-08-02)
+- Owner, testing the new UI on real data: "cant type, whats wrong".
+  Diagnosed against the live DOM rather than by reading CSS:
+  `document.elementFromPoint()` at the centre of the composer returned
+  `rewind-toast`, not the textarea.
+- **Root cause, and it is old.** `.rewind-toast` is positioned
+  `fixed; bottom:26px; left:50%` — directly over the composer — and is
+  hidden with `opacity: 0` alone. Opacity does not remove an element
+  from the hit-test layer, and the rule set no `pointer-events`. So the
+  moment ANY toast had been shown and faded, an invisible ~410×35 bar
+  sat permanently on top of the message box and swallowed every click.
+  The app could not be typed into again until reload. This predates the
+  redesign; cycles 38–39 only made it easy to hit, because testing the
+  permission modes fires a toast each time.
+- Fix is two declarations: `pointer-events: none` on the base rule, and
+  `pointer-events: auto` on `.show` — the toast can contain a link, so
+  it must stay clickable while actually visible.
+- Verified live end-to-end: hit-test at the composer centre returns the
+  textarea before AND after a toast fires, and real text inserted via
+  CDP `Input.insertText` (an OS-level keystroke path, not a JS value
+  assignment) lands in the box.
+- Regression tests: a faded toast must be click-through, a shown toast
+  must not be, and — generalised so the next one is caught by class
+  rather than by luck — NO fixed overlay hidden by opacity may remain
+  hit-testable. 322 → 325 module checks (329 total).
+- Lesson worth keeping: "hidden" in CSS has three independent meanings
+  (paint, layout, hit-testing) and opacity only buys the first.
