@@ -740,7 +740,7 @@ console.log('\n[18/18] schedule-parse — natural-language reminders EN/中文/�
 // ═══════════════════════════════════════════════════════════════
 // TEST 19: routines catch-up — missed fires run exactly once (cycle 21)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[19/22] routines — catch-up for missed fires')
+console.log('\n[19/23] routines — catch-up for missed fires')
 {
   const { createRequire } = await import('node:module')
   const require = createRequire(import.meta.url)
@@ -771,7 +771,7 @@ console.log('\n[19/22] routines — catch-up for missed fires')
 // ═══════════════════════════════════════════════════════════════
 // TEST 20: watchers — page text + change detection (cycle 24)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[20/22] watchers — page text + change detection')
+console.log('\n[20/23] watchers — page text + change detection')
 {
   const { createRequire } = await import('node:module')
   const fsw = await import('node:fs')
@@ -798,7 +798,7 @@ console.log('\n[20/22] watchers — page text + change detection')
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[21/22] model picker — routing, pricing, no retired ids')
+console.log('\n[21/23] model picker — routing, pricing, no retired ids')
 {
   const { createRequire } = await import('node:module')
   const fsm = await import('node:fs')
@@ -964,7 +964,7 @@ console.log('\n[21/22] model picker — routing, pricing, no retired ids')
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[22/22] model-discovery — live model lists without a rebuild')
+console.log('\n[22/23] model-discovery — live model lists without a rebuild')
 {
   const { createRequire } = await import('node:module')
   const fsd = await import('node:fs')
@@ -1101,6 +1101,59 @@ console.log('\n[22/22] model-discovery — live model lists without a rebuild')
   check('the extra group is capped',
     pickDiscoveredExtras(
       { openai: Array.from({ length: 200 }, (_, i) => 'gpt-x' + i) }, [], routerOf, 60).length === 60)
+}
+
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[23/23] chat UI — offline-clean, and inline code stays inline')
+{
+  const fsu = await import('node:fs')
+  const html = fsu.readFileSync(new URL('../renderer/index.html', import.meta.url), 'utf8')
+
+  // Real markup only: strip HTML comments (which discuss these very
+  // URLs) and strip inline <script> bodies, which contain generated
+  // iframe templates that legitimately reference a CDN.
+  const markup = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/gi, '')
+
+  // ── the app must not fetch anything to render itself ──────────
+  // Until cycle 38 the renderer pulled three families from Google
+  // Fonts on every launch: render-blocking, and a third-party request
+  // in an app whose whole promise is that nothing leaves the Mac.
+  check('no Google Fonts requests', !/fonts\.(googleapis|gstatic)\.com/.test(markup))
+  check('no remote stylesheet at page load',
+    !/<link[^>]+rel=["']stylesheet["'][^>]+href=["']https?:/i.test(markup))
+  check('no remote font files referenced',
+    !/@font-face[^}]*url\(\s*["']?https?:/i.test(markup))
+  // The one allowed external reference is the Pyodide CDN, and only
+  // inside the opt-in Python sandbox template — never a page resource.
+  const pageScripts = [...markup.matchAll(/<script[^>]+src=["'](https?:[^"']+)/gi)].map(m => m[1])
+  check('no remote <script> on the page itself', pageScripts.length === 0, pageScripts.join(', '))
+  check('the Python sandbox CDN is still available where it belongs',
+    /cdn\.jsdelivr\.net\/pyodide/.test(html))
+
+  // ── inline code must not be styled as an image ────────────────
+  // `.msg-content code` sat in a rule meant for `img` — display:block,
+  // an 8px margin, a border and a zoom-in cursor. Every sentence with
+  // inline code was split into three pieces down the page.
+  check('inline code is not caught by the image rule',
+    !/\.msg-content\s+code\s*,\s*\n\s*\.msg-content\s+\.md-img/.test(html))
+  check('the image rule still styles images', /\.msg-content\s+\.md-img\s*\{/.test(html))
+
+  // ── the redesign's own contract ───────────────────────────────
+  check('reading tokens defined',
+    /--read-col:/.test(html) && /--read-size:/.test(html) && /--ui-size:/.test(html))
+  check('a reply-serif variable exists so the face is swappable in one line',
+    /--serif-read:/.test(html))
+  check('assistant replies are set in the reading serif',
+    /\.msg-role\.assistant\)\s*>\s*\.msg-content\s*\{[^}]*--serif-read/.test(html))
+  check('user messages get a hugging bubble aligned to the end of the line',
+    /\.msg-role\.user\)\s*\{[^}]*align-items:\s*flex-end/.test(html))
+  check('role captions are hidden except where the name is content',
+    /\.msg:not\(\.msg-council\)\s+\.msg-role\s*\{\s*display:\s*none/.test(html))
+  // Type sizes: only two are allowed to reach the user's eye.
+  check('content is 16px and chrome is 14px',
+    /--read-size:\s*16px/.test(html) && /--ui-size:\s*14px/.test(html))
 }
 
 // ═══════════════════════════════════════════════════════════════

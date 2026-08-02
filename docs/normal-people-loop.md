@@ -560,3 +560,44 @@
   curation. A brand-new model is now selectable the day it ships, but its
   label, ordering and price still arrive with the next build.
   264 → 291 module checks (295 total).
+
+### Cycle 38 — "less is more": the chat window redesigned (2026-08-02)
+- Owner: "redesign the ui and chat window, look at what new in claude,
+  learn from it" + "'less is more' philosophy". Researched where Claude's
+  own interface landed in 2026 (measured DOM + 2026 announcements), then
+  took only the ideas that survive the second instruction.
+- **Removed the Google Fonts dependency.** The renderer had been pulling
+  Inter / Instrument Serif / IBM Plex Mono from fonts.googleapis.com on
+  every single launch — render-blocking, ~180KB, and a third-party
+  request in an app whose entire promise is that nothing leaves the Mac.
+  It also fell back to system faces offline anyway. macOS already ships
+  better: SF Pro, New York, SF Mono. One deletion bought privacy, cold
+  start and a more native feel at once.
+- **Identity by layout, not by label.** The uppercase "YOU" / "LABAIK"
+  captions are gone. Labaik's reply is now bare full-width text set in a
+  reading SERIF; your message is a sans bubble that hugs its own text at
+  the end of the line. A reply reads like a letter rather than a chat
+  log, and you can still tell instantly who is speaking. `--serif-read`
+  is its own variable, so the face reverts to sans in one line.
+  `align-items: flex-end` is direction-aware — Arabic RTL mirrors with
+  no extra rule (verified live).
+- **Two type sizes, held to.** 16px for anything a person reads, 14px
+  for every control around it. Much of the old noise was six sizes
+  competing. Mode chips under the composer lost their borders and fills
+  and earn them back on hover; the risky permission modes keep their
+  warning colour, because that is a safety signal, not decoration.
+- **Kept deliberately, against Claude's pattern:** the per-message model
+  badge. Claude shows the model once because a thread uses one model.
+  Labaik can answer from any of 66, so which one replied is information.
+- **Pre-existing bug found while looking, not searched for:** the rule
+  `.msg-content code, .msg-content .md-img { … display:block; margin:8px 0;
+  cursor:zoom-in }` was a typo for `img`. Every inline `code` span in
+  every reply had been rendered as an image — forced to its own block,
+  bordered, with a zoom cursor — so any sentence containing inline code
+  was split into three pieces down the page. Removed; inline code now
+  falls through to `.md-code` where it belongs.
+- Verified live in a hermetic instance: serif 16px/26.4px assistant, sans
+  bubble user, 768px column, 0 remote font requests, dark mode inverting
+  correctly, RTL mirroring. New test section [23/23] locks the offline
+  invariant and the inline-code regression. 291 → 304 module checks
+  (308 total).

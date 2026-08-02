@@ -2188,7 +2188,15 @@
     /* User messages still want literal whitespace preserved */
     .msg-content:not(:has(.md-p, .md-pre, .md-ul, .md-ol, .md-h1, .md-h2, .md-h3)) { white-space: pre-wrap; }
 
-    .msg-content code,
+    /* v0.8 cycle 38 — `.msg-content code` used to be listed here alongside
+       .md-img and it was a typo for `img`. The consequence was that EVERY
+       inline `code` span in every reply was styled as an image: forced to
+       display:block, given an 8px vertical margin, a border and a zoom-in
+       cursor. Any sentence containing inline code was split into three
+       pieces down the page. Removed rather than corrected to `img`, since
+       .md-img is the class the markdown renderer actually emits. Inline
+       code now falls through to the .md-code rule below, where it
+       belongs. */
     .msg-content .md-img {
       max-width: 100%;
       max-height: 400px;
@@ -5335,9 +5343,16 @@
        where we haven't opinionated; these rules take precedence where
        they touch.
        ═══════════════════════════════════════════════════════════════════ -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+  <!-- v0.8 cycle 38: the Google Fonts <link>s that used to live here are
+       GONE. They fetched Inter / Instrument Serif / IBM Plex Mono from
+       fonts.googleapis.com on every single launch — a render-blocking
+       request to a third party, in an app whose entire promise is "no
+       backend, nothing leaves your Mac". It also meant the UI visibly
+       reflowed on a cold start and fell back to system fonts offline
+       anyway. macOS already ships better faces than the ones we were
+       downloading: SF Pro, New York, SF Mono. See the type stack below.
+       This removes a network dependency, a privacy leak and ~180KB of
+       blocking downloads in one edit. -->
   <!-- v0.7.1: memory/profile styles extracted to their own stylesheet. -->
   <link rel="stylesheet" href="css/memory.css">
   <!-- v0.7.31: task-scope styles (workspace-bar breadcrumb + create button). -->
@@ -5353,9 +5368,16 @@
       --accent-faint: oklch(var(--accent-l) var(--accent-c) var(--accent-h) / 0.06);
       --accent-ink: oklch(0.98 0.01 var(--accent-h));
 
-      --sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-      --serif: "Instrument Serif", ui-serif, Georgia, serif;
-      --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+      /* v0.8 cycle 38 — system faces only; nothing is downloaded.
+         On macOS these resolve to SF Pro Text, New York and SF Mono.
+         `--serif-read` is the reading serif used for Labaik's replies and
+         is deliberately a SEPARATE variable from `--serif` (which stays
+         the display face for titles) so the reply typeface can be swapped
+         — or reverted to sans — in one line. */
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+      --serif-read: ui-serif, "New York", Georgia, "Times New Roman", serif;
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     }
     :root[data-theme="dark"],
     :root:not([data-theme]) {
@@ -6140,6 +6162,167 @@
     .todo-text { flex: 1; }
     .todo-row--done .todo-text { color: var(--text-faint); text-decoration: line-through; }
     .todo-row--active .todo-text { font-weight: 600; }
+  </style>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       v0.8 cycle 38 · "Less is more" chat redesign
+       ───────────────────────────────────────────────────────────────────
+       The last layer. Everything here either REMOVES chrome or gives the
+       words more room; nothing here adds a new control.
+
+       Three ideas, borrowed from where Claude's own interface landed in
+       2026 and adapted to an app that runs many models rather than one:
+
+       1. The reply is set in a SERIF and the question in sans. A reply
+          then reads like a letter instead of a chat log, and you can tell
+          who is speaking without either of them being labelled.
+       2. Asymmetry replaces labels. Your message hugs its own text and
+          sits at the end of the line; Labaik's is bare full-width text —
+          no bubble, no avatar, no name. The "YOU" / "LABAIK" captions are
+          deleted outright, because the layout already says it.
+       3. Two type sizes, held to strictly: 16px for anything a person
+          reads, 14px for every control around it. Much of the noise in
+          the old chat came from six sizes competing.
+
+       Kept deliberately, against Claude's own pattern: the per-message
+       model badge. Claude shows the model once because a thread uses one
+       model. Labaik can answer from any of 66, so which one replied is
+       information, not clutter.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <style>
+    :root {
+      --read-col: 768px;   /* the reading column, matching the composer */
+      --read-size: 16px;   /* anything a human reads */
+      --ui-size: 14px;     /* every control around it */
+      --bubble-radius: 14px;
+    }
+
+    /* ───── The reading column ───── */
+    /* Message list and composer share one width so the eye never has to
+       re-find the left edge when moving between reading and writing. */
+    .msg { max-width: var(--read-col); }
+    .input-wrap { max-width: var(--read-col); }
+
+    /* ───── Identity by layout, not by label ───── */
+    /* The uppercase role captions go. Named roles that carry real meaning
+       (🎭 Council) are exempt — those aren't labels, they're content. */
+    .msg:not(.msg-council) .msg-role { display: none; }
+
+    /* Your message: a bubble that hugs its text and sits at the end of
+       the line. `flex-end` is direction-aware, so Arabic RTL mirrors it
+       correctly with no separate rule. */
+    .msg:has(> .msg-header .msg-role.user) {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .msg:has(> .msg-header .msg-role.user) > .msg-content {
+      background: var(--bg-msg-user);
+      border-radius: var(--bubble-radius);
+      padding: 10px 15px;
+      max-width: min(72ch, 88%);
+      font-size: var(--read-size);
+      line-height: 1.5;
+    }
+
+    /* Labaik's reply: no bubble, no avatar, no name — just the text,
+       full width of the column, set in the reading serif. */
+    .msg:has(> .msg-header .msg-role.assistant) > .msg-content {
+      font-family: var(--serif-read);
+      font-size: var(--read-size);
+      line-height: 1.65;
+      letter-spacing: 0;
+    }
+    /* Code keeps its mono face and its own size inside a serif reply —
+       a serif is for prose, never for a command someone has to retype. */
+    .msg-content .md-pre code,
+    .msg-content code.md-code,
+    .msg-content pre,
+    .msg-content kbd { font-family: var(--mono); font-size: 13px; letter-spacing: 0; }
+
+    /* ───── Quieter message headers ───── */
+    .msg .msg-header {
+      gap: 8px;
+      opacity: 0.72;
+      font-size: 11px;
+      transition: opacity .15s;
+    }
+    .msg:hover .msg-header { opacity: 1; }
+
+    /* ───── Process rows stay sans and stay quiet ───── */
+    /* Thinking and tool calls are scaffolding, not the answer. Holding
+       them in sans at 13px keeps the serif reply visually primary. */
+    .activity-row {
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    /* ───── Composer ───── */
+    /* A white card on the page rather than a bar welded to the bottom.
+       The hairline is a 0.5px ring drawn as a shadow — crisper on a
+       retina display than a 1px border, which always renders heavy. */
+    .input-area { border-top-color: transparent; }
+    .input-wrap {
+      border-radius: 20px;
+      background: var(--bg-raised);
+      box-shadow:
+        0 4px 20px color-mix(in srgb, var(--text) 7%, transparent),
+        0 0 0 0.5px color-mix(in srgb, var(--text) 22%, transparent);
+      border: 0;
+    }
+    .input-wrap textarea {
+      font-family: var(--sans);
+      font-size: var(--read-size);
+      line-height: 1.45;
+    }
+
+    /* The row of mode controls under the composer was three bordered
+       pills competing with the send button. They lose their borders and
+       fills, and earn them back on hover — present when wanted, silent
+       when not. */
+    .workspace-bar { gap: 6px; opacity: 0.78; transition: opacity .15s; }
+    .workspace-bar:hover,
+    .workspace-bar:focus-within { opacity: 1; }
+    /* Selectors are scoped to .workspace-bar to out-specify the existing
+       per-mode rules (.workspace-perm-select[data-mode="autopilot"] etc),
+       which are 0,2,0 and would otherwise keep their borders. */
+    .workspace-bar .workspace-btn,
+    .workspace-bar .plan-mode-toggle,
+    .workspace-bar .workspace-perm-select {
+      font-family: var(--sans);
+      font-size: 12.5px;
+      border-color: transparent;
+      background: transparent;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+    .workspace-bar .workspace-btn:hover,
+    .workspace-bar .plan-mode-toggle:hover,
+    .workspace-bar .workspace-perm-select:hover {
+      background: var(--bg-hover);
+      border-color: transparent;
+    }
+    /* The three risky permission modes keep their warning colour — that is
+       a safety signal, not decoration. Only Autopilot (the default) goes
+       quiet. */
+    .workspace-bar .workspace-perm-select[data-mode="observe"] { color: #e0994a; }
+    .workspace-bar .workspace-perm-select[data-mode="careful"] { color: #3b82f6; }
+    .workspace-bar .workspace-perm-select[data-mode="flow"]    { color: #14b8a6; }
+    /* Plan mode ON is a real state change — it keeps its colour. */
+    .plan-mode-toggle.on { background: var(--green-dim); border-color: transparent; }
+
+    /* ───── Chrome holds one size ───── */
+    .topbar-keys-btn,
+    .sidebar-new-btn { font-size: var(--ui-size); }
+    .topbar { border-bottom-color: transparent; }
+
+    /* ───── Reduced motion ───── */
+    @media (prefers-reduced-motion: reduce) {
+      .msg .msg-header,
+      .workspace-bar,
+      .msg-actions { transition: none; }
+    }
   </style>
 </head>
 <body>
