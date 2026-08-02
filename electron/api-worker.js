@@ -1600,6 +1600,12 @@ async function runImageGen(args) {
   }
 }
 
+// ── v0.8 cycle 42 · agent-loop concurrency + an honest turn budget ──────
+// The batching primitive and the turn ceiling live in ./tool-batch.js so
+// their ordering semantics can be unit-tested; this file is a stdin-driven
+// child process and cannot be required from a test without hanging.
+const { PARALLEL_SAFE_TOOLS, MAX_AGENT_TURNS, executeToolBatch, turnBudgetNotice } = require('./tool-batch')
+
 async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts = {}) {
   const { skipTools = false, onActivity = () => {}, mode = 'autopilot', depth = 0, signal = null } = opts
   // v0.7.72: route image-gen activity events to this turn's onActivity.
@@ -1674,7 +1680,8 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   const suppressThinking = provider === 'ollama' && isThinkingLocalModel(model)
   let fullText = '', toolLog = ''
 
-  for (let i = 0; i < 10; i++) {
+  let finishedOnItsOwn = false
+  for (let i = 0; i < MAX_AGENT_TURNS; i++) {
     if (i > 0) onActivity({ phase: 'thinking', step: i })
 
     // Stream tokens live. Each content delta is emitted as a `token` activity;
@@ -1797,32 +1804,50 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
       msg = res.choices?.[0]?.message
     }
 
-    if (!msg) break
+    // The provider returned nothing to work with. That is an upstream
+    // problem, not the turn budget — don't blame the wrong thing.
+    if (!msg) { finishedOnItsOwn = true; break }
     chatMsgs.push(msg)
     if (msg.content) fullText += msg.content
     if (msg.tool_calls?.length) {
-      for (const tc of msg.tool_calls) {
+      // v0.8 cycle 42 — args are parsed for the whole batch FIRST, so a
+      // single malformed call no longer has to be handled mid-flight with
+      // a `continue` (which is what made this loop awkward to parallelise).
+      // Calls that fail to parse get their error result inline and are
+      // never executed; the rest are batched.
+      const parsed = msg.tool_calls.map((tc) => {
         // v0.7.67 — second-line JSON.parse safety. The streaming validator
         // above already filters malformed args, but the non-streaming
         // fallback path doesn't run that check, so we guard here too.
-        let args
-        try { args = JSON.parse(tc.function.arguments || '{}') }
+        try { return { tc, name: tc.function.name, args: JSON.parse(tc.function.arguments || '{}') } }
         catch (e) {
           process.stderr.write(`[worker] non-streaming bad tool args for ${tc.function.name}: ${e.message}\n`)
           onActivity({ phase: 'stream_warning', reason: 'bad_tool_args', name: tc.function.name })
-          chatMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'tool arguments were not valid JSON; the model needs to retry' }) })
-          continue
+          return { tc, name: tc.function.name, args: null, badArgs: true }
         }
-        onActivity({ phase: 'tool_start', name: tc.function.name, args: summarizeArgs(tc.function.name, args) })
+      })
+      // Adjacent read-only calls run concurrently; anything that mutates
+      // state stays serial and acts as an ordering barrier.
+      const batch = await executeToolBatch(parsed, async (p) => {
+        if (p.badArgs) return { error: 'tool arguments were not valid JSON; the model needs to retry' }
+        onActivity({ phase: 'tool_start', name: p.name, args: summarizeArgs(p.name, p.args) })
         // v0.4.5 — sub-agent delegation runs a nested chatOpenAI loop instead
         // of going through executeToolCall (it needs provider/model/depth).
         let result
-        if (tc.function.name === 'spawn_subagent') {
-          result = await runSubAgent(args, { model, provider, workspacePath, mode, depth, onActivity })
+        if (p.name === 'spawn_subagent') {
+          result = await runSubAgent(p.args, { model, provider, workspacePath, mode, depth, onActivity })
         } else {
-          result = await executeToolCall(tc.function.name, args, workspacePath, mode)
+          result = await executeToolCall(p.name, p.args, workspacePath, mode)
         }
-        onActivity({ phase: 'tool_end', name: tc.function.name, ok: !result?.error })
+        onActivity({ phase: 'tool_end', name: p.name, ok: !result?.error })
+        return result
+      })
+      // Bookkeeping runs in the model's requested order regardless of which
+      // call finished first, so the transcript reads as asked.
+      for (let bi = 0; bi < parsed.length; bi++) {
+        const tc = parsed[bi].tc
+        const args = parsed[bi].args || {}
+        const result = batch[bi]
         // Emit a structured file_edit event with old/new content so the renderer
         // can show a live colored diff inline in the chat bubble.
         if (tc.function.name === 'write_file' && result?.success) {
@@ -1848,8 +1873,13 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
       }
       continue
     }
+    finishedOnItsOwn = true
     break
   }
+  // Running out of rounds used to look identical to finishing: the loop
+  // simply ended and whatever text existed was returned. A half-done job
+  // presented as a complete answer is the worst failure this loop has.
+  if (!finishedOnItsOwn && !signal?.aborted) fullText += turnBudgetNotice(MAX_AGENT_TURNS)
   // Screen response for health red flags
   if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const responseText = (fullText + toolLog) || '(Done)'
@@ -2133,7 +2163,8 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
   const chatMsgs = msgs.map(m => ({ role: m.role, content: reshape(m.content) }))
   let fullText = '', toolLog = ''
 
-  for (let i = 0; i < 10; i++) {
+  let finishedOnItsOwn = false
+  for (let i = 0; i < MAX_AGENT_TURNS; i++) {
     if (i > 0) onActivity({ phase: 'thinking', step: i })
 
     // Stream tokens live via the Anthropic SDK's stream helper, then pull the
@@ -2179,8 +2210,9 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     const tuBlocks = res.content.filter(b => b.type === 'tool_use')
     if (tuBlocks.length) {
       chatMsgs.push({ role: 'assistant', content: res.content })
-      const results = []
-      for (const tu of tuBlocks) {
+      // v0.8 cycle 42 — adjacent read-only calls run concurrently; writes,
+      // commands and sub-agents stay serial and act as ordering barriers.
+      const batch = await executeToolBatch(tuBlocks, async (tu) => {
         onActivity({ phase: 'tool_start', name: tu.name, args: summarizeArgs(tu.name, tu.input) })
         // v0.4.5 — sub-agent delegation runs a nested loop (see runSubAgent).
         let result
@@ -2190,6 +2222,15 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
           result = await executeToolCall(tu.name, tu.input, workspacePath, mode)
         }
         onActivity({ phase: 'tool_end', name: tu.name, ok: !result?.error })
+        return result
+      })
+      // Bookkeeping stays strictly in the model's requested order, so the
+      // transcript and the live activity log read the way the model asked,
+      // regardless of which call happened to finish first.
+      const results = []
+      for (let bi = 0; bi < tuBlocks.length; bi++) {
+        const tu = tuBlocks[bi]
+        const result = batch[bi]
         if (tu.name === 'write_file' && result?.success) {
           onActivity({
             phase: 'file_edit',
@@ -2213,8 +2254,10 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
       chatMsgs.push({ role: 'user', content: results })
       continue
     }
+    finishedOnItsOwn = true
     break
   }
+  if (!finishedOnItsOwn && !signal?.aborted) fullText += turnBudgetNotice(MAX_AGENT_TURNS)
   if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
   const anthrResponseText = (fullText + toolLog) || '(Done)'
   const triage = require(_path.join(healthDir, 'triage-engine.js'))

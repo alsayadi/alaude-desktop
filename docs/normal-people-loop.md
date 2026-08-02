@@ -718,3 +718,34 @@
   catch — from none of the rendering, layout, interaction or
   hit-testing failures that actually shipped, to all three, demonstrably.
   Deferred: visual-regression baselines (worth a cycle of its own).
+
+### Cycle 42 — the agent loop runs in parallel, and admits when it stops (2026-08-03)
+- Owner clarified "harness" meant Labaik's OWN agent harness, not the test
+  rig. Re-audited `electron/api-worker.js` against frontier practice
+  (Claude Code's compaction ladder, parallel sub-agents, six-phase loop).
+- **Tool calls ran strictly one at a time.** All three agent loops did
+  `for (const tu of toolCalls) { await … }`, so a model asking to read
+  five files paid five round-trips of latency for no reason. New
+  `electron/tool-batch.js` runs ADJACENT read-only calls concurrently.
+- **Ordering is preserved, not merely mostly preserved.** Only neighbouring
+  parallel-safe calls are grouped, so anything mutating is a barrier:
+  given [read A, write B, read C], A and C are never run together, because
+  C may be reading exactly what B just wrote. That is a data race a user
+  could never diagnose, and the adjacency rule is what prevents it.
+- Parallel-safe is an **allow-list** (read_file, list_directory,
+  web_search, fetch_page, browser_get_text, browser_screenshot, three
+  health calculators). A deny-list would silently parallelise every tool
+  added later — exactly the wrong default. Writes, commands, browser and
+  screen actions, generate_image, use_skill, spawn_subagent and all mcp_*
+  stay serial; several of them can also raise an approval dialog, and two
+  dialogs racing for one window is its own bug.
+- **Silent truncation fixed.** The cap was a bare `for (i < 10)` in three
+  places, and hitting it simply fell out of the loop and returned whatever
+  text existed — a job abandoned half-done read as a finished answer. The
+  ceiling is now named, raised to 24 (each round is cheaper now), and
+  exhausting it SAYS SO and says it can be resumed. Provider-returned-
+  nothing and user-pressed-Stop are distinguished from budget exhaustion
+  so the app never blames the wrong thing.
+- 23 unit tests on the batching semantics — the barrier case, peak
+  concurrency, order preservation, allow-list closure, degenerate input.
+  325 → 352 module checks; 404 total across the suite.

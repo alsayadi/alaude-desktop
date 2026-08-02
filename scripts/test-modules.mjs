@@ -1104,7 +1104,7 @@ console.log('\n[22/23] model-discovery — live model lists without a rebuild')
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[23/23] chat UI — offline-clean, and inline code stays inline')
+console.log('\n[23/24] chat UI — offline-clean, and inline code stays inline')
 {
   const fsu = await import('node:fs')
   const html = fsu.readFileSync(new URL('../renderer/index.html', import.meta.url), 'utf8')
@@ -1208,6 +1208,98 @@ console.log('\n[23/23] chat UI — offline-clean, and inline code stays inline')
     check(`  "${key}" translated in all 3 locales`,
       (html.match(new RegExp(`'${key.replace('.', '\\.')}':`, 'g')) || []).length === 3)
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[24/24] tool-batch — concurrent reads, ordered writes')
+{
+  const { createRequire } = await import('node:module')
+  const require = createRequire(import.meta.url)
+  const tb = require('../electron/tool-batch.js')
+
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+  // Records the interleaving so we can prove what really ran together.
+  const tracer = () => {
+    const log = []
+    let live = 0, peak = 0
+    return {
+      log, peak: () => peak,
+      run: async (call, i) => {
+        log.push('start:' + call.name + i)
+        live++; peak = Math.max(peak, live)
+        await sleep(20)
+        live--
+        log.push('end:' + call.name + i)
+        return call.name + i
+      },
+    }
+  }
+
+  // ── results always come back in the model's requested order ──
+  {
+    const t = tracer()
+    const calls = [{ name: 'read_file' }, { name: 'list_directory' }, { name: 'read_file' }]
+    const out = await tb.executeToolBatch(calls, t.run)
+    check('results keep the requested order',
+      out.join(',') === 'read_file0,list_directory1,read_file2', out.join(','))
+    check('adjacent read-only calls run concurrently', t.peak() === 3, `peak concurrency ${t.peak()}`)
+  }
+
+  // ── mutating tools never overlap anything ──
+  {
+    const t = tracer()
+    const calls = [{ name: 'write_file' }, { name: 'run_command' }, { name: 'write_file' }]
+    await tb.executeToolBatch(calls, t.run)
+    check('mutating tools run strictly one at a time', t.peak() === 1, `peak ${t.peak()}`)
+    check('mutating tools run in order',
+      t.log.join(',') === 'start:write_file0,end:write_file0,start:run_command1,end:run_command1,start:write_file2,end:write_file2')
+  }
+
+  // ── THE important one: a write is an ordering barrier ──
+  // [read A, write B, read C] must not run A and C together — C may be
+  // reading exactly what B wrote. This is the data race the allow-list
+  // and the adjacency rule exist to prevent.
+  {
+    const t = tracer()
+    const calls = [{ name: 'read_file' }, { name: 'write_file' }, { name: 'read_file' }]
+    await tb.executeToolBatch(calls, t.run)
+    check('a write between two reads is a barrier, not a thing to hop over',
+      t.peak() === 1, `peak ${t.peak()}`)
+    check('the read after a write really does run after it',
+      t.log.indexOf('end:write_file1') < t.log.indexOf('start:read_file2'))
+  }
+
+  // ── leading/trailing groups still batch around a barrier ──
+  {
+    const t = tracer()
+    const calls = [{ name: 'read_file' }, { name: 'read_file' }, { name: 'write_file' },
+                   { name: 'web_search' }, { name: 'fetch_page' }]
+    const out = await tb.executeToolBatch(calls, t.run)
+    check('groups on both sides of a barrier are each batched', t.peak() === 2, `peak ${t.peak()}`)
+    check('five mixed calls all return, in order',
+      out.join(',') === 'read_file0,read_file1,write_file2,web_search3,fetch_page4')
+  }
+
+  // ── the allow-list is an allow-list ──
+  check('an unknown tool is treated as unsafe to parallelise',
+    !tb.PARALLEL_SAFE_TOOLS.has('some_new_tool_someone_adds_later'))
+  for (const t of ['write_file', 'run_command', 'spawn_subagent', 'use_skill',
+                   'browser_click', 'screen_type', 'generate_image', 'open_in_browser']) {
+    check(`  ${t} is never parallelised`, !tb.PARALLEL_SAFE_TOOLS.has(t))
+  }
+  check('plain reads are parallelised',
+    ['read_file', 'list_directory', 'web_search', 'fetch_page'].every(t => tb.PARALLEL_SAFE_TOOLS.has(t)))
+
+  // ── degenerate input must not throw ──
+  check('empty batch returns empty', (await tb.executeToolBatch([], async () => 1)).length === 0)
+  check('null batch returns empty', (await tb.executeToolBatch(null, async () => 1)).length === 0)
+
+  // ── the turn budget is real and says so ──
+  check('turn budget leaves room for real work', tb.MAX_AGENT_TURNS >= 20)
+  const notice = tb.turnBudgetNotice(tb.MAX_AGENT_TURNS)
+  check('running out of turns is stated, not hidden',
+    /stopped after \d+ rounds/i.test(notice) && /not the end of the job/i.test(notice))
+  check('and it tells the user it can be resumed', /continue/i.test(notice))
 }
 
 // ═══════════════════════════════════════════════════════════════
