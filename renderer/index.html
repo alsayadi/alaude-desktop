@@ -12211,6 +12211,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'login.detectFailed': "Couldn't identify this key — pick the provider from the list and try again.",
         'login.saving': 'saving…',
         'model.rec.group': '✨ Recommended',
+        'model.discovered.group': '🔎 Other models your key can use',
+        'model.discovered.unknownPrice': 'price unknown',
         'model.rec.best': 'best overall',
         'model.rec.fast': 'fastest',
         'model.rec.local': 'private (runs on this Mac)',
@@ -12621,6 +12623,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'login.detectFailed': '无法识别此密钥——请从列表中选择服务商后重试。',
         'login.saving': '保存中…',
         'model.rec.group': '✨ 推荐',
+        'model.discovered.group': '🔎 你的密钥可用的其他模型',
+        'model.discovered.unknownPrice': '价格未知',
         'model.rec.best': '综合最佳',
         'model.rec.fast': '最快',
         'model.rec.local': '本地私密运行',
@@ -13016,6 +13020,8 @@ footer a { color: var(--accent); text-decoration: none; }
         'login.detectFailed': 'تعذّر التعرّف على هذا المفتاح — اختر المزوّد من القائمة وأعد المحاولة.',
         'login.saving': 'جارٍ الحفظ…',
         'model.rec.group': '✨ مُوصى به',
+        'model.discovered.group': '🔎 نماذج أخرى يتيحها مفتاحك',
+        'model.discovered.unknownPrice': 'السعر غير معروف',
         'model.rec.best': 'الأفضل عمومًا',
         'model.rec.fast': 'الأسرع',
         'model.rec.local': 'خاص (يعمل على جهازك)',
@@ -18019,8 +18025,10 @@ Title:`
       if (isLocal) return { dots: '🟢', label: 'free · local' }
       const price = getModelPricing(modelId)
       if (price?.local) return { dots: '🟢', label: 'free · local' }
-      // Unknown/custom ids: don't claim to know. Mid is the safe middle.
-      if (!price) return { dots: '🟡', label: 'mid' }
+      // Unknown/custom ids — including models found by discovery that this
+      // build has never heard of. Say "unknown" rather than picking a
+      // bucket: a confident-looking wrong badge is worse than no badge.
+      if (!price) return { dots: '⚪', label: 'price unknown' }
       // A genuinely free cloud model (Zhipu's GLM-4.7-Flash) deserves to
       // say so — "cheap" undersells the one tier a user can run forever.
       if (price.in === 0 && price.out === 0) return { dots: '🟢', label: 'free' }
@@ -18047,11 +18055,62 @@ Title:`
       return 'anthropic'
     }
 
+    // v0.8 cycle 37: the curated picker above is a snapshot of what existed
+    // when this build shipped. Providers release models between builds, and
+    // there is no "type a custom cloud model id" escape hatch — so anything
+    // new is unreachable until the next release. This asks each provider
+    // the user ALREADY has a key for what that key can see, and appends
+    // whatever the curated list doesn't know about.
+    //
+    // Deliberately additive and deliberately quiet: discovery never
+    // reorders or removes a curated entry, it runs off the critical path so
+    // a slow provider can't delay the picker, and it runs at most once per
+    // app session (the main process caches for 24h on top of that).
+    let _discoveryStarted = false
+    async function insertDiscoveredModels() {
+      if (_discoveryStarted) return
+      // Dependencies checked BEFORE claiming the once-per-session flag:
+      // the ES-module block that publishes window.modelExtras runs after
+      // this classic script, so an early call must be able to retry rather
+      // than silently disable discovery for the whole session.
+      if (!window.alaude?.modelsDiscover || !window.modelExtras?.pickDiscoveredExtras) return
+      _discoveryStarted = true
+      let res
+      try { res = await window.alaude.modelsDiscover() } catch { return }
+      const select = document.getElementById('model-select')
+      if (!select || !res?.models) return
+
+      const known = Array.from(select.options).map(o => o.value || '')
+      const extras = window.modelExtras.pickDiscoveredExtras(res.models, known, providerOf)
+      if (!extras.length) return
+
+      select.querySelector('#model-select-discovered')?.remove()
+      const grp = document.createElement('optgroup')
+      grp.id = 'model-select-discovered'
+      grp.label = t('model.discovered.group', '🔎 Other models your key can use')
+      for (const id of extras.sort()) {
+        const o = document.createElement('option')
+        o.value = id
+        // No price is discoverable from any provider API, so say so rather
+        // than guessing — an invented number would undermine the whole
+        // point of the spend meter.
+        const priced = getModelPricing(id)
+        o.text = `⚡ ${prettyModelName(id)}${priced ? '' : ' · ' + t('model.discovered.unknownPrice', 'price unknown')}`
+        o.dataset.connected = '1'
+        grp.appendChild(o)
+      }
+      // Sits before the local group so "on your Mac" stays the last word.
+      const localGrp = select.querySelector('#model-select-local')
+      select.insertBefore(grp, localGrp || null)
+    }
+
     async function refreshModelReadiness() {
       try {
         const statuses = await window.alaude.getKeyStatuses()
         const select = document.getElementById('model-select')
         if (!select) return
+        // Fire-and-forget: never block the readiness pass on the network.
+        insertDiscoveredModels().catch(() => {})
         for (const opt of select.options) {
           if (!opt.value && !opt.text) continue
           // Local Ollama options are always ready once installed — mark them
@@ -18773,10 +18832,20 @@ Title:`
       if (lc.startsWith('claude-sonnet-5') && Date.now() < SONNET_5_INTRO_UNTIL) {
         return { in: 2.00, out: 10.00 }
       }
-      // Longest-prefix-wins
+      // Longest-prefix-wins, but only across a `-` boundary.
+      //
+      // v0.8 cycle 37: a bare `lc.startsWith(k)` let a NEW model inherit an
+      // OLD one's price — `gpt-5.7-nova` matched the `gpt-5` row and was
+      // billed at GPT-5 rates. With model discovery now surfacing ids this
+      // build has never heard of, that silent mispricing would be routine.
+      // Requiring the next character to be `-` keeps every real variant
+      // working (`gpt-4o-mini-2024-07-18` → `gpt-4o-mini`,
+      // `gemini-3.1-pro-preview` → `gemini-3.1-pro`) while a version bump,
+      // which reads as `.` or a digit, correctly falls through to null and
+      // renders as "price unknown".
       const keys = Object.keys(MODEL_PRICING).sort((a, b) => b.length - a.length)
       for (const k of keys) {
-        if (lc.startsWith(k)) return MODEL_PRICING[k]
+        if (lc === k || lc.startsWith(k + '-')) return MODEL_PRICING[k]
       }
       return null
     }
@@ -21404,6 +21473,11 @@ Title:`
   <script type="module">
     import { parseReminder } from './js/schedule-parse.js'
     window.scheduleParse = { parseReminder }
+  </script>
+
+  <script type="module">
+    import { pickDiscoveredExtras } from './js/model-extras.js'
+    window.modelExtras = { pickDiscoveredExtras }
   </script>
 
   <script type="module">

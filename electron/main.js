@@ -1590,7 +1590,31 @@ ipcMain.handle('share-image', async (_e, html) => {
 // 4/3 of raw, so the wire cap is MAX_AUDIO_BYTES * 4/3.
 const voice = require('./voice')
 const netLedger = require('./net-ledger')
+const modelDiscovery = require('./model-discovery')
 const watchers = require('./watchers')
+// v0.8 cycle 37: ask the providers the user already pays for what models
+// their key can see, so a model released today is usable today instead of
+// waiting for the next build. Strictly additive to the curated picker —
+// see electron/model-discovery.js for why there is no remote manifest.
+ipcMain.handle('models-discover', async (_e, opts) => {
+  try {
+    const providers = PROVIDER_KEY_IDS.filter(p => !!getApiKey(p))
+    if (!providers.length) return { models: {}, fetched: [], cached: [] }
+    return await modelDiscovery.discoverAll(providers, getApiKey, {
+      force: !!opts?.force,
+      // Receipts: every real request lands in the ledger, same as chat.
+      onCall: (provider) => {
+        let host = provider
+        try { host = new URL(getBaseURL(provider) || 'https://api.anthropic.com').host } catch {}
+        if (provider === 'google') host = 'generativelanguage.googleapis.com'
+        netLedger.log(host, 'model list', provider)
+      },
+    })
+  } catch (err) {
+    return { models: {}, fetched: [], cached: [], error: String(err?.message || err).slice(0, 200) }
+  }
+})
+
 ipcMain.handle('voice-transcribe', async (_e, payload) => {
   try {
     if (!payload?.audioB64) return { error: 'empty-audio' }

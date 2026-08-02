@@ -188,6 +188,7 @@ contextBridge.exposeInMainWorld('alaude', {
   undoRestoreTurn: (turnId) => ipcRenderer.invoke('undo-restore-turn', turnId),
   // v0.8 cycle 6 — voice dictation: recorded audio → STT engine in main.
   voiceTranscribe: (payload) => ipcRenderer.invoke('voice-transcribe', payload),
+  modelsDiscover: (opts) => ipcRenderer.invoke('models-discover', opts),
   // v0.8 cycle 12 — print a clean document (Paperwork reply letters).
   printHtml: (html) => ipcRenderer.invoke('print-html', html),
   // v0.8 cycle 23 — share a reply as a clipboard image (for chat apps).

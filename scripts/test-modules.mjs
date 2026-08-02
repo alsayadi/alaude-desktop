@@ -740,7 +740,7 @@ console.log('\n[18/18] schedule-parse — natural-language reminders EN/中文/�
 // ═══════════════════════════════════════════════════════════════
 // TEST 19: routines catch-up — missed fires run exactly once (cycle 21)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[19/21] routines — catch-up for missed fires')
+console.log('\n[19/22] routines — catch-up for missed fires')
 {
   const { createRequire } = await import('node:module')
   const require = createRequire(import.meta.url)
@@ -771,7 +771,7 @@ console.log('\n[19/21] routines — catch-up for missed fires')
 // ═══════════════════════════════════════════════════════════════
 // TEST 20: watchers — page text + change detection (cycle 24)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[20/21] watchers — page text + change detection')
+console.log('\n[20/22] watchers — page text + change detection')
 {
   const { createRequire } = await import('node:module')
   const fsw = await import('node:fs')
@@ -798,7 +798,7 @@ console.log('\n[20/21] watchers — page text + change detection')
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[21/21] model picker — routing, pricing, no retired ids')
+console.log('\n[21/22] model picker — routing, pricing, no retired ids')
 {
   const { createRequire } = await import('node:module')
   const fsm = await import('node:fs')
@@ -886,7 +886,10 @@ console.log('\n[21/21] model picker — routing, pricing, no retired ids')
     priceKeys.every(k => k === k.toLowerCase()))
 
   const sorted = [...priceKeys].sort((a, b) => b.length - a.length)
-  const priceFor = (id) => sorted.find(k => id.toLowerCase().startsWith(k)) || null
+  const priceFor = (id) => {
+    const lc = id.toLowerCase()
+    return sorted.find(k => lc === k || lc.startsWith(k + '-')) || null
+  }
   const unpriced = options.filter(o => !priceFor(o.value))
   check('every model in the picker has a price', unpriced.length === 0,
     unpriced.map(o => o.value).join(', '))
@@ -897,6 +900,19 @@ console.log('\n[21/21] model picker — routing, pricing, no retired ids')
   check('hy3-preview does not collapse onto hy3', priceFor('hy3-preview') === 'hy3-preview')
   check('gemini-3.1-pro-preview resolves to the 3.1 Pro row',
     priceFor('gemini-3.1-pro-preview') === 'gemini-3.1-pro')
+
+  // A model this build has never heard of must NOT inherit its
+  // predecessor's price. Discovery surfaces exactly these ids, and a
+  // confidently wrong number would poison the spend meter.
+  check('a future version bump gets no price rather than a stale one',
+    priceFor('gpt-5.7-nova') === null && priceFor('grok-4.9') === null &&
+    priceFor('claude-opus-6') === null && priceFor('gemini-3.9-pro') === null,
+    `${priceFor('gpt-5.7-nova')} / ${priceFor('grok-4.9')}`)
+  // ...while real dated snapshots and variants still resolve.
+  check('dated snapshots and variants still resolve across the - boundary',
+    priceFor('gpt-4o-mini-2024-07-18') === 'gpt-4o-mini' &&
+    priceFor('claude-sonnet-4-5-20250929') === 'claude-sonnet-4-5' &&
+    priceFor('grok-4.20-0309-reasoning') === 'grok-4.20')
 
   // Cost tier is derived from the output price, not the model name. The
   // name-regex version it replaced scored gpt-5.6-luna — OpenAI's cheapest
@@ -945,6 +961,146 @@ console.log('\n[21/21] model picker — routing, pricing, no retired ids')
   // than lumping it in with merely-cheap models.
   check('a $0/$0 model is priced at zero, not missing',
     outPrice('glm-4.7-flash') === 0, String(outPrice('glm-4.7-flash')))
+}
+
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[22/22] model-discovery — live model lists without a rebuild')
+{
+  const { createRequire } = await import('node:module')
+  const fsd = await import('node:fs')
+  const require = createRequire(import.meta.url)
+  const disco = require('../electron/model-discovery.js')
+
+  // ── the noise filter ──────────────────────────────────────────
+  // /v1/models returns the provider's WHOLE catalogue. Without this
+  // filter the extra group is a wall of embeddings and TTS models.
+  check('chat models pass the filter',
+    ['gpt-5.6-sol', 'claude-opus-5', 'kimi-k3', 'glm-5.2', 'deepseek-v4-pro']
+      .every(disco.isChatModel))
+  check('non-chat models are filtered out',
+    !['text-embedding-3-large', 'whisper-1', 'tts-1-hd', 'dall-e-3',
+      'omni-moderation-latest', 'babbage-002', 'gemini-embedding-001',
+      'imagen-4.0-generate-001', 'rerank-v1']
+      .some(disco.isChatModel))
+  check('garbage ids rejected', !disco.isChatModel('') && !disco.isChatModel(null) &&
+    !disco.isChatModel('x'.repeat(200)))
+
+  // ── per-provider response shapes ──────────────────────────────
+  const fakeFetch = (payload, status = 200) => async () => ({
+    ok: status === 200, status, json: async () => payload,
+  })
+
+  const openai = await disco.discoverProvider('deepseek', 'sk-test',
+    fakeFetch({ data: [{ id: 'deepseek-v4-pro' }, { id: 'deepseek-v4-flash' }, { id: 'text-embedding-x' }] }))
+  check('OpenAI-shaped response parsed + filtered',
+    openai.models.join(',') === 'deepseek-v4-pro,deepseek-v4-flash', openai.models.join(','))
+
+  const anthropic = await disco.discoverProvider('anthropic', 'sk-ant-test',
+    fakeFetch({ data: [{ id: 'claude-opus-5' }, { id: 'claude-sonnet-5' }] }))
+  check('Anthropic shape parsed', anthropic.models.length === 2)
+
+  // Google namespaces ids as "models/x" and marks what generateContent
+  // supports — strip and honour both or ids won't match the router.
+  const google = await disco.discoverProvider('google', 'AIzaTest',
+    fakeFetch({ models: [
+      { name: 'models/gemini-3.6-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-embedding-001', supportedGenerationMethods: ['embedContent'] },
+      { name: 'models/gemini-3.1-pro-preview', supportedGenerationMethods: ['generateContent'] },
+    ] }))
+  check('Google prefix stripped + embed-only dropped',
+    google.models.join(',') === 'gemini-3.6-flash,gemini-3.1-pro-preview', google.models.join(','))
+
+  // ── failure is never fatal ────────────────────────────────────
+  const rejected = await disco.discoverProvider('deepseek', 'bad-key', fakeFetch({}, 401))
+  check('401 yields empty list + error, never throws',
+    rejected.models.length === 0 && rejected.error === 'http-401')
+  const exploded = await disco.discoverProvider('deepseek', 'k', async () => { throw new Error('offline') })
+  check('network failure yields empty list, never throws',
+    exploded.models.length === 0 && exploded.error === 'network')
+  const noKey = await disco.discoverProvider('deepseek', '', fakeFetch({ data: [] }))
+  check('no key → no call attempted', noKey.error === 'no-key')
+
+  check('per-provider result is capped',
+    (await disco.discoverProvider('deepseek', 'k',
+      fakeFetch({ data: Array.from({ length: 500 }, (_, i) => ({ id: 'deepseek-m' + i })) })
+    )).models.length === disco.MAX_PER_PROVIDER)
+
+  // ── the cache ─────────────────────────────────────────────────
+  try { fsd.unlinkSync(disco.CACHE_FILE) } catch {}
+  const getKey = () => 'k'
+  let calls = 0
+  const countingFetch = async () => { calls++; return { ok: true, status: 200, json: async () => ({ data: [{ id: 'deepseek-v4-pro' }] }) } }
+
+  const T0 = 1_700_000_000_000
+  const first = await disco.discoverAll(['deepseek'], getKey, { _fetch: countingFetch, _now: T0 })
+  check('first run fetches', calls === 1 && first.fetched.includes('deepseek'))
+
+  const second = await disco.discoverAll(['deepseek'], getKey, { _fetch: countingFetch, _now: T0 + 60_000 })
+  check('second run inside TTL serves cache, no call',
+    calls === 1 && second.cached.includes('deepseek') && second.models.deepseek.length === 1)
+
+  const later = await disco.discoverAll(['deepseek'], getKey, { _fetch: countingFetch, _now: T0 + disco.CACHE_TTL_MS + 1 })
+  check('past the TTL it refetches', calls === 2 && later.fetched.includes('deepseek'))
+
+  const forced = await disco.discoverAll(['deepseek'], getKey, { _fetch: countingFetch, _now: T0 + disco.CACHE_TTL_MS + 2, force: true })
+  check('force bypasses a fresh cache', calls === 3 && forced.fetched.includes('deepseek'))
+
+  // A failing refresh must not throw away a good list — otherwise one
+  // flaky morning empties the user's picker.
+  const failing = async () => { throw new Error('offline') }
+  const degraded = await disco.discoverAll(['deepseek'], getKey,
+    { _fetch: failing, _now: T0 + (disco.CACHE_TTL_MS * 3), })
+  check('a failed refresh keeps serving the stale list',
+    degraded.models.deepseek?.length === 1 && degraded.errors.deepseek === 'network')
+
+  // ...and must not stamp a fresh timestamp, or the failure would go
+  // unretried for a full day.
+  calls = 0
+  const retried = await disco.discoverAll(['deepseek'], getKey,
+    { _fetch: countingFetch, _now: T0 + (disco.CACHE_TTL_MS * 3) + 1000 })
+  check('a failed refresh does not start a fresh 24h of silence', calls === 1)
+
+  check('providers with no key are skipped entirely',
+    Object.keys((await disco.discoverAll(['deepseek', 'openai'], (p) => p === 'deepseek' ? 'k' : null,
+      { _fetch: countingFetch, _now: T0, })).models).join(',') === 'deepseek')
+
+  try { fsd.unlinkSync(disco.CACHE_FILE) } catch {}
+
+  // ── which discovered ids actually reach the picker ────────────
+  // This lives in its own module because window.alaude is frozen by
+  // contextBridge, so the browser-side path cannot be stubbed live.
+  const { pickDiscoveredExtras } = await import('../renderer/js/model-extras.js')
+  const registry = require('../electron/provider-registry.js')
+  const routerOf = (id) => registry.detectProvider(id)
+
+  const known = ['claude-opus-5', 'gpt-5.6-sol', 'deepseek-v4-pro']
+  const picked = pickDiscoveredExtras({
+    anthropic: ['claude-opus-5', 'claude-nextgen-6'],   // one known, one new
+    openai:    ['gpt-5.7-nova', 'gpt-5.6-sol'],
+    deepseek:  ['deepseek-v5-pro'],
+  }, known, routerOf)
+  check('only unknown ids are offered',
+    picked.join(',') === 'claude-nextgen-6,deepseek-v5-pro,gpt-5.7-nova', picked.join(','))
+
+  // Providers really do list foreign ids (proxying gateways, comparison
+  // entries). Offering one would sign the request with the wrong key.
+  check('ids that route to a different provider are rejected',
+    pickDiscoveredExtras({ zhipu: ['gpt-5.9-turbo'] }, [], routerOf).length === 0)
+  check('a correctly-routed id from the same provider is kept',
+    pickDiscoveredExtras({ zhipu: ['glm-9'] }, [], routerOf).join(',') === 'glm-9')
+
+  check('known-id match is case-insensitive',
+    pickDiscoveredExtras({ minimax: ['MiniMax-M3'] }, ['minimax-m3'], routerOf).length === 0)
+  check('duplicates across providers are collapsed',
+    pickDiscoveredExtras({ moonshot: ['kimi-k9'], kimi: ['kimi-k9'] }, [], routerOf).length === 1)
+  check('a hostile router never breaks the picker',
+    pickDiscoveredExtras({ openai: ['gpt-x'] }, [], () => { throw new Error('boom') }).length === 0)
+  check('empty / malformed input yields nothing',
+    pickDiscoveredExtras(null, [], routerOf).length === 0 &&
+    pickDiscoveredExtras({ openai: [null, '', 42] }, [], routerOf).length === 0)
+  check('the extra group is capped',
+    pickDiscoveredExtras(
+      { openai: Array.from({ length: 200 }, (_, i) => 'gpt-x' + i) }, [], routerOf, 60).length === 60)
 }
 
 // ═══════════════════════════════════════════════════════════════

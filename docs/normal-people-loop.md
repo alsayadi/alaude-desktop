@@ -518,3 +518,45 @@
   land where they should; and a MUST_HAVE list guards that every current
   flagship is actually present — the miss the completeness pass caught
   is now impossible to repeat silently. 258 → 264 checks green.
+
+### Cycle 37 — models without a rebuild (2026-08-02)
+- Owner question after the cycle-36 refresh: "any way to load them async
+  without updating the client?" The answer splits cleanly — model IDS can
+  be discovered live; PRICES cannot, because no provider exposes pricing
+  programmatically.
+- Rejected the obvious option: a remote catalog served from labaik.ai
+  would give full fidelity with no rebuild, but it is a phone-home on
+  every launch and it makes the app depend on a domain staying alive —
+  which directly contradicts the survival guarantee printed into the app
+  in cycle 35. Not worth trading a permanent promise for a few days of
+  freshness.
+- Shipped the hybrid instead. `electron/model-discovery.js` asks each
+  provider the user ALREADY has a key for what that key can see, on the
+  user's own credentials, cached 24h on disk. No backend, no manifest, no
+  new privacy surface; every call lands in the net-ledger like any other.
+  Anthropic and Google need their own auth shapes and Google namespaces
+  ids as `models/…`; everything else speaks the OpenAI `/v1/models` form,
+  which the provider-registry baseURLs already supply.
+- The response is filtered hard: `/v1/models` returns the provider's whole
+  catalogue (OpenAI answers with ~80 entries — embeddings, TTS, image,
+  moderation, `babbage-002`). Unfiltered it would make the picker worse,
+  not better. Anything unrecognised lands in a "🔎 Other models your key
+  can use" group above Local, so curated ordering is never disturbed.
+- **Honest pricing beats guessed pricing.** Discovered models carry no
+  price, so they render "price unknown" with a ⚪ badge rather than a
+  fabricated number. Live testing then exposed a related bug that had
+  been latent for releases: longest-prefix matching let `gpt-5.7-nova`
+  inherit the `gpt-5` row's price. Prefix matches now require a `-`
+  boundary, so variants and dated snapshots still resolve
+  (`gpt-4o-mini-2024-07-18`, `gemini-3.1-pro-preview`) while a version
+  bump correctly falls through to unknown.
+- Testing note worth remembering: `window.alaude` is frozen by
+  contextBridge, so the discovery response CANNOT be stubbed from the
+  page. Rather than leave the browser half unverified, the decision logic
+  moved to `renderer/js/model-extras.js` (matching schedule-parse.js and
+  friends) where it is directly testable — and the DOM half was then
+  verified live by stubbing that plain module object.
+- Residual, stated plainly: discovery removes the hard block, not the
+  curation. A brand-new model is now selectable the day it ships, but its
+  label, ordering and price still arrive with the next build.
+  264 → 291 module checks (295 total).
