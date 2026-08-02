@@ -601,3 +601,39 @@
   correctly, RTL mirroring. New test section [23/23] locks the offline
   invariant and the inline-code regression. 291 → 304 module checks
   (308 total).
+
+### Cycle 39 — the composer's "+" menu (2026-08-02)
+- Finishes what cycle 38 left as the stated residual: the permanent row
+  of controls under the composer (Choose folder · permission mode · Plan
+  mode · hint) folds into a single "+" popover, and the paperclip becomes
+  that "+" with "Attach a file" as its first item. The composer is now
+  one line: [+] [state] [message] [mic] [send].
+- **Moved, not rewritten.** Every control keeps its element, its id and
+  its handler — `folder-btn`, `perm-mode-select`, `plan-mode-btn`,
+  `workspace-hint`, `task-scope-breadcrumb` — so ⌘⇧A, setPermMode(),
+  refreshPermModeUi(), pickWorkspace() and the task-scope renderer all
+  keep working untouched. Tests assert each id still resolves inside the
+  menu; losing one would have failed silently, not thrown.
+- **One thing refused to go in the menu.** The plan's standing rule is
+  that agent state is always visible, so "what may Labaik do right now,
+  and where" stays on the composer as a state chip: the mode icon
+  (👁️/🛡️/🌊/🚀) plus the folder name once one is chosen. Restrictive
+  modes keep their warning colour. Hiding that behind a click would have
+  been tidiness at the cost of trust.
+- EN/中文/العربية for the three new strings; Escape and outside-click
+  close the menu; focus moves into it on open. 304 → 322 module checks
+  (326 total).
+- **Tested against real data for the first time this loop** (owner: "load
+  local data when open the app, so we can test with the api keys we
+  have"). Launched with the real ~/.labaik: 6 providers connected, 51
+  sessions. A live Anthropic call on `claude-sonnet-5` returned a real
+  reply and rendered as "Sonnet 5" — cycle 36's model refresh confirmed
+  end-to-end against a provider, not just against a fixture. The
+  cycle-38 inline-code fix also verified on genuinely streamed markdown.
+- **Mistake recorded honestly:** the second live test message was sent
+  without re-checking the active session, and landed in the owner's real
+  "Novel Math System Concept" thread (2 messages inserted mid-conversation)
+  rather than a fresh one. `newSession()` was called before the first
+  test but not the second, and the active session had changed in between.
+  Lesson for any future real-data run: assert the session id immediately
+  before every send, never once at the start.

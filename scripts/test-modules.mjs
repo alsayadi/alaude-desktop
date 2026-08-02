@@ -1154,6 +1154,43 @@ console.log('\n[23/23] chat UI — offline-clean, and inline code stays inline')
   // Type sizes: only two are allowed to reach the user's eye.
   check('content is 16px and chrome is 14px',
     /--read-size:\s*16px/.test(html) && /--ui-size:\s*14px/.test(html))
+
+  // ── cycle 39: the composer "+" menu ───────────────────────────
+  // The folder / permission / plan controls moved into a popover. The
+  // whole point of moving rather than rewriting them is that every id
+  // the rest of the app reaches for still resolves — losing one would
+  // break a keyboard shortcut or a silent JS lookup, not throw.
+  const menuBlock = html.slice(
+    html.indexOf('<div class="composer-menu"'),
+    html.indexOf('</div>', html.indexOf('class="workspace-hint"')))
+  check('the composer menu exists', menuBlock.length > 200)
+  for (const id of ['folder-btn', 'folder-label', 'folder-path', 'perm-mode-select',
+                    'plan-mode-btn', 'workspace-hint', 'task-scope-breadcrumb']) {
+    check(`  ${id} still lives inside the menu`, menuBlock.includes(`id="${id}"`))
+  }
+  check('exactly one workspace-bar remains in the page',
+    (html.match(/class="workspace-bar"/g) || []).length === 1)
+  check('the "+" trigger replaced the paperclip',
+    /id="composer-plus"[\s\S]{0,400}toggleComposerMenu/.test(html))
+  check('attach is still reachable, from inside the menu',
+    /composerMenuAction\('attach'\)/.test(html) && /if \(what === 'attach'\) return attachFile\(\)/.test(html))
+
+  // Agent state must never hide in a menu — the standing project rule.
+  check('permission state stays visible on the composer',
+    /id="composer-state"/.test(html) && /id="composer-state-icon"/.test(html))
+  check('every permission mode has an icon for that chip',
+    /PERM_ICONS\s*=\s*\{[^}]*observe[^}]*careful[^}]*flow[^}]*autopilot/.test(html))
+  check('the chip is refreshed whenever the mode is refreshed',
+    /async function refreshPermModeUi\(\)[\s\S]{0,700}updateComposerState\(\)/.test(html))
+  check('the menu closes on Escape and on an outside click',
+    /e\.key === 'Escape'\) closeComposerMenu/.test(html) &&
+    /#composer-menu, #composer-plus, #composer-state/.test(html))
+
+  // The three new strings must exist in all three locales.
+  for (const key of ['composer.plus.title', 'composer.state.title', 'composer.attach']) {
+    check(`  "${key}" translated in all 3 locales`,
+      (html.match(new RegExp(`'${key.replace('.', '\\.')}':`, 'g')) || []).length === 3)
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
