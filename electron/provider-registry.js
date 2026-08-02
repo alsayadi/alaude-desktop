@@ -57,9 +57,9 @@ const PROVIDERS_ORDERED = [
   ['moonshot',  { baseURL: 'https://api.moonshot.cn/v1', prefixes: ['moonshot-', 'kimi-'], envVar: 'MOONSHOT_API_KEY' }],
 
   // Alibaba Qwen via DashScope's OpenAI-compatible endpoint. Prefix is
-  // just `qwen` (no dash) to catch both legacy `qwen-max` and the newer
-  // `qwen3.6-max-preview` (which uses dots) without a collision — no
-  // other provider ships a model id starting with `qwen`.
+  // just `qwen` (no dash) to catch legacy `qwen-max`, `qwen3.6-max-preview`
+  // and the current `qwen3.7-*` family (which use dots) without a
+  // collision — no other provider ships a model id starting with `qwen`.
   ['dashscope', { baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1', prefixes: ['qwen'], envVar: 'DASHSCOPE_API_KEY' }],
 
   // Zhipu GLM — GLM-5 / GLM-5.1 / GLM-4.x all match.
@@ -70,11 +70,19 @@ const PROVIDERS_ORDERED = [
   // reaches the SDK unchanged (their API 400s on lowercased ids).
   ['minimax',   { baseURL: 'https://api.minimax.io/v1', prefixes: ['minimax-'], envVar: 'MINIMAX_API_KEY' }],
 
-  // Tencent Hunyuan — match both `hunyuan-` (older families like
-  // hunyuan-turbo / hunyuan-t1) and `hy3-` / `hy4-` (the new Hy-series
-  // flagships). Absorbed in the router so users never have to type a
-  // synthetic `hunyuan/` prefix in the picker.
-  ['hunyuan',   { baseURL: 'https://api.hunyuan.cloud.tencent.com/v1', prefixes: ['hunyuan-', 'hy3-', 'hy4-'], envVar: 'HUNYUAN_API_KEY' }],
+  // Tencent Hunyuan — MIGRATED to TokenHub (v0.8 cycle 36).
+  //
+  // Tencent is shutting `api.hunyuan.cloud.tencent.com` down entirely on
+  // 2026-09-30; 46 legacy `hunyuan-*` ids were already retired 2026-06-22.
+  // Current models (hy3, hy3-preview, hy-mt2-pro, hy-role, hy-vision-*)
+  // are served from TokenHub. Keys are the same Tencent credentials.
+  //
+  // Prefixes: `hy3` WITHOUT a trailing dash, because the flagship id is
+  // the bare string `hy3` — the old `hy3-` prefix matched `hy3-preview`
+  // but silently missed `hy3` itself and fell through to Anthropic.
+  // `hy4-` is gone: Hy generation numbering stops at 3, so that prefix
+  // could never match a real model. `hunyuan-` stays for saved sessions.
+  ['hunyuan',   { baseURL: 'https://tokenhub.tencentmaas.com/v1', prefixes: ['hunyuan-', 'hy3', 'hy-'], envVar: 'HUNYUAN_API_KEY' }],
 
   // DeepSeek (v0.7.65) — OpenAI-compatible, sk-... keys from
   // platform.deepseek.com. The `deepseek-` prefix COULD collide with the

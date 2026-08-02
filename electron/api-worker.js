@@ -1189,7 +1189,10 @@ function emitActivity(id, activity) {
 }
 
 function shouldHeartbeatProviderWait(provider, model) {
-  return provider === 'deepseek' || /reasoner|thinking|^o[13]|^gpt-5.*think/i.test(model || '')
+  // Keep in step with main.js's `isReasoningModel`. Reasoning is a request
+  // parameter on GPT-5.6, so `gpt-5.x-pro` (not `-thinking`) is the silent
+  // long-thinker on OpenAI now.
+  return provider === 'deepseek' || /reasoner|thinking|^o[13]|^gpt-5[\d.]*-pro|^gpt-5.*think|^grok-.*reasoning|^hy3-preview/i.test(model || '')
 }
 
 // Some reasoning providers accept a streaming request, then stay quiet before
@@ -1460,8 +1463,8 @@ async function handleChat({ messages, model, workspacePath, spacePrompt, id, mes
     // OpenAI/Anthropic flagships with comparable quality on most tasks.
     // Fallback chain in order of preference if the user lacks the key.
     if (getApiKey('deepseek')) { provider = 'deepseek'; model = 'deepseek-v4-pro' }
-    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-4-6' }
-    else if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-4o' }
+    else if (getApiKey('anthropic')) { provider = 'anthropic'; model = 'claude-sonnet-5' }
+    else if (getApiKey('openai')) { provider = 'openai'; model = 'gpt-5.6-terra' }
     else throw new Error('No API key configured')
   }
   process.stderr.write(`[worker] resolved provider="${provider}" model="${model}"\n`)

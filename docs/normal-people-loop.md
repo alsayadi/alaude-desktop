@@ -462,3 +462,59 @@
   stealth model downgrades elsewhere are the market backdrop — an app
   that shows you the exit door is one you can trust to stay.
   EN/中文/العربية. 243 checks green.
+
+### Cycle 36 — the model refresh: current everywhere, and nothing dead (2026-08-02)
+- Owner request ("the providers added new models, support them"). Three
+  parallel research agents verified every provider's current lineup
+  against official docs rather than trusting the ids already shipped.
+- **New models added.** Anthropic: the Claude 5 family (Sonnet 5 as the
+  daily driver, Opus 5 flagship, Fable 5 most-capable; there is no
+  Haiku 5, so Haiku 4.5 stays the cheap tier). OpenAI: GPT-5.6's three
+  named tiers — Sol / Terra / Luna. Google: Gemini 3.6 Flash + 3.5
+  Flash-Lite (3.1 Pro is still the newest Pro tier). xAI: Grok 4.5, 4.3
+  (1M ctx), Build 0.1. Kimi K3, Qwen 3.7 max/plus/flash + Coder Next,
+  GLM-5.2/5-turbo/4.7, MiniMax-M3, Hunyuan hy3. Local: Gemma 4 12B,
+  Liquid LFM2.5 8B, Ornith 1.0 9B/35B, MiniCPM-V 4.6.
+- **Dead ids removed** — these were shipping and would error on click:
+  `deepseek-chat` / `deepseek-reasoner` (retired 2026-07-24, they now
+  hard-error rather than falling back), `glm-5-air` and bare `glm-4`
+  (never on any Zhipu list), `kimi-k2-thinking-turbo` (K2 discontinued
+  2026-05-25), and `gpt-5.5-thinking` / `gpt-5.5-mini` /
+  `gpt-5.4-thinking` — reasoning became a request *parameter* on
+  GPT-5.6, so those ids never existed upstream at all.
+- **Routing bugs fixed.** The `hy4-` prefix matched a Hunyuan generation
+  that was never made; worse, the `hy3-` prefix silently missed the bare
+  flagship id `hy3` and fell it through to Anthropic. Hunyuan also moved
+  to TokenHub — the old api.hunyuan.cloud.tencent.com host shuts down
+  2026-09-30. And the Anthropic group shipped an option with an EMPTY
+  value that blanked the session model on selection.
+- **Pricing is now real.** The old table was openly guessed ("assumes
+  OpenAI follows their usual tier ratios"). Every current-generation row
+  is the provider's own published list price, including the Jul 30
+  OpenAI cut. Sonnet 5's introductory $2/$10 is encoded as a DATE so the
+  spend meter stops under-reporting on Sep 1 instead of quietly lying.
+- **Cost tier derived from price, not from the name.** Caught live, not
+  by tests: the old name-regex scored `gpt-5.6-luna` — OpenAI's cheapest
+  model — as 🔴 premium, because "gpt-5." pattern-matched a flagship.
+  Tiers now bucket on published output $/Mtok, so they stay honest on
+  their own. Fallout worth knowing: Gemini's Flash tier is no longer
+  cheap ($7.50/Mtok out) and now correctly reads 🟡 mid.
+- **Completeness pass** (owner asked "are you sure you included all new
+  models"): the first pass had in fact missed eight that the research
+  confirmed — Gemini 3.5 Flash, GLM-4.7-Flash (which is FREE, the single
+  most valuable omission for a no-subscription app), Kimi K2.7 Code
+  High-Speed on both endpoints, Claude Opus 4.8, Grok 4.20 multi-agent,
+  Hunyuan Vision 2.0 and Role, and Nemotron 3 locally. All added; the
+  picker went 58 → 66 models. Deliberately still excluded, with reasons
+  recorded in the markup: `claude-mythos-5` (invite-only, would 404 for
+  almost everyone), `qwen3.8-max-preview` (subscription-only, no
+  pay-per-token), and the colon-less local releases (north-mini-code,
+  laguna-xs) that the Ollama `name:tag` routing check cannot see.
+- A free cloud model now reads 🟢 **free**, not merely "cheap" — GLM-4.7
+  Flash is the one tier a user with no money at all can run forever.
+- New test section [21/21] asserts the whole invariant set: every picker
+  option routes to its own optgroup's provider, has a price, and is not
+  on the retired list; no empty values; MiniMax keeps its case; tiers
+  land where they should; and a MUST_HAVE list guards that every current
+  flagship is actually present — the miss the completeness pass caught
+  is now impossible to repeat silently. 258 → 264 checks green.

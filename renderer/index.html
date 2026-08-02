@@ -6250,91 +6250,140 @@
       <button class="sidebar-new-btn" data-i18n="sidebar.addAccount" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
         <optgroup label="Anthropic">
-          <!-- v0.7.62 — 4.x family. Default model lives in the DeepSeek
-               group below (deepseek-v4-pro) — cheaper per token than
-               Sonnet 4.6 with comparable quality. Sonnet stays as a
-               popular alternative; Opus is the flagship for hard tasks. -->
-          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 · daily driver</option>
-          <option value="claude-opus-4-7">Claude Opus 4.7 · flagship</option>
+          <!-- v0.8 cycle 36 — the Claude 5 family (Jun–Jul 2026). Sonnet 5
+               is the daily driver, Opus 5 the flagship, Fable 5 the most
+               capable tier. Haiku 4.5 is still the fast/cheap tier —
+               there is no Haiku 5. The 4.x models stay as legacy so saved
+               chats keep working. Removed here: the option with an EMPTY
+               value ("Claude Sonnet · legacy"), which silently set the
+               session model to "" and fell through to the provider
+               default. -->
+          <option value="claude-sonnet-5">Claude Sonnet 5 · daily driver</option>
+          <option value="claude-opus-5">Claude Opus 5 · flagship</option>
+          <option value="claude-fable-5">Claude Fable 5 · most capable</option>
           <option value="claude-haiku-4-5">Claude Haiku 4.5 · fast / cheap</option>
-          <option value="">Claude Sonnet · legacy</option>
+          <option value="claude-opus-4-8">Claude Opus 4.8 · legacy</option>
+          <option value="claude-opus-4-7">Claude Opus 4.7 · legacy</option>
+          <option value="claude-sonnet-4-6">Claude Sonnet 4.6 · legacy</option>
           <option value="claude-opus-4-6">Claude Opus 4.6 · legacy</option>
-          <option value="claude-opus-4-5">Claude Opus 4.5 · legacy</option>
         </optgroup>
         <optgroup label="OpenAI">
-          <!-- v0.7.72 — GPT-5.5 is the new flagship (May 2026). 5.4 stays
-               as a popular alternative; 5.3 is ChatGPT's logged-in
-               default. GPT-4o retired per OpenAI's own deprecation notice
-               but kept as legacy so saved chats don't error. -->
-          <option value="gpt-5.5">GPT-5.5 · flagship</option>
-          <option value="gpt-5.5-thinking">GPT-5.5 Thinking · reasoning</option>
-          <option value="gpt-5.5-mini">GPT-5.5 Mini · fast / cheap</option>
-          <option value="gpt-5.4">GPT-5.4 · alternative</option>
-          <option value="gpt-5.4-thinking">GPT-5.4 Thinking · reasoning</option>
-          <option value="gpt-5.4-pro">GPT-5.4 Pro · deep reasoning</option>
-          <option value="gpt-5.3">GPT-5.3 · balanced</option>
-          <option value="gpt-5">GPT-5 · legacy</option>
-          <option value="o3">o3 · reasoning (legacy)</option>
-          <option value="o4-mini">o4-mini · legacy</option>
+          <!-- v0.8 cycle 36 — GPT-5.6 (Jul 2026) ships three named tiers:
+               Sol (flagship), Terra (balanced), Luna (fast/cheap). The
+               o-series is gone and reasoning is now a REQUEST PARAMETER,
+               not a model id — so the old `-thinking` ids we carried
+               (gpt-5.5-thinking, gpt-5.5-mini, gpt-5.4-thinking) never
+               existed upstream and are removed. gpt-5.4's real mini/nano
+               SKUs are listed instead. -->
+          <option value="gpt-5.6-sol">GPT-5.6 Sol · flagship</option>
+          <option value="gpt-5.6-terra">GPT-5.6 Terra · balanced</option>
+          <option value="gpt-5.6-luna">GPT-5.6 Luna · fast / cheap</option>
+          <option value="gpt-5.5">GPT-5.5 · legacy</option>
+          <option value="gpt-5.5-pro">GPT-5.5 Pro · deep reasoning (legacy)</option>
+          <option value="gpt-5.4">GPT-5.4 · legacy</option>
+          <option value="gpt-5.4-mini">GPT-5.4 Mini · legacy</option>
+          <option value="gpt-5.4-nano">GPT-5.4 Nano · legacy</option>
+          <option value="gpt-5.4-pro">GPT-5.4 Pro · deep reasoning (legacy)</option>
+          <option value="gpt-5">GPT-5 · retired Dec 2026</option>
           <option value="gpt-4o">GPT-4o · retired</option>
         </optgroup>
         <optgroup label="xAI">
-          <!-- v0.7.62 — Grok-4.20 with explicit reasoning / non-reasoning
-               variants per xAI's API split. grok-3 kept as legacy. -->
-          <option value="grok-4.20-reasoning">Grok 4.20 · reasoning flagship</option>
-          <option value="grok-4.20-non-reasoning">Grok 4.20 · fast (non-reasoning)</option>
-          <option value="grok-3">Grok-3 · legacy</option>
+          <!-- v0.8 cycle 36 — Grok 4.5 (Jul 2026) is the flagship; 4.3
+               keeps the 1M-token context. The 4.20 ids are date-stamped
+               (`-0309-`) per xAI's docs — the bare `grok-4.20-reasoning`
+               form we shipped before is not a documented alias. grok-3
+               was retired in xAI's May 15 2026 sweep. -->
+          <option value="grok-4.5">Grok 4.5 · flagship (500k)</option>
+          <option value="grok-4.3">Grok 4.3 · reasoning (1M context)</option>
+          <option value="grok-build-0.1">Grok Build 0.1 · coding (256k)</option>
+          <option value="grok-4.20-multi-agent-0309">Grok 4.20 · multi-agent</option>
+          <option value="grok-4.20-0309-reasoning">Grok 4.20 · reasoning (legacy)</option>
+          <option value="grok-4.20-0309-non-reasoning">Grok 4.20 · fast (legacy)</option>
+          <option value="grok-3">Grok-3 · retired</option>
         </optgroup>
         <optgroup label="Kimi (kimi.com / CN)">
-          <!-- v0.7.61: flagship K2.6 + thinking-turbo + legacy 128k -->
-          <option value="kimi-k2.6">Kimi K2.6 · flagship (256k)</option>
-          <option value="kimi-k2-thinking-turbo">Kimi K2 Thinking Turbo · reasoning</option>
-          <option value="moonshot-v1-128k">Moonshot v1 (128k) · legacy</option>
+          <!-- v0.8 cycle 36 — K3 (Jul 2026, 1M context) is the flagship.
+               The `kimi-k2` series was discontinued 2026-05-25, so the
+               old kimi-k2-thinking-turbo id is dead and removed.
+               moonshot-v1-* sunsets 2026-08-31. -->
+          <option value="kimi-k3">Kimi K3 · flagship (1M)</option>
+          <option value="kimi-k2.7-code">Kimi K2.7 Code · coding (256k)</option>
+          <option value="kimi-k2.7-code-highspeed">Kimi K2.7 Code · high-speed</option>
+          <option value="kimi-k2.6">Kimi K2.6 · balanced (256k)</option>
         </optgroup>
         <optgroup label="Kimi (kimi.ai / Global)">
           <!-- `kimi-intl/` is a routing prefix stripped by provider-registry
                before hitting the api.moonshot.ai endpoint. -->
-          <option value="kimi-intl/kimi-k2.6">Kimi K2.6 · flagship (256k)</option>
-          <option value="kimi-intl/kimi-k2-thinking-turbo">Kimi K2 Thinking Turbo · reasoning</option>
+          <option value="kimi-intl/kimi-k3">Kimi K3 · flagship (1M)</option>
+          <option value="kimi-intl/kimi-k2.7-code">Kimi K2.7 Code · coding (256k)</option>
+          <option value="kimi-intl/kimi-k2.7-code-highspeed">Kimi K2.7 Code · high-speed</option>
+          <option value="kimi-intl/kimi-k2.6">Kimi K2.6 · balanced (256k)</option>
         </optgroup>
         <optgroup label="Qwen (DashScope)">
-          <option value="qwen3.6-max-preview">Qwen 3.6 Max Preview · flagship (262k)</option>
-          <option value="qwen3-coder-plus">Qwen 3 Coder Plus · coding (1M)</option>
+          <!-- v0.8 cycle 36 — Qwen3.7 family (May–Jul 2026), all 1M
+               context. qwen3.6-max-preview and qwen3-coder-plus are on
+               Alibaba's 2026-10-10 retirement list — kept as legacy.
+               Deliberately NOT listed: qwen3.8-max-preview, which is
+               Token-Plan-subscription only and 401s on a normal key. -->
+          <option value="qwen3.7-max">Qwen 3.7 Max · flagship (1M)</option>
+          <option value="qwen3.7-plus">Qwen 3.7 Plus · balanced (1M)</option>
+          <option value="qwen3.7-flash">Qwen 3.7 Flash · cheap / fast (1M)</option>
+          <option value="qwen3-coder-next">Qwen 3 Coder Next · coding</option>
+          <option value="qwen3.6-max-preview">Qwen 3.6 Max · legacy (retires Oct 2026)</option>
           <option value="qwen-max">Qwen Max · legacy</option>
         </optgroup>
         <optgroup label="GLM (Zhipu)">
-          <option value="glm-5">GLM-5 · flagship MoE</option>
-          <option value="glm-5.1">GLM-5.1 (#1 SWE-Bench Pro)</option>
-          <option value="glm-4">GLM-4 · legacy</option>
+          <!-- v0.8 cycle 36 — GLM-5.2 (Jun 2026, 1M context) is the
+               flagship. `glm-5-air` is REMOVED: it never existed on
+               either the z.ai or bigmodel model list and 404'd. -->
+          <option value="glm-5.2">GLM-5.2 · flagship (1M)</option>
+          <option value="glm-5.1">GLM-5.1 · alternative</option>
+          <option value="glm-5-turbo">GLM-5 Turbo · fast</option>
+          <option value="glm-4.7">GLM-4.7 · balanced</option>
+          <option value="glm-4.7-flashx">GLM-4.7 FlashX · cheap / fast</option>
+          <option value="glm-4.7-flash">GLM-4.7 Flash · free</option>
+          <option value="glm-5">GLM-5 · legacy</option>
         </optgroup>
         <optgroup label="MiniMax">
-          <option value="MiniMax-M2.7">MiniMax M2.7 · flagship</option>
+          <!-- Model ids are CASE-SENSITIVE upstream — MiniMax-M3, not
+               minimax-m3. provider-registry preserves the original case. -->
+          <option value="MiniMax-M3">MiniMax M3 · flagship (1M)</option>
+          <option value="MiniMax-M2.7">MiniMax M2.7 · balanced</option>
+          <option value="MiniMax-M2.7-highspeed">MiniMax M2.7 · high-speed</option>
         </optgroup>
         <optgroup label="Tencent Hunyuan">
-          <option value="hy3-preview">Hunyuan Hy3 Preview · Tencent flagship</option>
+          <!-- v0.8 cycle 36 — now served from TokenHub (the old
+               api.hunyuan.cloud.tencent.com host shuts down 2026-09-30).
+               `hy3` is the bare flagship id; there is no hy4 generation. -->
+          <option value="hy3">Hunyuan Hy3 · flagship (256k)</option>
+          <option value="hy3-preview">Hunyuan Hy3 Preview · agentic</option>
+          <option value="hy-mt2-pro">Hunyuan MT2 Pro · translation</option>
+          <option value="hy-vision-2.0-instruct">Hunyuan Vision 2.0 · images</option>
+          <option value="hy-role">Hunyuan Role · roleplay</option>
         </optgroup>
         <optgroup label="DeepSeek">
-          <!-- v0.7.65: DeepSeek V4. The API /v1/models list shows two
-               concrete ids: deepseek-v4-pro (flagship) and
-               deepseek-v4-flash (fast). `deepseek-chat` and
-               `deepseek-reasoner` are documented aliases that route
-               to those; we expose all four so users can target either
-               by id or by semantic label.
+          <!-- v0.8 cycle 36: DeepSeek exposes exactly two concrete ids,
+               deepseek-v4-pro (flagship) and deepseek-v4-flash (fast).
+               The `deepseek-chat` / `deepseek-reasoner` aliases we used
+               to list were RETIRED on 2026-07-24 and now return an error
+               rather than falling back, so they are removed outright.
                Collision guard: the local Ollama 'deepseek-r1' family
                routes via the : tag check, not this prefix. -->
           <option value="deepseek-v4-pro" selected>DeepSeek V4 Pro · default · flagship · cheap</option>
           <option value="deepseek-v4-flash">DeepSeek V4 Flash · fast</option>
-          <option value="deepseek-reasoner">DeepSeek Reasoner · thinking (alias)</option>
-          <option value="deepseek-chat">DeepSeek Chat · balanced (alias)</option>
         </optgroup>
         <optgroup label="Google">
-          <!-- v0.7.62 — Gemini 3.1 is the current production family.
-               Pro is flagship reasoning + multimodal; Flash is the new
-               default balanced tier; Flash-Lite is the cheap/fast tier.
-               Gemini 2.0 Flash kept as legacy. -->
+          <!-- v0.8 cycle 36 — Gemini 3.1 Pro is STILL the newest Pro tier
+               (no 3.5/3.6 Pro exists); the Flash line moved on twice.
+               3.6 Flash (Jul 2026) is the new default. Note
+               gemini-3.1-flash-lite went GA — the `-preview` suffix we
+               shipped before is a stale id. -->
           <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro · flagship</option>
-          <option value="gemini-3-flash-preview">Gemini 3 Flash · default</option>
-          <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash-Lite · cheap / fast</option>
+          <option value="gemini-3.6-flash">Gemini 3.6 Flash · default</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash · alternative</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite · cheap / fast</option>
+          <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite · cheap</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash · legacy</option>
           <option value="gemini-2.0-flash">Gemini 2.0 Flash · legacy</option>
         </optgroup>
         <optgroup label="Local (Ollama)" data-i18n-attr="label:model.optgroup.local" id="model-select-local"></optgroup>
@@ -13243,17 +13292,24 @@ footer a { color: var(--accent); text-decoration: none; }
     }
 
     // v0.7.72: pretty-print a model id for the per-message badge. The raw
-    // ids ("deepseek-v4-pro", "claude-sonnet-4-6", "gpt-5.4-thinking") read
+    // ids ("deepseek-v4-pro", "claude-sonnet-5", "gpt-5.6-sol") read
     // like API tokens; users want a short, readable label. Maps the
     // common families to their marketing names; falls back to the raw id
     // for anything we don't recognise (Ollama tags, custom IDs, etc).
     window.prettyModelName = (id) => {
       if (!id || typeof id !== 'string') return ''
       const m = id
+      const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
       // Anthropic: "claude-sonnet-4-6" → "Sonnet 4.6", "claude-opus-4-7" → "Opus 4.7", etc.
       let match = m.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)$/i)
-      if (match) return `${match[1].charAt(0).toUpperCase() + match[1].slice(1)} ${match[2]}.${match[3]}`
-      // OpenAI: gpt-5.4 / gpt-5.4-thinking / o3 / o4-mini stay as-is (already short)
+      if (match) return `${cap(match[1])} ${match[2]}.${match[3]}`
+      // Claude 5 family ids carry no minor version: "claude-opus-5" → "Opus 5"
+      match = m.match(/^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)$/i)
+      if (match) return `${cap(match[1])} ${match[2]}`
+      // OpenAI: GPT-5.6 ships named tiers — "gpt-5.6-sol" → "GPT-5.6 Sol".
+      // Older ids (gpt-5.4, o3, o4-mini) are already short; left as-is.
+      match = m.match(/^gpt-([\d.]+)-(sol|terra|luna|pro|mini|nano)$/i)
+      if (match) return `GPT-${match[1]} ${cap(match[2])}`
       // DeepSeek: "deepseek-v4-pro" → "DeepSeek V4 Pro"
       match = m.match(/^deepseek-(v\d)(?:-(\w+))?$/i)
       if (match) return `DeepSeek ${match[1].toUpperCase()}${match[2] ? ' ' + match[2].charAt(0).toUpperCase() + match[2].slice(1) : ''}`
@@ -17950,14 +18006,26 @@ Title:`
     // goes stale fast, so we bucket by family into 🟢 cheap / 🟡 mid / 🔴
     // premium — robust at the tier level and enough to stop a user burning a
     // flagship on a one-liner. Local models are free.
+    // v0.8 cycle 36: derived from MODEL_PRICING instead of a name regex.
+    // The old version pattern-matched on model ids and drifted from reality
+    // every time a provider renamed a tier — it scored `gpt-5.6-luna` (the
+    // cheapest OpenAI model, $1.20/Mtok out) as 🔴 premium because "gpt-5."
+    // matched a flagship pattern. Bucketing on the published output price
+    // is both correct today and self-correcting whenever prices are updated.
+    // Thresholds are on OUTPUT $/Mtok, which dominates chat cost.
+    const COST_TIER_CHEAP_MAX = 5.00     // at or below: pennies per conversation
+    const COST_TIER_PREMIUM_MIN = 15.00  // at or above: flagship money
     function modelCostTier(modelId, isLocal) {
       if (isLocal) return { dots: '🟢', label: 'free · local' }
-      const m = (modelId || '').toLowerCase()
-      // Premium flagships
-      if (/claude-opus|gpt-5(\.5)?-pro|gpt-5(\.5)?($|[^-])|grok-.*reasoning|gemini-3\.?1?-pro|^o[13]/.test(m)) return { dots: '🔴', label: 'premium' }
-      // Cheap / mini / flash / distilled
-      if (/haiku|flash|mini|-air|deepseek-chat|qwen.*(flash|turbo)|gpt-5(\.5)?-mini|nano/.test(m)) return { dots: '🟢', label: 'cheap' }
-      // Everything else (sonnet, deepseek-v4, glm-5, kimi, minimax, hunyuan…)
+      const price = getModelPricing(modelId)
+      if (price?.local) return { dots: '🟢', label: 'free · local' }
+      // Unknown/custom ids: don't claim to know. Mid is the safe middle.
+      if (!price) return { dots: '🟡', label: 'mid' }
+      // A genuinely free cloud model (Zhipu's GLM-4.7-Flash) deserves to
+      // say so — "cheap" undersells the one tier a user can run forever.
+      if (price.in === 0 && price.out === 0) return { dots: '🟢', label: 'free' }
+      if (price.out <= COST_TIER_CHEAP_MAX) return { dots: '🟢', label: 'cheap' }
+      if (price.out >= COST_TIER_PREMIUM_MIN) return { dots: '🔴', label: 'premium' }
       return { dots: '🟡', label: 'mid' }
     }
     function providerOf(modelId) {
@@ -17970,7 +18038,7 @@ Title:`
       if (m.startsWith('qwen')) return 'dashscope'           // covers qwen-max AND qwen3.6-max-preview
       if (m.startsWith('glm-')) return 'zhipu'
       if (m.startsWith('minimax-')) return 'minimax'
-      if (m.startsWith('hunyuan-') || m.startsWith('hy3-') || m.startsWith('hy4-')) return 'hunyuan'
+      if (m.startsWith('hunyuan-') || m.startsWith('hy3') || m.startsWith('hy-')) return 'hunyuan'
       // v0.7.65: DeepSeek. Match AFTER the Ollama `:` check at the top so
       // `deepseek-r1:7b` stays local. Guard with !includes(':') as
       // belt+braces in case a colon sneaks into a cloud model id.
@@ -18013,8 +18081,8 @@ Title:`
             }
             return null
           }
-          const best = byPrefix(['claude-opus', 'gpt-5', 'claude-sonnet', 'deepseek-v4', 'gemini-3', 'grok-', 'kimi-', 'glm-', 'qwen'])
-          const fast = byPrefix(['claude-haiku', 'gemini-3-flash', 'gemini-3.1-flash', 'deepseek-chat', 'gpt-5-mini', 'glm-5-air'])
+          const best = byPrefix(['claude-opus-5', 'claude-fable', 'claude-opus', 'gpt-5.6-sol', 'gpt-5', 'claude-sonnet', 'deepseek-v4-pro', 'gemini-3', 'grok-', 'kimi-', 'glm-', 'qwen'])
+          const fast = byPrefix(['claude-haiku', 'gpt-5.6-luna', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3-flash', 'deepseek-v4-flash', 'qwen3.7-flash', 'glm-4.7-flashx'])
           const local = connectedOpts.find(o => o.parentElement?.id === 'model-select-local')
           const recs = []
           if (best) recs.push([best, t('model.rec.best')])
@@ -18211,16 +18279,16 @@ Title:`
         // v0.7.62: defaults point at each provider's current flagship so
         // new users land on the best model without a manual pick.
         const modelMap = {
-          anthropic: 'claude-sonnet-4-6',           // balanced default (flagship = opus-4-7)
-          openai:    'gpt-5.5',                     // flagship (was 5.4 in v0.7.62; retired: gpt-4o)
-          google:    'gemini-3.1-pro-preview',      // flagship (retired: 2.0-flash)
-          xai:       'grok-4.20-reasoning',         // flagship (legacy: grok-3)
-          moonshot:  'kimi-k2.6',                   // kimi.com flagship
-          kimi:      'kimi-intl/kimi-k2.6',         // kimi.ai flagship
-          dashscope: 'qwen3.6-max-preview',         // Qwen flagship
-          zhipu:     'glm-5',                       // GLM flagship
-          minimax:   'MiniMax-M2.7',                // MiniMax flagship (case-sensitive)
-          hunyuan:   'hy3-preview',                 // Tencent flagship
+          anthropic: 'claude-sonnet-5',             // balanced default (flagship = opus-5)
+          openai:    'gpt-5.6-sol',                 // flagship (was 5.5 in v0.7.72)
+          google:    'gemini-3.1-pro-preview',      // flagship — still newest Pro tier
+          xai:       'grok-4.5',                    // flagship (retired: grok-3, grok-4.20)
+          moonshot:  'kimi-k3',                     // kimi.com flagship
+          kimi:      'kimi-intl/kimi-k3',           // kimi.ai flagship
+          dashscope: 'qwen3.7-max',                 // Qwen flagship (3.6 retires Oct 2026)
+          zhipu:     'glm-5.2',                     // GLM flagship
+          minimax:   'MiniMax-M3',                  // MiniMax flagship (case-sensitive)
+          hunyuan:   'hy3',                         // Tencent flagship (TokenHub)
           deepseek:  'deepseek-v4-pro',             // DeepSeek flagship (v-pro, not bare v4)
         }
         if (lastProvider && modelMap[lastProvider] !== undefined) {
@@ -18568,16 +18636,25 @@ Title:`
     // Keys are matched case-insensitive, longest-prefix-wins so e.g. a chat
     // with "gpt-4o-mini-2024-07-18" falls through to gpt-4o-mini pricing.
     // Unknown models return null and the UI degrades quietly (no $ shown).
+    // v0.8 cycle 36: every current-generation row below is the provider's
+    // OWN published list price, not an inferred tier ratio. Keys MUST be
+    // lowercase — lookup lowercases the model id before matching (so
+    // `MiniMax-M3` matches the `minimax-m3` key).
     const MODEL_PRICING = {
-      // OpenAI — GPT-5.5 family added v0.7.72 (May 2026). Pricing assumes
-      // OpenAI follows their usual flagship/thinking/mini tier ratios; will
-      // be corrected when official numbers ship.
-      'gpt-5.5-mini':           { in: 0.30,   out: 1.20 },
-      'gpt-5.5-thinking':       { in: 6.00,   out: 24.00 },
-      'gpt-5.5':                { in: 3.00,   out: 12.00 },
-      'gpt-5.4-pro':            { in: 12.00,  out: 48.00 },
-      'gpt-5.4-thinking':       { in: 5.00,   out: 20.00 },
-      'gpt-5.4':                { in: 2.50,   out: 10.00 },
+      // OpenAI — GPT-5.6 named tiers (Jul 2026). Terra/Luna reflect the
+      // Jul 30 2026 price cut (Luna −80%, Terra −20%); any table sourced
+      // before that date is wrong. "Fast mode" is a 2x multiplier on the
+      // same id, not a separate model, so it isn't listed here.
+      'gpt-5.6-sol':            { in: 5.00,   out: 30.00 },
+      'gpt-5.6-terra':          { in: 2.00,   out: 12.00 },
+      'gpt-5.6-luna':           { in: 0.20,   out: 1.20 },
+      'gpt-5.6':                { in: 5.00,   out: 30.00 },  // bare alias → Sol
+      'gpt-5.5-pro':            { in: 30.00,  out: 180.00 },
+      'gpt-5.5':                { in: 5.00,   out: 30.00 },
+      'gpt-5.4-pro':            { in: 30.00,  out: 180.00 },
+      'gpt-5.4-mini':           { in: 0.75,   out: 4.50 },
+      'gpt-5.4-nano':           { in: 0.20,   out: 1.25 },
+      'gpt-5.4':                { in: 2.50,   out: 15.00 },
       'gpt-5.3':                { in: 1.25,   out: 5.00 },
       'gpt-5':                  { in: 2.00,   out: 8.00 },
       'gpt-4o-mini':            { in: 0.15,   out: 0.60 },
@@ -18591,7 +18668,14 @@ Title:`
       'o3-mini':                { in: 1.10,   out: 4.40 },
       'o3':                     { in: 10.00,  out: 40.00 },
       'o4-mini':                { in: 1.10,   out: 4.40 },
-      // Anthropic
+      // Anthropic — Claude 5 family. Sonnet 5 is on introductory pricing
+      // ($2/$10) through 2026-08-31 and reverts to $3/$15 on Sep 1; the
+      // switch is handled by date in getModelPricing(), not here.
+      'claude-fable-5':         { in: 10.00,  out: 50.00 },
+      'claude-mythos-5':        { in: 10.00,  out: 50.00 },
+      'claude-opus-5':          { in: 5.00,   out: 25.00 },
+      'claude-sonnet-5':        { in: 3.00,   out: 15.00 },
+      'claude-haiku-4-5':       { in: 1.00,   out: 5.00 },
       'claude-3-5-sonnet':      { in: 3.00,   out: 15.00 },
       'claude-3-5-haiku':       { in: 0.80,   out: 4.00 },
       'claude-3-opus':          { in: 15.00,  out: 75.00 },
@@ -18599,35 +18683,96 @@ Title:`
       'claude-3-haiku':         { in: 0.25,   out: 1.25 },
       'claude-sonnet-4':        { in: 3.00,   out: 15.00 },
       'claude-sonnet-4-5':      { in: 3.00,   out: 15.00 },
+      'claude-sonnet-4-6':      { in: 3.00,   out: 15.00 },
+      'claude-opus-4-1':        { in: 15.00,  out: 75.00 },
+      'claude-opus-4-5':        { in: 5.00,   out: 25.00 },
+      'claude-opus-4-6':        { in: 5.00,   out: 25.00 },
+      'claude-opus-4-7':        { in: 5.00,   out: 25.00 },
+      'claude-opus-4-8':        { in: 5.00,   out: 25.00 },
       'claude-opus-4':          { in: 15.00,  out: 75.00 },
-      'claude-opus-4-5':        { in: 15.00,  out: 75.00 },
-      'claude-opus-4-6':        { in: 15.00,  out: 75.00 },
-      'claude-opus-4-7':        { in: 15.00,  out: 75.00 },
       'claude-haiku-4':         { in: 0.80,   out: 4.00 },
-      // Google
+      // Google — Gemini. Pro is tiered by prompt size (≤200k / >200k);
+      // we quote the ≤200k rate, which is what a chat session hits.
+      'gemini-3.6-flash':       { in: 1.50,   out: 7.50 },
+      'gemini-3.5-flash-lite':  { in: 0.30,   out: 2.50 },
+      'gemini-3.5-flash':       { in: 1.50,   out: 9.00 },
+      'gemini-3.1-pro':         { in: 2.00,   out: 12.00 },
+      'gemini-3.1-flash-lite':  { in: 0.25,   out: 1.50 },
+      'gemini-3-flash':         { in: 0.50,   out: 3.00 },
       'gemini-2.0-flash':       { in: 0.10,   out: 0.40 },
       'gemini-1.5-flash':       { in: 0.075,  out: 0.30 },
       'gemini-1.5-pro':         { in: 1.25,   out: 5.00 },
-      'gemini-2.5-flash':       { in: 0.10,   out: 0.40 },
-      'gemini-2.5-pro':         { in: 1.25,   out: 5.00 },
-      // xAI
+      'gemini-2.5-flash-lite':  { in: 0.10,   out: 0.40 },
+      'gemini-2.5-flash':       { in: 0.30,   out: 2.50 },
+      'gemini-2.5-pro':         { in: 1.25,   out: 10.00 },
+      // xAI — prompts ≥200k tokens bill at 2x across the whole request;
+      // the sub-200k rate is quoted here.
+      'grok-4.5':               { in: 2.00,   out: 6.00 },
+      'grok-4.3':               { in: 1.25,   out: 2.50 },
+      'grok-4.20':              { in: 1.25,   out: 2.50 },
+      'grok-build-0.1':         { in: 1.00,   out: 2.00 },
       'grok-2':                 { in: 2.00,   out: 10.00 },
       'grok-3':                 { in: 3.00,   out: 15.00 },
       'grok-4':                 { in: 5.00,   out: 20.00 },
-      // Misc
+      // Moonshot / Kimi
+      'kimi-intl/kimi-k3':      { in: 3.00,   out: 15.00 },
+      'kimi-intl/kimi-k2.7-code-highspeed': { in: 1.90, out: 8.00 },
+      'kimi-intl/kimi-k2.7':    { in: 0.95,   out: 4.00 },
+      'kimi-intl/kimi-k2.6':    { in: 0.95,   out: 4.00 },
+      'kimi-k3':                { in: 3.00,   out: 15.00 },
+      'kimi-k2.7-code-highspeed': { in: 1.90, out: 8.00 },
+      'kimi-k2.7':              { in: 0.95,   out: 4.00 },
+      'kimi-k2.6':              { in: 0.95,   out: 4.00 },
       'kimi-k2':                { in: 0.15,   out: 2.50 },
       'moonshot-v1-8k':         { in: 0.14,   out: 0.14 },
+      // DeepSeek — NOTE: list price DOUBLES during Beijing peak hours
+      // (09:00–12:00 and 14:00–18:00 daily). Off-peak cache-miss quoted.
+      'deepseek-v4-pro':        { in: 0.435,  out: 0.87 },
+      'deepseek-v4-flash':      { in: 0.14,   out: 0.28 },
       'deepseek-r1':            { in: 0.55,   out: 2.19 },
       'deepseek-v3':            { in: 0.27,   out: 1.10 },
+      // Alibaba Qwen — international (dashscope-intl) tariff, USD.
+      'qwen3.7-max':            { in: 2.60,   out: 7.81 },
+      'qwen3.7-plus':           { in: 0.42,   out: 1.67 },
+      'qwen3.7-flash':          { in: 0.03,   out: 0.14 },
+      'qwen3-coder-next':       { in: 0.31,   out: 1.53 },
+      'qwen3.6-max':            { in: 2.60,   out: 7.81 },
       'qwen-plus':              { in: 0.40,   out: 1.20 },
       'qwen-max':               { in: 2.00,   out: 6.00 },
+      // Zhipu GLM — z.ai international USD list.
+      'glm-5.2':                { in: 1.40,   out: 4.40 },
+      'glm-5.1':                { in: 1.40,   out: 4.40 },
+      'glm-5-turbo':            { in: 1.20,   out: 4.00 },
+      'glm-5':                  { in: 1.00,   out: 3.20 },
+      'glm-4.7-flashx':         { in: 0.07,   out: 0.40 },
+      'glm-4.7-flash':          { in: 0.00,   out: 0.00 },
+      'glm-4.7':                { in: 0.60,   out: 2.20 },
+      'glm-4.6':                { in: 0.60,   out: 2.20 },
+      'glm-4.5-air':            { in: 0.20,   out: 1.10 },
       'glm-4-plus':             { in: 0.50,   out: 1.50 },
+      // MiniMax (keys lowercase; ids upstream are case-sensitive)
+      'minimax-m3':             { in: 0.30,   out: 1.20 },
+      'minimax-m2.7-highspeed': { in: 0.60,   out: 2.40 },
+      'minimax-m2.7':           { in: 0.30,   out: 1.20 },
+      // Tencent Hunyuan — TokenHub, converted from RMB.
+      'hy3-preview':            { in: 0.167,  out: 0.556 },
+      'hy3':                    { in: 0.139,  out: 0.556 },
+      'hy-mt2-pro':             { in: 0.069,  out: 0.278 },
+      'hy-role':                { in: 0.333,  out: 1.333 },
+      'hy-vision-2.0':          { in: 1.042,  out: 2.431 },
     }
+    // Anthropic's Sonnet 5 launch discount. Encoded as a date rather than
+    // a flat number so the spend meter doesn't quietly under-report from
+    // September onwards — an honest receipt is the whole point of it.
+    const SONNET_5_INTRO_UNTIL = Date.UTC(2026, 8, 1)   // 2026-09-01
     function getModelPricing(model) {
       if (!model) return null
       const lc = String(model).toLowerCase()
       // Local Ollama → free
       if (lc.startsWith('ollama/') || lc.includes(':')) return { in: 0, out: 0, local: true }
+      if (lc.startsWith('claude-sonnet-5') && Date.now() < SONNET_5_INTRO_UNTIL) {
+        return { in: 2.00, out: 10.00 }
+      }
       // Longest-prefix-wins
       const keys = Object.keys(MODEL_PRICING).sort((a, b) => b.length - a.length)
       for (const k of keys) {
@@ -19088,7 +19233,9 @@ Title:`
     // Images go through a separate pipeline from regular file attachments
     // because vision models want a content-array shape, not a text prefix.
     let attachedImages = []  // [{ dataUrl, name, mime, size }]
-    const VISION_MODELS_REGEX = /^(gpt-4o|gpt-4-turbo|gpt-4-vision|o1|o3|o4|claude-3|claude-sonnet-4|claude-opus-4|claude-haiku-4|gemini-1\.5|gemini-2|gemini-2\.5|grok-2-vision|grok-4|llava|llama3\.2-vision|qwen2\.5-vl)/i
+    // v0.8 cycle 36: the whole current generation is natively multimodal —
+    // GPT-5.x, the Claude 5 family, Gemini 3.x, Grok 4.x and Qwen3.7.
+    const VISION_MODELS_REGEX = /^(gpt-4o|gpt-4-turbo|gpt-4-vision|gpt-5|o1|o3|o4|claude-3|claude-sonnet-4|claude-opus-4|claude-haiku-4|claude-(opus|sonnet|haiku|fable|mythos)-5|gemini-1\.5|gemini-2|gemini-2\.5|gemini-3|grok-2-vision|grok-4|qwen3\.7|hy-vision|llava|llama3\.2-vision|qwen2\.5-vl)/i
     function modelIsVisionCapable(model) {
       if (!model) return false
       // Local Ollama vision models

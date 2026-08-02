@@ -9,6 +9,66 @@
  */
 
 module.exports = [
+  // ── New since April 2026 ──────────────────────────────────────────────────
+  // Only tags containing a `:` are listed. provider-registry routes a model
+  // to Ollama on the `name:tag` shape, so colon-less releases (Cohere's
+  // north-mini-code-1.0, Poolside's laguna-xs-2.1) would mis-route to a
+  // cloud provider and are deliberately left out until that check is widened.
+  {
+    id: 'gemma4:12b',
+    name: 'Gemma 4 · 12B',
+    family: 'gemma',
+    sizeGb: 7.6,
+    context: 262144,
+    tags: ['balanced', 'quality', 'multimodal'],
+    description: 'Gemma 4 12B (June 2026) — the size that was missing between E4B and 26B. 256K context, multimodal.',
+  },
+  {
+    id: 'lfm2.5:8b',
+    name: 'Liquid LFM2.5 · 8B',
+    family: 'lfm',
+    sizeGb: 5.2,
+    context: 128000,
+    tags: ['fast', 'balanced'],
+    description: 'Liquid AI LFM2.5 8B-A1B — sparse MoE built for laptops. Very fast on Apple Silicon.',
+  },
+  {
+    id: 'minicpm-v4.6:1b',
+    name: 'MiniCPM-V 4.6 · 1B',
+    family: 'minicpm',
+    sizeGb: 1.6,
+    context: 262144,
+    tags: ['fast', 'vision'],
+    description: 'Tiny vision model — reads screenshots and photos on machines with little RAM.',
+  },
+  {
+    id: 'ornith:9b',
+    name: 'Ornith 1.0 · 9B',
+    family: 'ornith',
+    sizeGb: 5.6,
+    context: 262144,
+    tags: ['coding'],
+    description: 'Ornith 1.0 9B — code-focused, 256K context. Fits comfortably on 16 GB machines.',
+  },
+  {
+    id: 'nemotron3:33b',
+    name: 'NVIDIA Nemotron 3 · 33B',
+    family: 'nemotron',
+    sizeGb: 28,
+    context: 131072,
+    tags: ['quality', 'reasoning'],
+    description: 'NVIDIA Nemotron 3 Nano 33B — strong reasoning. Wants 32 GB+ of memory.',
+  },
+  {
+    id: 'ornith:35b',
+    name: 'Ornith 1.0 · 35B MoE',
+    family: 'ornith',
+    sizeGb: 21,
+    context: 262144,
+    tags: ['coding', 'quality'],
+    description: 'Ornith 1.0 35B MoE — the strong open coding model of mid-2026. Needs 24 GB+.',
+  },
+
   // ── Qwen 3.6 (Alibaba · April 2026) ───────────────────────────────────────
   {
     id: 'qwen3.6:latest',

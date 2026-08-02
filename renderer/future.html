@@ -1264,21 +1264,23 @@
   <script>
     const CLOUD_MODELS = [
       { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", provider: "deepseek" },
-      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic" },
-      { id: "claude-opus-4-7", label: "Claude Opus 4.7", provider: "anthropic" },
-      { id: "gpt-5.4", label: "GPT-5.4", provider: "openai" },
-      { id: "gpt-5.4-thinking", label: "GPT-5.4 Thinking", provider: "openai" },
-      { id: "gpt-5.4-pro", label: "GPT-5.4 Pro", provider: "openai" },
+      { id: "claude-sonnet-5", label: "Claude Sonnet 5", provider: "anthropic" },
+      { id: "claude-opus-5", label: "Claude Opus 5", provider: "anthropic" },
+      { id: "claude-fable-5", label: "Claude Fable 5", provider: "anthropic" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol", provider: "openai" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra", provider: "openai" },
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", provider: "openai" },
       { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", provider: "google" },
-      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "google" },
-      { id: "grok-4.20-reasoning", label: "Grok 4.20 Reasoning", provider: "xai" },
-      { id: "kimi-k2.6", label: "Kimi K2.6 China", provider: "moonshot" },
-      { id: "kimi-intl/kimi-k2.6", label: "Kimi K2.6 Global", provider: "kimi" },
-      { id: "qwen3.6-max-preview", label: "Qwen 3.6 Max", provider: "dashscope" },
-      { id: "qwen3-coder-plus", label: "Qwen 3 Coder Plus", provider: "dashscope" },
-      { id: "glm-5.1", label: "GLM-5.1", provider: "zhipu" },
-      { id: "MiniMax-M2.7", label: "MiniMax M2.7", provider: "minimax" },
-      { id: "hy3-preview", label: "Hunyuan Hy3 Preview", provider: "hunyuan" }
+      { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", provider: "google" },
+      { id: "grok-4.5", label: "Grok 4.5", provider: "xai" },
+      { id: "grok-4.3", label: "Grok 4.3 (1M)", provider: "xai" },
+      { id: "kimi-k3", label: "Kimi K3 China", provider: "moonshot" },
+      { id: "kimi-intl/kimi-k3", label: "Kimi K3 Global", provider: "kimi" },
+      { id: "qwen3.7-max", label: "Qwen 3.7 Max", provider: "dashscope" },
+      { id: "qwen3-coder-next", label: "Qwen 3 Coder Next", provider: "dashscope" },
+      { id: "glm-5.2", label: "GLM-5.2", provider: "zhipu" },
+      { id: "MiniMax-M3", label: "MiniMax M3", provider: "minimax" },
+      { id: "hy3", label: "Hunyuan Hy3", provider: "hunyuan" }
     ];
 
     const DEFAULT_MISSIONS = [
@@ -1370,7 +1372,7 @@
       if (m.startsWith("qwen")) return "dashscope";
       if (m.startsWith("glm-")) return "zhipu";
       if (m.startsWith("minimax-")) return "minimax";
-      if (m.startsWith("hy3-") || m.startsWith("hy4-") || m.startsWith("hunyuan-")) return "hunyuan";
+      if (m.startsWith("hy3") || m.startsWith("hy-") || m.startsWith("hunyuan-")) return "hunyuan";
       if (m.startsWith("deepseek-")) return "deepseek";
       return "anthropic";
     }

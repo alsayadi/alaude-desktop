@@ -240,7 +240,7 @@ function modelFamily(model) {
   if (s.startsWith('moonshot') || s.startsWith('kimi')) return 'moonshot'  // kimi.com CN
   if (s.startsWith('glm')) return 'glm'
   if (s.startsWith('minimax')) return 'minimax'
-  if (s.startsWith('hunyuan') || s.startsWith('hy3') || s.startsWith('hy4')) return 'hunyuan'
+  if (s.startsWith('hunyuan') || s.startsWith('hy3') || s.startsWith('hy-')) return 'hunyuan'
   return 'other'
 }
 

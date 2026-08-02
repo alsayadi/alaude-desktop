@@ -815,7 +815,11 @@ ipcMain.handle('chat', async (event, messagesRaw, model, workspacePath, spaceId,
     // cloud cap of 90s killed those requests with the misleading
     // "Provider is silent" error. Real-world repro: DeepSeek-v4-pro
     // on a multi-file code review crashed at the 90s mark.
-    const isReasoningModel = /reasoner|thinking|^o[13]|^gpt-5.*think|deepseek-v4|deepseek-reasoner/i.test(model || '')
+    // v0.8 cycle 36: OpenAI turned reasoning into a request parameter, so
+    // there are no `-thinking` ids any more — the deep-reasoning SKUs are
+    // `gpt-5.x-pro`. Grok's explicit reasoning variants and Hunyuan's
+    // agentic hy3-preview think silently for minutes too.
+    const isReasoningModel = /reasoner|thinking|^o[13]|^gpt-5[\d.]*-pro|^gpt-5.*think|^grok-.*reasoning|^hy3-preview|deepseek-v4|deepseek-reasoner/i.test(model || '')
     // Idle (no-activity) cap. Reasoning + local both get 5 min; other
     // cloud models get 3 min (was 90s — still strong enough to surface
     // a genuinely dead socket without amputating legit long thinking).
@@ -910,7 +914,7 @@ async function chatAnthropic(messagesRaw, model, workspacePath) {
 
   for (let i = 0; i < 10; i++) {
     const response = await client.messages.create({
-      model: model || 'claude-sonnet-4-5',
+      model: model || 'claude-sonnet-5',
       max_tokens: 4096,
       system: systemPrompt,
       messages,

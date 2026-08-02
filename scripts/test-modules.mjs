@@ -740,7 +740,7 @@ console.log('\n[18/18] schedule-parse — natural-language reminders EN/中文/�
 // ═══════════════════════════════════════════════════════════════
 // TEST 19: routines catch-up — missed fires run exactly once (cycle 21)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[19/19] routines — catch-up for missed fires')
+console.log('\n[19/21] routines — catch-up for missed fires')
 {
   const { createRequire } = await import('node:module')
   const require = createRequire(import.meta.url)
@@ -771,7 +771,7 @@ console.log('\n[19/19] routines — catch-up for missed fires')
 // ═══════════════════════════════════════════════════════════════
 // TEST 20: watchers — page text + change detection (cycle 24)
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[20/20] watchers — page text + change detection')
+console.log('\n[20/21] watchers — page text + change detection')
 {
   const { createRequire } = await import('node:module')
   const fsw = await import('node:fs')
@@ -795,6 +795,156 @@ console.log('\n[20/20] watchers — page text + change detection')
   check('change persists as new baseline', c4.changed === false)
   check('hostile id sanitized', (watchers.checkChange('../../evil', 'x'), fsw.existsSync(watchers.DIR + '/______evil.json')))
   watchers.reset(ID); watchers.reset('../../evil')
+}
+
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[21/21] model picker — routing, pricing, no retired ids')
+{
+  const { createRequire } = await import('node:module')
+  const fsm = await import('node:fs')
+  const require = createRequire(import.meta.url)
+  const registry = require('../electron/provider-registry.js')
+
+  const html = fsm.readFileSync(new URL('../renderer/index.html', import.meta.url), 'utf8')
+  const selectBlock = html.slice(
+    html.indexOf('<select class="model-selector" id="model-select"'),
+    html.indexOf('</select>', html.indexOf('id="model-select"')),
+  )
+  check('model-select block found', selectBlock.length > 500)
+
+  // optgroup label → the provider id every model inside it must route to.
+  const GROUP_PROVIDER = {
+    'Anthropic': 'anthropic',
+    'OpenAI': 'openai',
+    'xAI': 'xai',
+    'Kimi (kimi.com / CN)': 'moonshot',
+    'Kimi (kimi.ai / Global)': 'kimi',
+    'Qwen (DashScope)': 'dashscope',
+    'GLM (Zhipu)': 'zhipu',
+    'MiniMax': 'minimax',
+    'Tencent Hunyuan': 'hunyuan',
+    'DeepSeek': 'deepseek',
+    'Google': 'google',
+  }
+
+  const options = []   // [{ value, group }]
+  for (const g of selectBlock.split('<optgroup').slice(1)) {
+    const label = (g.match(/label="([^"]*)"/) || [])[1] || ''
+    for (const m of g.matchAll(/<option value="([^"]*)"/g)) {
+      options.push({ value: m[1], group: label })
+    }
+  }
+  check('picker exposes a healthy number of models', options.length >= 40)
+
+  // An option with an empty value silently blanks the session model and
+  // falls through to the provider default — shipped as a real bug until
+  // v0.8 cycle 36. Never again.
+  check('no option has an empty value', options.every(o => o.value.trim() !== ''))
+
+  const misrouted = options.filter(o => {
+    const expected = GROUP_PROVIDER[o.group]
+    return expected && registry.detectProvider(o.value) !== expected
+  })
+  check('every model routes to its own optgroup\'s provider',
+    misrouted.length === 0, misrouted.map(o => `${o.value}→${registry.detectProvider(o.value)}`).join(', '))
+
+  // Model ids the providers have actually retired or that never existed
+  // upstream. Each one 404s or errors if a user picks it.
+  const RETIRED = [
+    'deepseek-chat',            // retired 2026-07-24
+    'deepseek-reasoner',        // retired 2026-07-24
+    'deepseek-v4',              // bare id never existed (only -pro / -flash)
+    'glm-5-air',                // never on any Zhipu model list
+    'kimi-k2-thinking-turbo',   // kimi-k2 series discontinued 2026-05-25
+    'gpt-5.5-thinking',         // reasoning is a parameter, not an id
+    'gpt-5.5-mini',
+    'gpt-5.4-thinking',
+    'grok-4.20-reasoning',      // undated alias is not documented
+    'grok-4.20-non-reasoning',
+  ]
+  const present = RETIRED.filter(id => options.some(o => o.value === id))
+  check('no retired / nonexistent model ids in the picker',
+    present.length === 0, present.join(', '))
+
+  // `hy4-*` was a routing prefix for a model generation that never shipped.
+  check('bare hy3 routes to hunyuan', registry.detectProvider('hy3') === 'hunyuan')
+  check('hy-mt2-pro routes to hunyuan', registry.detectProvider('hy-mt2-pro') === 'hunyuan')
+
+  // Case sensitivity: MiniMax 400s on a lowercased id.
+  check('MiniMax id keeps its original case through the router',
+    registry.normalizeModelId('MiniMax-M3') === 'MiniMax-M3')
+  check('kimi-intl/ prefix is stripped and routes global',
+    registry.detectProvider('kimi-intl/kimi-k3') === 'kimi' &&
+    registry.normalizeModelId('kimi-intl/kimi-k3') === 'kimi-k3')
+
+  // Every listed model needs a price, or the spend meter — the whole
+  // "receipts" promise — silently shows nothing for it.
+  const priceBlock = html.slice(html.indexOf('const MODEL_PRICING = {'))
+  const priceKeys = [...priceBlock.slice(0, priceBlock.indexOf('\n    }')).matchAll(/^\s+'([^']+)':/gm)].map(m => m[1])
+  check('pricing table parsed', priceKeys.length >= 60)
+  check('pricing keys are all lowercase (lookup lowercases the model id)',
+    priceKeys.every(k => k === k.toLowerCase()))
+
+  const sorted = [...priceKeys].sort((a, b) => b.length - a.length)
+  const priceFor = (id) => sorted.find(k => id.toLowerCase().startsWith(k)) || null
+  const unpriced = options.filter(o => !priceFor(o.value))
+  check('every model in the picker has a price', unpriced.length === 0,
+    unpriced.map(o => o.value).join(', '))
+
+  // Spot-check that longest-prefix-wins resolves the tricky overlaps.
+  check('deepseek-v4-flash prices apart from deepseek-v4-pro',
+    priceFor('deepseek-v4-flash') === 'deepseek-v4-flash' && priceFor('deepseek-v4-pro') === 'deepseek-v4-pro')
+  check('hy3-preview does not collapse onto hy3', priceFor('hy3-preview') === 'hy3-preview')
+  check('gemini-3.1-pro-preview resolves to the 3.1 Pro row',
+    priceFor('gemini-3.1-pro-preview') === 'gemini-3.1-pro')
+
+  // Cost tier is derived from the output price, not the model name. The
+  // name-regex version it replaced scored gpt-5.6-luna — OpenAI's cheapest
+  // model — as 🔴 premium, because "gpt-5." looked like a flagship.
+  const outPrice = (id) => {
+    const k = priceFor(id)
+    if (!k) return null
+    const row = priceBlock.match(new RegExp(`'${k.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}':\\s*\\{[^}]*out:\\s*([\\d.]+)`))
+    return row ? Number(row[1]) : null
+  }
+  const tierOf = (id) => {
+    const out = outPrice(id)
+    if (out === null) return 'mid'
+    return out <= 5.00 ? 'cheap' : out >= 15.00 ? 'premium' : 'mid'
+  }
+  check('gpt-5.6-luna is cheap, not premium', tierOf('gpt-5.6-luna') === 'cheap', tierOf('gpt-5.6-luna'))
+  check('gpt-5.4-mini and -nano are cheap',
+    tierOf('gpt-5.4-mini') === 'cheap' && tierOf('gpt-5.4-nano') === 'cheap')
+  check('claude-haiku-4-5 is cheap', tierOf('claude-haiku-4-5') === 'cheap')
+  check('gemini-3.6-flash is mid — the Flash tier is not cheap any more',
+    tierOf('gemini-3.6-flash') === 'mid', tierOf('gemini-3.6-flash'))
+  check('gpt-5.6-sol is premium', tierOf('gpt-5.6-sol') === 'premium')
+  check('claude-opus-5 and fable-5 are premium',
+    tierOf('claude-opus-5') === 'premium' && tierOf('claude-fable-5') === 'premium')
+  check('deepseek-v4-pro (the default) reads cheap', tierOf('deepseek-v4-pro') === 'cheap')
+  check('gpt-5.6-terra sits in the middle', tierOf('gpt-5.6-terra') === 'mid')
+
+  // Coverage guard: the picker must actually carry each provider's current
+  // flagship. Adding a family to the pricing table but forgetting the
+  // <option> is the quiet way a "model refresh" ends up half-done.
+  const MUST_HAVE = [
+    'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5', 'claude-haiku-4-5',
+    'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+    'gemini-3.1-pro-preview', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite',
+    'grok-4.5', 'grok-4.3', 'grok-build-0.1',
+    'kimi-k3', 'kimi-intl/kimi-k3',
+    'qwen3.7-max', 'qwen3.7-plus', 'qwen3.7-flash',
+    'glm-5.2', 'glm-4.7-flash',
+    'MiniMax-M3', 'hy3', 'deepseek-v4-pro', 'deepseek-v4-flash',
+  ]
+  const missing = MUST_HAVE.filter(id => !options.some(o => o.value === id))
+  check('every current-generation flagship is in the picker',
+    missing.length === 0, missing.join(', '))
+
+  // Zhipu's GLM-4.7-Flash is free; the tier badge should say so rather
+  // than lumping it in with merely-cheap models.
+  check('a $0/$0 model is priced at zero, not missing',
+    outPrice('glm-4.7-flash') === 0, String(outPrice('glm-4.7-flash')))
 }
 
 // ═══════════════════════════════════════════════════════════════
