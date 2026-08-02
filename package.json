@@ -13,7 +13,8 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "npm run test:app && npm run test:worker && npm run test:boot",
+    "test": "npm run test:app && npm run test:worker && npm run test:boot && npm run test:e2e",
+    "test:e2e": "node scripts/test-e2e.mjs",
     "test:unit": "node scripts/test-modules.mjs",
     "test:fixtures": "node electron/test-ooda-fixture.js",
     "test:app": "node scripts/test-app.mjs",

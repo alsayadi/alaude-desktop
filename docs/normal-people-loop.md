@@ -665,3 +665,56 @@
   hit-testable. 322 → 325 module checks (329 total).
 - Lesson worth keeping: "hidden" in CSS has three independent meanings
   (paint, layout, hit-testing) and opacity only buys the first.
+
+### Cycle 41 — the harness learns to see and touch (2026-08-02)
+- Owner: "lets work on harness, improve it by 10x at least, find what is
+  going on in the frontiers first, choose most impactful ones."
+- **The audit came first, and it was damning.** 311 module checks, and
+  NOT ONE executed the renderer: no jsdom, no Playwright, no CDP, no
+  click, no hit-test. 45 of them asserted that index.html *contained
+  certain strings*. The only test that ran the real app asserted a single
+  beacon on stdout. That is exactly why all three bugs this session —
+  inline code styled as an image, an invisible toast eating every click,
+  a cost badge inverting its own tiers — were found by a person looking
+  at the window and none by the suite.
+- **New: `scripts/lib/harness.mjs`** — boots the real app hermetically and
+  drives it over CDP. Zero new dependencies (the `ws` that ships
+  transitively); Playwright would be nicer but this app ships two
+  devDependencies and a promise to stay small, and a test rig is a poor
+  reason to break that. Every CDP call is individually timed out, because
+  an occluded Electron window makes captureScreenshot hang forever rather
+  than fail, and a harness that hangs is worse than one that fails.
+- **New: `scripts/test-e2e.mjs`** — 30 checks built as SWEEPS, not
+  one-off assertions. A sweep states a property that must hold for every
+  element on screen, so it catches the NEXT bug of that shape:
+  · nothing invisible may intercept a click (samples ACROSS each control)
+  · nothing inline may be laid out as a block
+  · every translation key exists in all three locales
+  · WCAG AA contrast in both themes; no horizontal overflow in either
+    theme or in RTL; console stays clean throughout
+  Plus real interaction: a real mouse click through the input pipeline
+  (not `el.click()`, which bypasses hit-testing and would have sailed
+  straight through the cycle-40 bug) and real inserted keystrokes.
+- **Proved rather than asserted.** Both historical bugs were reverted back
+  in and the suite went red, naming them exactly: `#input blocked by
+  INVISIBLE #rewind-toast (effective opacity 0)` and `<code class="md-code">
+  "~/.labaik" → display:block`. Then restored, and green again.
+- **Four defects in the harness itself, found by that exercise** — each
+  one would have made it report a comfortable false green:
+  1. `offsetParent` is always null for `position:fixed`, so the check
+     guarding "are we even past the login screen" passed while the login
+     screen covered the whole window.
+  2. The login screen is dismissed asynchronously; asserting once after
+     boot is a race. It waits now.
+  3. The toast fade is a 200ms transition — sweeping the instant the
+     class comes off measures a still-visible toast and lets the bug
+     through.
+  4. Centre-point hit-testing missed the real toast, which was only as
+     wide as its text and covered the composer's left half while leaving
+     the exact midpoint clear. Now samples five points across each
+     control.
+- Honest scoping of "10x": the check count rose ~9% (351 → 381). What
+  changed by an order of magnitude is the CLASS of bug the suite can
+  catch — from none of the rendering, layout, interaction or
+  hit-testing failures that actually shipped, to all three, demonstrably.
+  Deferred: visual-regression baselines (worth a cycle of its own).
