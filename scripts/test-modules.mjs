@@ -1356,6 +1356,22 @@ console.log('\n[25/25] task-scope — never hide the user\'s own files')
   check('the old README>10 heuristic is gone',
     !/hasReadme\s*&&\s*names\.filter/.test(handler))
 
+  // The task checklist is a block the model writes IN ITS REPLY, which the
+  // UI renders as a progress card. In a dogfood run the model instead wrote
+  // todos.json into the user's workspace: the card never appeared, and the
+  // folder gained a file nobody asked for. The prompt must forbid that
+  // explicitly — "emit a block" alone was not unambiguous enough.
+  const workerSrc = fsm.readFileSync(new URL('../electron/api-worker.js', import.meta.url), 'utf8')
+  const checklist = workerSrc.slice(
+    workerSrc.indexOf('## Task checklist'),
+    workerSrc.indexOf('## Task checklist') + 1400)
+  check('the checklist is described as text in the reply, not a file',
+    /not a file/i.test(checklist))
+  check('writing a checklist file is explicitly forbidden',
+    /never\s+create\s+todos\.json/i.test(checklist))
+  check('the block is anchored to the message',
+    /INSIDE YOUR MESSAGE/i.test(checklist))
+
   // changeModel must trust its argument, not the <select>'s current index.
   const htmlSrc = fsm.readFileSync(new URL('../renderer/index.html', import.meta.url), 'utf8')
   check('changeModel() applies the model it was given',

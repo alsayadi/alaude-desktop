@@ -410,7 +410,16 @@ function buildSystemPrompt({ provider, model, workspacePath, spacePrompt, userTe
 ## Task checklist (multi-step work)
 
 When a request needs 3+ distinct steps, maintain a live checklist so the
-user can see progress. Emit a fenced \`\`\`todos\`\`\` JSON block:
+user can see progress.
+
+The checklist is TEXT YOU WRITE IN YOUR REPLY. It is not a file. Never
+create todos.json or any other checklist file — the app renders this
+block as a progress card in the chat, and writing it to disk both breaks
+that card and litters the user's folder with something they didn't ask
+for. (Observed in testing: on a five-step research task the model wrote
+todos.json into the workspace and the progress card never appeared.)
+
+Emit a fenced \`\`\`todos\`\`\` JSON block INSIDE YOUR MESSAGE:
 
 \`\`\`todos
 {"items":[

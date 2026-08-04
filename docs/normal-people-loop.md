@@ -791,3 +791,34 @@
   first run it verified the empty folder with a shell command, refused to
   reach outside its workspace, and asked a clear either/or question. The
   harness failed it, not the model. 352 → 372 module checks.
+
+### Cycle 44 — the progress card that never appeared (2026-08-04)
+- Second dogfood run: a real web-research task (search Claude pricing,
+  search GPT pricing, open two source pages, write a cited comparison,
+  and say plainly what could not be verified) on DeepSeek V4 Flash.
+- **The agent did well.** Prices matched an independent check exactly;
+  it read two official docs pages; it refused to guess and reported four
+  specific unverifiable items, including a 403 on OpenAI's marketing
+  pricing page. Nothing to fix in its behaviour.
+- **Cycle 42's parallelism confirmed in production.** The network ledger
+  shows two `fetch_page` calls to different hosts logged 2 MILLISECONDS
+  apart (`platform.claude.com` at …356421, `openai.com` at …356423).
+  Before cycle 42 those were strictly sequential.
+- **But it wrote `todos.json` into the user's folder.** The system prompt
+  says to "maintain a live checklist … Emit a fenced ```todos``` JSON
+  block" — the app renders that block as a live progress card. The model
+  read "maintain a checklist" as something to persist and wrote a file
+  instead. Consequences: the folder gained a file nobody asked for, AND
+  the progress card never rendered — verified, 0 `.todo-row` elements on
+  a five-step task that explicitly qualified for one. A whole UI feature
+  was silently dead on this path.
+- Fix is prompt-level and blunt: the checklist "is TEXT YOU WRITE IN YOUR
+  REPLY. It is not a file. Never create todos.json…", plus the block is
+  now anchored "INSIDE YOUR MESSAGE". Re-ran the identical shape of task:
+  `todos.json` gone, **5 progress rows rendered**, and the computed total
+  correct (it also correctly skipped a junk header line that broke my own
+  verification script).
+- Lesson worth keeping: an instruction that only says what TO do leaves
+  the obvious wrong alternative open. Where a feature depends on the model
+  choosing message-text over a tool, say which, and say it twice.
+  372 → 375 module checks.
