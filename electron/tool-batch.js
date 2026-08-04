@@ -86,8 +86,13 @@ async function executeToolBatch(calls, run) {
  * point.
  */
 function turnBudgetNotice(used) {
-  return `\n\n⏳ I stopped after ${used} rounds of tool use — that is the safety limit for a single message, not the end of the job. ` +
-    `Tell me to continue and I will pick up where I left off.`
+  // Leads with the word that matters. An earlier version opened with "I
+  // stopped after N rounds…", which read as a completion summary when it
+  // sat above a long log of successful tool calls — the owner saw exactly
+  // that output and concluded the task was done. It wasn't; it had stopped
+  // at step 23 of 30.
+  return `\n\n---\n\n⏳ **NOT FINISHED** — I used all ${used} rounds of tool use allowed for one message and stopped part-way. ` +
+    `Nothing above is wrong, but the job is incomplete. Say "continue" and I'll pick up exactly where I left off.`
 }
 
 module.exports = { PARALLEL_SAFE_TOOLS, MAX_AGENT_TURNS, executeToolBatch, turnBudgetNotice }

@@ -822,3 +822,28 @@
   the obvious wrong alternative open. Where a feature depends on the model
   choosing message-text over a tool, say which, and say it twice.
   372 → 375 module checks.
+
+### Cycle 45 — "I see task already done" (2026-08-04)
+- Third dogfood: 30 files, read strictly one at a time, deliberately
+  structured so tool calls could not be batched — a test of cycle 42's
+  turn-budget honesty.
+- **The budget fired correctly.** It stopped at file 23 of 30 and emitted
+  the notice. But the owner looked at the output and said *"i see task
+  already done"* — and was right to.
+- **The notice was buried.** It was appended to the prose, and the tool
+  log printed BELOW it: measured at 76% through the message, with 588
+  characters of `📖 Read f23.txt` after it. A run that stopped two-thirds
+  of the way through ended on a wall of successful reads and read as
+  finished. An "I stopped early" warning placed above evidence of success
+  is worse than no warning.
+- Fixed in both agent loops: the notice is now appended AFTER the tool
+  log, so it is the last thing in the message. Wording leads with the
+  point — "⏳ **NOT FINISHED** — I used all 24 rounds…" instead of
+  "I stopped after 24 rounds…", which read as a completion summary.
+- Tests pin both properties: the notice must contain NOT FINISHED within
+  its first 40 characters, and both loops must append it after the log
+  (asserted structurally, so re-introducing `fullText += turnBudgetNotice`
+  fails). 375 → 378 module checks.
+- Note: a re-run at the same settings completed all 30 files without
+  hitting the cap, so the live position could not be re-observed —
+  the property is covered by the tests rather than by that run.

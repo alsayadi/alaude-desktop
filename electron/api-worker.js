@@ -1888,10 +1888,17 @@ async function chatOpenAI(msgs, model, provider, workspacePath, sysPrompt, opts 
   // Running out of rounds used to look identical to finishing: the loop
   // simply ended and whatever text existed was returned. A half-done job
   // presented as a complete answer is the worst failure this loop has.
-  if (!finishedOnItsOwn && !signal?.aborted) fullText += turnBudgetNotice(MAX_AGENT_TURNS)
+  // v0.8 cycle 45 — the notice goes AFTER the tool log, not before it.
+  // Appending to fullText buried it: the log of successful reads rendered
+  // below it, so a run that stopped at step 23 of 30 ended with a wall of
+  // "📖 Read f23.txt" and read as finished. Observed for real — the owner
+  // looked at exactly this output and said "i see task already done".
+  // Whatever tells the user the job is INCOMPLETE has to be the last thing
+  // they see.
+  const _budgetNote = (!finishedOnItsOwn && !signal?.aborted) ? turnBudgetNotice(MAX_AGENT_TURNS) : ''
   // Screen response for health red flags
   if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
-  const responseText = (fullText + toolLog) || '(Done)'
+  const responseText = ((fullText + toolLog) || '(Done)') + _budgetNote
   const { screenForRedFlags, formatRedFlagAlert } = require(_path.join(healthDir, 'triage-engine.js'))
   // Screen both last user message and AI response
   const lastUserMsg = msgs[msgs.length - 1]?.content || ''
@@ -2266,9 +2273,11 @@ async function chatAnthropic(msgs, model, workspacePath, sysPrompt, opts = {}) {
     finishedOnItsOwn = true
     break
   }
-  if (!finishedOnItsOwn && !signal?.aborted) fullText += turnBudgetNotice(MAX_AGENT_TURNS)
+  // Same as the OpenAI loop: an "I stopped early" notice buried above the
+  // tool log is worse than none, because the log below it looks like success.
+  const _anthBudgetNote = (!finishedOnItsOwn && !signal?.aborted) ? turnBudgetNotice(MAX_AGENT_TURNS) : ''
   if (signal?.aborted && !fullText.includes('⏹ Stopped')) fullText += '\n\n⏹ Stopped.'
-  const anthrResponseText = (fullText + toolLog) || '(Done)'
+  const anthrResponseText = ((fullText + toolLog) || '(Done)') + _anthBudgetNote
   const triage = require(_path.join(healthDir, 'triage-engine.js'))
   const lastUser = msgs[msgs.length - 1]?.content || ''
   const anthrTriage = triage.screenForRedFlags(lastUser) || triage.screenForRedFlags(anthrResponseText)

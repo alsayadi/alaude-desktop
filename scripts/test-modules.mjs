@@ -1297,9 +1297,24 @@ console.log('\n[24/25] tool-batch — concurrent reads, ordered writes')
   // ── the turn budget is real and says so ──
   check('turn budget leaves room for real work', tb.MAX_AGENT_TURNS >= 20)
   const notice = tb.turnBudgetNotice(tb.MAX_AGENT_TURNS)
-  check('running out of turns is stated, not hidden',
-    /stopped after \d+ rounds/i.test(notice) && /not the end of the job/i.test(notice))
+  check('running out of turns is stated, not hidden', /\d+ rounds/i.test(notice))
+  check('the notice leads with incompleteness, not with a summary',
+    /NOT FINISHED/i.test(notice) && notice.indexOf('NOT FINISHED') < 40, notice.slice(0, 60))
   check('and it tells the user it can be resumed', /continue/i.test(notice))
+
+  // Position matters as much as wording. The notice used to be appended to
+  // the prose and then have the whole tool log printed BELOW it, so a run
+  // that stopped at step 23 of 30 ended on "📖 Read f23.txt" and looked
+  // finished. Both agent loops must append it after the log, last.
+  const { createRequire: _cr } = await import('node:module')
+  const _req = _cr(import.meta.url)
+  const _fs = _req('node:fs')
+  const workerSrc2 = _fs.readFileSync(new URL('../electron/api-worker.js', import.meta.url), 'utf8')
+  const appendsLast = [...workerSrc2.matchAll(/const \w*[Rr]esponseText = \(\(fullText \+ toolLog\) \|\| '\(Done\)'\) \+ _\w*[Bb]udgetNote/g)]
+  check('both agent loops put the budget notice AFTER the tool log',
+    appendsLast.length === 2, `found ${appendsLast.length} of 2`)
+  check('the notice is no longer appended into the prose above the log',
+    !/fullText \+= turnBudgetNotice/.test(workerSrc2))
 }
 
 // ═══════════════════════════════════════════════════════════════
