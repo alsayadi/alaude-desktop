@@ -324,6 +324,37 @@ try {
     if (!u) return false;
     return getComputedStyle(u).alignItems === 'flex-end';
   })()`))
+  // Direction is a property of the MESSAGE, not of the app. A user with an
+  // English interface asking for an Arabic answer — the flagship diaspora
+  // case — must get right-to-left text in a left-to-right UI. Without
+  // dir="auto" the reply inherited the interface direction and mixed
+  // Arabic/Latin text was reordered wrongly.
+  // Explicitly LTR: the whole point is an RTL reply inside an LTR app.
+  await cdp.run(`document.documentElement.setAttribute('dir', 'ltr')`)
+  const perMessageDir = await cdp.eval(`(() => {
+    // Use the live messages array, the same handle section 3 renders
+    // through — pushing into sessions[].messages does not drive the view.
+    messages.length = 0;
+    messages.push({ role: 'user', content: 'Explain this bill please' });
+    // Percent-encoded so the Arabic is pure ASCII in transit through the
+    // nested template literal — escape sequences did not survive it.
+    messages.push({ role: 'assistant', content: decodeURIComponent('%D9%87%D8%B0%D9%87%20%D9%81%D8%A7%D8%AA%D9%88%D8%B1%D8%A9') + ' Stadtwerke 183.84 EUR' });
+    renderMessages();
+    return [...document.querySelectorAll('.msg-content')].map(e => ({
+      attr: e.getAttribute('dir'),
+      dir: getComputedStyle(e).direction,
+      arabic: /[\\u0600-\\u06FF]/.test(e.textContent),
+    }));
+  })()`)
+  check('every message declares dir="auto"',
+    perMessageDir.length >= 2 && perMessageDir.every(m => m.attr === 'auto'),
+    JSON.stringify(perMessageDir))
+  check('the Arabic fixture survived into the DOM', perMessageDir[1]?.arabic === true,
+    JSON.stringify(perMessageDir))
+  check('an Arabic reply renders RTL inside an LTR interface',
+    perMessageDir[0]?.dir === 'ltr' && perMessageDir[1]?.dir === 'rtl',
+    JSON.stringify(perMessageDir))
+
   const rtlOverflow = await overflowIn('rtl')
   check('nothing overflows horizontally in RTL', rtlOverflow.length === 0, rtlOverflow.join(', '))
   await cdp.run(`document.documentElement.setAttribute('dir', 'ltr')`)

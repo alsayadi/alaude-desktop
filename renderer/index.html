@@ -15240,7 +15240,7 @@ Title:`
           <span class="msg-model-badge">${n} models</span>
           <span class="msg-timestamp" title="${new Date(msg.ts).toLocaleString()}">${formatRelTime(msg.ts)}</span>
         </div>
-        <div class="msg-content">
+        <div class="msg-content" dir="auto">
           <div class="${lanesClass}">${laneHtml}</div>
           ${synthLaneHtml}
           ${synthHtml}
@@ -15462,6 +15462,16 @@ Title:`
         const personalNote = msg.note
           ? `<div class="msg-note" onclick="editMessageNote(${i})" title="Click to edit your note"><span class="msg-note-icon">📝</span><span class="msg-note-text">${escapeHtml(msg.note)}</span><button class="msg-note-remove" onclick="event.stopPropagation(); removeMessageNote(${i})" title="Remove note">×</button></div>`
           : ''
+        // v0.8 cycle 46 — dir="auto" is per MESSAGE, not per app. Message
+        // content carried no direction, so it inherited the interface's:
+        // an Arabic reply inside an English UI rendered left-to-right.
+        // That is not cosmetic — bidi ordering breaks on mixed text, so a
+        // company name in Latin script inside an Arabic sentence, and every
+        // parenthesis, colon and number, lands on the wrong side. Found
+        // while testing the flagship case: an English-UI user asking for an
+        // Arabic explanation of a German bill to show a parent. "auto"
+        // infers direction from the first strong character, so each message
+        // stands on its own whatever the interface language is.
         html += `<div class="msg ${msg.pinned ? 'pinned' : ''}${reactionClass}" data-msg-idx="${i}">
           <div class="msg-header">
             <span class="msg-role ${roleClass}">${roleLabel}</span>
@@ -15473,7 +15483,7 @@ Title:`
             ${costBadge}
             ${timestamp}
           </div>
-          <div class="msg-content">${body}</div>
+          <div class="msg-content" dir="auto">${body}</div>
           ${reactionNote}
           ${personalNote}
           ${statsPanel}

@@ -847,3 +847,31 @@
 - Note: a re-run at the same settings completed all 30 files without
   hitting the cap, so the live position could not be re-observed —
   the property is covered by the tests rather than by that run.
+
+### Cycle 46 — Arabic rendered left-to-right (2026-08-05)
+- Fourth dogfood, the flagship case: a real German utility bill
+  (Stadtwerke München, 183.84 EUR arrears, 26.08.2026 deadline, with a
+  Mahnverfahren threat) explained in Arabic — a diaspora user reading a
+  parent's letter.
+- **The answer was excellent.** Correct amount, correct deadline, correct
+  consequence, German terms kept alongside the Arabic. Nothing to fix in
+  the content.
+- **But it rendered left-to-right.** `.msg-content` carried NO direction,
+  so it inherited the interface's. Measured: `direction: ltr` on Arabic
+  text. That is not cosmetic — bidi reorders mixed content, so a Latin
+  company name inside an Arabic sentence, and every parenthesis, colon and
+  number, lands on the wrong side. In the exact case the moat is built
+  for: English UI, Arabic answer, shown to a parent.
+- Fix: `dir="auto"` on every message, both render paths. Direction is a
+  property of the MESSAGE, not the app — inferred from the first strong
+  character, so an English question and an Arabic answer sit correctly in
+  one thread regardless of interface language. Verified live: user message
+  `ltr`, assistant reply `rtl`, same conversation, LTR interface.
+- E2E sweep added (33 checks): every message declares `dir="auto"`, and an
+  Arabic reply resolves RTL inside an LTR interface.
+- **Two self-inflicted wounds worth recording**, both the same mistake:
+  a comment containing BACKTICKS placed inside a JS template literal.
+  First in renderer/index.html — it terminated the string and the whole
+  main script failed to parse, so the app booted with no `newSession`.
+  Then again in the E2E fixture. Lesson: prose inside a template literal
+  is code, not prose. Keep explanatory comments outside the backticks.
