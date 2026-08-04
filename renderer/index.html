@@ -18360,7 +18360,19 @@ Title:`
     let _lastModelForUx = null
     function changeModel(model) {
       const select = document.getElementById('model-select')
-      const opt = select.options[select.selectedIndex]
+      // v0.8 cycle 43: the argument is the source of truth, not whatever the
+      // <select> happens to be showing. This read `select.selectedIndex`
+      // directly, so any caller that set the model programmatically —
+      // restoring a session, the post-key-save default, a keyboard shortcut —
+      // got the label and cost tier of the PREVIOUSLY selected option while
+      // actually switching models. Caught in a dogfood run: changeModel()
+      // straight after newSession() silently kept the old model.
+      if (model && select.value !== model) {
+        const exists = Array.from(select.options).some(o => o.value === model)
+        if (exists) select.value = model
+      }
+      const opt = select.options[select.selectedIndex] || select.options[0]
+      if (!opt) return
       const label = opt.text
       // v0.8 cycle 40: prefix the always-visible model chip with its cost tier
       // (🟢/🟡/🔴) so the user sees what they're spending at every glance —

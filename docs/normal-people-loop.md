@@ -749,3 +749,45 @@
 - 23 unit tests on the batching semantics — the barrier case, peak
   concurrency, order preservation, allow-list closure, degenerate input.
   325 → 352 module checks; 404 total across the suite.
+
+### Cycle 43 — the folder bug that made Labaik invent your data (2026-08-04)
+- Owner: "run the app, let it do long term task with different tools and
+  skills, find what we can improve." Dogfooded a realistic multi-tool goal
+  (read a CSV + notes → compute revenue per region → write a report →
+  write a script → run it → verify it matches → list the folder) against a
+  real folder on DeepSeek V4 Flash.
+- **It produced a confident, beautifully formatted, completely fabricated
+  report.** Regions North/South/East/**West** with a Widget/Gadget product
+  line — none of which existed in the user's CSV. Total: 14,126.25 against
+  a real answer of 6,590.50.
+- **Root cause, and it is not the model.** Task-scope auto-create fired,
+  made `work-in-folder-do-20260804/`, and silently pointed the agent
+  there. The user's files were one level up, outside scope. Finding an
+  empty folder, the agent wrote its own plausible `notes.md` and
+  `sales.csv` and computed on those. It overrode an explicit "do not
+  create subfolders" in the prompt.
+- Three independent guards all failed:
+  1. `looksLikeProject` (main.js) tested ONLY for developer manifests —
+     `.git`, `package.json`, `Cargo.toml`, `Makefile` … — or a README with
+     >10 files beside it. A normal person's folder of documents matches
+     none of that, so it was judged blank scratch space. **This is the
+     audience the entire plan targets.** Now: any visible entry at all
+     means the folder is the user's, and auto-scope stays out.
+  2. `detectExplicitNoFolder` missed "do not" (only "don't"), missed the
+     plural "subfolders", and had no pattern for "work in this folder" —
+     the most natural phrasing. Widened, with 20 tests.
+  3. `hasCreationIntent` matched "write report.md" as intent to start new
+     work. Left alone; guards 1 and 2 are the correct place to stop this.
+- **Also fixed, same run:** `changeModel(model)` read
+  `select.options[select.selectedIndex]` instead of its own argument, so
+  any programmatic switch (session restore, post-key default, a shortcut)
+  applied the PREVIOUS model's label and cost tier while appearing to
+  switch. Now the argument is the source of truth.
+- Verified by re-running the identical task: no subfolder, files written
+  to the folder root, and the report's numbers match an independent
+  computation exactly (South 2623.0 / North 2565.0 / East 1402.5 /
+  6590.5). The agent also ran analyze.py and confirmed the match itself.
+- Worth recording: the agent's OWN behaviour was good throughout. On the
+  first run it verified the empty folder with a shell command, refused to
+  reach outside its workspace, and asked a clear either/or question. The
+  harness failed it, not the model. 352 → 372 module checks.

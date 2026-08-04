@@ -2015,9 +2015,26 @@ ipcMain.handle('task-scope-looks-like-project', async (_e, folderPath) => {
       if (markers.has(n)) return true
       if (n.endsWith('.xcodeproj') || n.endsWith('.xcworkspace')) return true
     }
-    // README + substantive contents — looks like something already going on.
-    const hasReadme = names.some(n => /^README(\.md|\.txt)?$/i.test(n))
-    if (hasReadme && names.filter(n => !n.startsWith('.')).length > 10) return true
+    // v0.8 cycle 43 — THE FIX THAT MATTERS.
+    //
+    // This used to look ONLY for developer manifests, plus a README with
+    // more than ten files beside it. A normal person's folder — documents,
+    // a spreadsheet, some notes — matched none of that, so it was judged
+    // "blank scratch space" and task-scope silently created a subfolder and
+    // pointed the agent at it. The agent then could not see the user's
+    // files at all, and in a real dogfood run it INVENTED plausible source
+    // data and reported confident totals that had nothing to do with the
+    // user's actual spreadsheet.
+    //
+    // The auto-scope feature is only ever meant to tidy a genuinely blank
+    // folder. So the test is now literal: does this folder already contain
+    // anything of the user's? Hidden entries (.DS_Store, .git internals)
+    // don't count as content, but any real file or folder does.
+    //
+    // Anyone who still wants a subfolder can name one ("put it in a folder
+    // called budget") or use the 📁+ button — those paths are untouched.
+    const visible = names.filter(n => !n.startsWith('.'))
+    if (visible.length > 0) return true
     return false
   } catch {
     return false

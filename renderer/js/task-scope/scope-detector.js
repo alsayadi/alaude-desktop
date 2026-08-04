@@ -99,9 +99,26 @@ export class ScopeDetector {
   //   "don't create a folder"
   //   "use the root"
   //   "in the root directory"
+  // v0.8 cycle 43: widened after a dogfood run where the prompt literally
+  // said "do not create subfolders" and a subfolder was created anyway.
+  // Three separate misses in the old pattern:
+  //   · "do not" — only the contraction "don't" was handled
+  //   · "subfolders" — only the singular matched
+  //   · "work in this folder" / "directly in this folder" — the most
+  //     natural way to say it wasn't covered at all
+  // Being generous here is the safe direction: a false positive just means
+  // files land in the folder the user pointed at, which is what they asked
+  // for. A false negative hides their data from the agent.
   detectExplicitNoFolder(text) {
     if (!text) return false
-    return /\b(?:no\s+(?:folder|subfolder|dir|directory)|use\s+(?:the\s+)?root|in\s+(?:the\s+)?root|don'?t\s+(?:make|create|use)\s+(?:a\s+)?(?:folder|subfolder)|skip\s+(?:the\s+)?(?:folder|subfolder))\b/i.test(text)
+    const t = String(text)
+    const noFolder = /\b(?:no\s+(?:new\s+)?(?:folder|subfolder|dir|directory)s?|use\s+(?:the\s+)?root|in\s+(?:the\s+)?root|(?:don'?t|do\s+not|never|avoid)\s+(?:make|create|creating|use|using|add|adding)\s+(?:a\s+|any\s+)?(?:new\s+)?(?:folder|subfolder|dir|directory)s?|skip\s+(?:the\s+)?(?:folder|subfolder)s?)\b/i
+    // "work in this folder", "directly in the current directory", "right here"
+    // The object can sit between the verb and the preposition — "save IT in
+    // the current directory", "keep EVERYTHING in this folder", "write THE
+    // FILES into my workspace". Up to three words, non-greedy.
+    const workHere = /\b(?:work|save|write|put|keep|store|create)\s+(?:\w+\s+){0,3}?(?:directly\s+)?(?:in|into|inside)\s+(?:this|the\s+current|the\s+existing|my)\s+(?:folder|dir|directory|workspace)\b/i
+    return noFolder.test(t) || workHere.test(t)
   }
 
   // ── slug generation ──────────────────────────────────────────

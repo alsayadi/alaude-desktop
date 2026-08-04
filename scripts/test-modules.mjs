@@ -1211,7 +1211,7 @@ console.log('\n[23/24] chat UI — offline-clean, and inline code stays inline')
 }
 
 // ═══════════════════════════════════════════════════════════════
-console.log('\n[24/24] tool-batch — concurrent reads, ordered writes')
+console.log('\n[24/25] tool-batch — concurrent reads, ordered writes')
 {
   const { createRequire } = await import('node:module')
   const require = createRequire(import.meta.url)
@@ -1300,6 +1300,66 @@ console.log('\n[24/24] tool-batch — concurrent reads, ordered writes')
   check('running out of turns is stated, not hidden',
     /stopped after \d+ rounds/i.test(notice) && /not the end of the job/i.test(notice))
   check('and it tells the user it can be resumed', /continue/i.test(notice))
+}
+
+// ═══════════════════════════════════════════════════════════════
+console.log('\n[25/25] task-scope — never hide the user\'s own files')
+{
+  const { ScopeDetector } = await import('../renderer/js/task-scope/scope-detector.js')
+  const d = new ScopeDetector({ api: {} })
+
+  // Every one of these appeared in, or is a near-neighbour of, the prompt
+  // from the dogfood run that created a subfolder anyway — hiding the
+  // user's spreadsheet from the agent, which then invented its own data
+  // and reported confident totals for a region that did not exist.
+  const mustOptOut = [
+    'do not create subfolders',
+    'Do not create a subfolder',
+    "don't create a folder",
+    'dont make a new folder',
+    'no subfolder',
+    'no subfolders please',
+    'no new directory',
+    'avoid creating folders',
+    'skip the subfolder',
+    'use the root',
+    'in the root directory',
+    'work directly in this folder',
+    'work in this folder',
+    'save it in the current directory',
+    'write the files into my workspace',
+    'keep everything in this folder',
+  ]
+  for (const t of mustOptOut) {
+    check(`  opt-out understood: "${t}"`, d.detectExplicitNoFolder(t) === true)
+  }
+  // …without swallowing prompts that genuinely do want a new folder.
+  for (const t of ['build me a todo app', 'create a folder called budget and put it there',
+                   'make a new landing page', 'summarize this document']) {
+    check(`  not a false opt-out: "${t}"`, d.detectExplicitNoFolder(t) === false)
+  }
+
+  // An explicitly-named folder must still win — that path is untouched.
+  check('an explicitly named folder is still honoured',
+    d.detectExplicitFolderRequest('put everything in a folder called budget')?.name === 'budget')
+
+  // The main-process side of the fix: a folder holding ANY visible entry is
+  // the user's, not blank scratch space. Asserted on source because the
+  // check is an IPC handler in main.js, not an importable module.
+  const fsm = await import('node:fs')
+  const mainSrc = fsm.readFileSync(new URL('../electron/main.js', import.meta.url), 'utf8')
+  const handler = mainSrc.slice(
+    mainSrc.indexOf("ipcMain.handle('task-scope-looks-like-project'"),
+    mainSrc.indexOf("ipcMain.handle('task-scope-looks-like-project'") + 2200)
+  check('a folder with any visible entry counts as the user\'s work',
+    /visible\.length\s*>\s*0\)\s*return true/.test(handler), 'the blank-folder test did not survive')
+  check('the old README>10 heuristic is gone',
+    !/hasReadme\s*&&\s*names\.filter/.test(handler))
+
+  // changeModel must trust its argument, not the <select>'s current index.
+  const htmlSrc = fsm.readFileSync(new URL('../renderer/index.html', import.meta.url), 'utf8')
+  check('changeModel() applies the model it was given',
+    /function changeModel\(model\)\s*\{[\s\S]{0,700}?if \(model && select\.value !== model\)/.test(htmlSrc))
 }
 
 // ═══════════════════════════════════════════════════════════════
