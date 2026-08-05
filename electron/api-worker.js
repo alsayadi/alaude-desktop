@@ -125,6 +125,15 @@ dns.lookup = function patchedLookup(hostname, options, callback) {
 // OAuth tokens (Bearer) beat API keys (x-api-key) if both are present.
 function getCredential(provider) {
   if (provider === 'ollama') return { value: 'ollama', isOauth: false }
+  // v0.8 — a Labaik account's credential is the device token from
+  // account.json, not an API key in credentials.json. The worker resolves
+  // credentials independently of main.js, so teaching only main about
+  // Labaik accounts left every actual chat failing with "your API key was
+  // rejected" while the account page cheerfully showed a balance.
+  if (provider === 'labaik') {
+    const token = require('./labaik-account').getToken()
+    return token ? { value: token, isOauth: false } : null
+  }
   // v0.7.64: credentials now live at ~/.labaik/credentials.json. We keep
   // reading from ~/.claude/.credentials.json (legacy) and the dev
   // `claude-local-src/` fallback so existing users don't lose access —

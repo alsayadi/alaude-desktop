@@ -92,6 +92,16 @@ const PROVIDERS_ORDERED = [
   // local `deepseek-r1:7b` still routes to 'ollama'.
   ['deepseek',  { baseURL: 'https://api.deepseek.com/v1', prefixes: ['deepseek-'], envVar: 'DEEPSEEK_API_KEY' }],
 
+  // Labaik account (v0.8) — the user signs in with Google at labaik.ai and
+  // rides on Labaik's own key instead of bringing their own. The endpoint
+  // is OpenAI-compatible on purpose, so this row is all the client needs:
+  // the "API key" is the device token minted at sign-in, and the server
+  // meters usage against the account's credit.
+  //
+  // The `labaik/` prefix is stripped before the id reaches the SDK, so
+  // `labaik/deepseek-v4-flash` is sent upstream as `deepseek-v4-flash`.
+  ['labaik',    { baseURL: (process.env.LABAIK_API_BASE || 'https://labaik.ai/api/v1'), prefixes: ['labaik/'], stripPrefix: 'labaik/', envVar: 'LABAIK_TOKEN' }],
+
   // Ollama — local. Treated specially in detectProvider() because
   // Ollama tags use `name:tag` and several known family names (gemma,
   // llama3, etc) don't share a single prefix.
@@ -105,7 +115,9 @@ const PROVIDERS = Object.fromEntries(PROVIDERS_ORDERED)
 // status modal. Anthropic first (default), then the rest in display
 // order. Ollama is handled specially by `main.js` (runtime availability,
 // not an API key), so it's intentionally absent.
-const PROVIDER_KEY_IDS = ['anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan', 'deepseek']
+// 'labaik' leads because a signed-in account is the zero-setup path — the
+// one that works without the user ever obtaining an API key.
+const PROVIDER_KEY_IDS = ['labaik', 'anthropic', 'openai', 'google', 'xai', 'kimi', 'moonshot', 'dashscope', 'zhipu', 'minimax', 'hunyuan', 'deepseek']
 
 // Map provider id → env var name. Derived so env-var discovery stays
 // synchronised with the registry automatically.

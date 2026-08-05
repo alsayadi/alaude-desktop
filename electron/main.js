@@ -314,6 +314,14 @@ const SRC_DIR = path.resolve(__dirname, '..', '..', 'claude_code_src')
 // that path.
 function getCredential(provider) {
   const fs = require('fs')
+  // v0.8 — a Labaik account is not a stored API key. Its "credential" is
+  // the device token minted when the user signed in with Google, so it
+  // lives in account.json rather than credentials.json and is resolved
+  // here before the normal lookup.
+  if (provider === 'labaik') {
+    const token = require('./labaik-account').getToken()
+    return token ? { value: token, isOauth: false } : null
+  }
   const envMap = {
     anthropic: 'ANTHROPIC_API_KEY',
     openai: 'OPENAI_API_KEY',
@@ -1591,6 +1599,7 @@ ipcMain.handle('share-image', async (_e, html) => {
 const voice = require('./voice')
 const netLedger = require('./net-ledger')
 const modelDiscovery = require('./model-discovery')
+const labaikAccount = require('./labaik-account')
 const watchers = require('./watchers')
 // v0.8 cycle 37: ask the providers the user already pays for what models
 // their key can see, so a model released today is usable today instead of
@@ -1613,6 +1622,47 @@ ipcMain.handle('models-discover', async (_e, opts) => {
   } catch (err) {
     return { models: {}, fetched: [], cached: [], error: String(err?.message || err).slice(0, 200) }
   }
+})
+
+// ── v0.8 · Labaik account (labaik.ai) ───────────────────────────────────
+// Sign-in happens in the user's own browser; the app only ever holds the
+// resulting device token. See electron/labaik-account.js for why.
+ipcMain.handle('labaik-signin-start', async () => {
+  try {
+    const started = await labaikAccount.startSignIn()
+    netLedger.log(new URL(labaikAccount.API_BASE).host, 'sign in to Labaik')
+    // Opening the browser is main's job — the module deliberately doesn't.
+    try { await shell.openExternal(started.verify_url) } catch {}
+    return { ok: true, ...started }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
+ipcMain.handle('labaik-signin-wait', async (_e, code) => {
+  try {
+    const rec = await labaikAccount.waitForSignIn(String(code || ''))
+    return { ok: true, account: rec.account }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+})
+
+ipcMain.handle('labaik-account', async (_e, opts) => {
+  if (opts?.refresh) {
+    netLedger.log(new URL(labaikAccount.API_BASE).host, 'check Labaik balance')
+    return await labaikAccount.fetchAccount()
+  }
+  return labaikAccount.read()?.account || null
+})
+
+ipcMain.handle('labaik-signout', async () => {
+  await labaikAccount.signOut()
+  return true
+})
+
+ipcMain.handle('labaik-open-account', async () => {
+  try { await shell.openExternal(labaikAccount.accountUrl()); return true } catch { return false }
 })
 
 ipcMain.handle('voice-transcribe', async (_e, payload) => {

@@ -6324,6 +6324,21 @@
     /* Plan mode ON is a real state change — it keeps its colour. */
     .plan-mode-toggle.on { background: var(--green-dim); border-color: transparent; }
 
+    /* ───── v0.8 · Labaik credit chip ───── */
+    .labaik-balance {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--green-dim);
+      color: var(--green);
+      cursor: pointer;
+      user-select: none;
+    }
+    .labaik-balance:hover { background: var(--bg-hover); }
+    /* Running out is the one state worth interrupting for. */
+    .labaik-balance.low { background: color-mix(in srgb, #e0994a 20%, transparent); color: #e0994a; }
+
     /* ───── v0.8 cycle 39 · the "+" menu ───── */
     .input-wrap { position: relative; }
     .composer-menu {
@@ -6466,7 +6481,21 @@
           <div class="login-path-chevron">›</div>
         </button>
 
-        <!-- Path 2 — BYO API key, form collapsed until the header is clicked -->
+        <!-- v0.8 — Labaik account. The middle door: no key to obtain, no
+             model to download. Placed AFTER the local path deliberately —
+             the free, fully-private option should still be the one a
+             first-time user reads first. -->
+        <button class="login-path" id="login-labaik-btn" onclick="loginLabaikPath()"
+                data-i18n-attr="aria-label:login.labaik.title" aria-label="Sign in with Google">
+          <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 15%, var(--bg))">🔵</div>
+          <div class="login-path-body">
+            <div class="login-path-title"><span data-i18n="login.labaik.title">Sign in with Google</span> <span class="login-path-badge" data-i18n="login.labaik.badge">$1 FREE</span></div>
+            <div class="login-path-desc" id="login-labaik-desc" data-i18n="login.labaik.desc">No API key needed. Get $1 of free credit — about 1,000 messages — then top up only if you want to.</div>
+          </div>
+          <div class="login-path-chevron">›</div>
+        </button>
+
+        <!-- Path 3 — BYO API key, form collapsed until the header is clicked -->
         <div class="login-path" data-i18n-attr="aria-label:login.byok.title" aria-label="Connect with your API key">
           <div class="login-path-icon" style="background: color-mix(in oklch, var(--green) 12%, var(--bg))">🔑</div>
           <div class="login-path-body" style="flex:1">
@@ -6546,6 +6575,13 @@
     <div class="sidebar-footer">
       <button class="sidebar-new-btn" data-i18n="sidebar.addAccount" style="background:var(--bg-input);color:var(--text);border-color:var(--border);margin:0 0 8px 0" onclick="showLogin()">Add Account</button>
       <select class="model-selector" id="model-select" onchange="changeModel(this.value)">
+        <optgroup label="Labaik account" id="model-select-labaik">
+          <!-- v0.8 — no API key needed: sign in with Google at labaik.ai and
+               these run on Labaik's own key, metered against your credit.
+               Hidden until signed in (refreshModelReadiness). -->
+          <option value="labaik/deepseek-v4-flash">Labaik · fast (included)</option>
+          <option value="labaik/deepseek-v4-pro">Labaik · deeper (included)</option>
+        </optgroup>
         <optgroup label="Anthropic">
           <!-- v0.8 cycle 36 — the Claude 5 family (Jun–Jul 2026). Sonnet 5
                is the daily driver, Opus 5 the flagship, Fable 5 the most
@@ -6699,6 +6735,8 @@
              populates them (renderSessionCost, renderModelSlots) should
              reveal them when they have content. -->
         <span class="cost-session-total" id="topbar-cost" title="Estimated API cost for this session" style="display:none"></span>
+        <!-- v0.8: remaining Labaik credit. Hidden unless signed in. -->
+        <span class="labaik-balance" id="labaik-balance" onclick="openLabaikAccount()" style="display:none"></span>
         <span class="model-slots" id="model-slots" style="display:none"></span>
       </div>
       <div class="topbar-actions">
@@ -7334,7 +7372,7 @@
            and the exit door is printed right inside the app. -->
       <div style="margin-top:14px;padding:10px 12px;border:1px dashed var(--border);border-radius:10px">
         <div style="font-size:12.5px;font-weight:700" data-i18n="data.leave.title">🎒 Take everything & leave — any time</div>
-        <div style="font-size:12px;color:var(--text-dim);line-height:1.55;margin-top:4px" data-i18n="data.leave.body">Labaik has no account and no lock-in. Everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains, and nothing follows you.</div>
+        <div style="font-size:12px;color:var(--text-dim);line-height:1.55;margin-top:4px" data-i18n="data.leave.body">Labaik works with no account at all — local models and your own API keys need nothing from us. A Labaik account is optional, and only exists to lend you our key if you would rather not get one. Either way there is no lock-in: everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains on your Mac, and if you signed in, deleting your account removes what we hold too.</div>
       </div>
     </div>
   </div>
@@ -12569,7 +12607,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.reveal': '📂 Reveal in Finder',
         'data.backup': '💾 Back up…',
         'data.leave.title': '🎒 Take everything & leave — any time',
-        'data.leave.body': 'Labaik has no account and no lock-in. Everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains, and nothing follows you.',
+        'data.leave.body': 'Labaik works with no account at all — local models and your own API keys need nothing from us. A Labaik account is optional, and only exists to lend you our key if you would rather not get one. Either way there is no lock-in: everything lives in the folder above and in your backup file (plain JSON — readable anywhere, forever). To leave completely: save a backup, delete the data folder, and drag Labaik to the Trash. Nothing remains on your Mac, and if you signed in, deleting your account removes what we hold too.',
         'data.total': 'Total on disk',
         'data.clear': 'Clear this',
         'nudge.routine': '💡 Liked that? Labaik can do it on a schedule.',
@@ -12587,6 +12625,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.rec.group': '✨ Recommended',
         'model.discovered.group': '🔎 Other models your key can use',
         'composer.plus.title': 'Add a file, a folder, or change what Labaik may do',
+        'login.labaik.title': 'Sign in with Google',
+        'login.labaik.badge': '$1 FREE',
+        'login.labaik.desc': 'No API key needed. Get $1 of free credit — about 1,000 messages — then top up only if you want to.',
+        'login.labaik.opening': 'Opening your browser…',
+        'login.labaik.waiting': 'Finish signing in with Google in your browser.',
+        'login.labaik.done': 'Signed in. Setting things up…',
+        'login.labaik.welcome': '✅ Signed in — your free credit is ready.',
         'composer.state.title': 'What Labaik may do right now (⌘⇧A to change)',
         'composer.attach': '📎 Attach a file',
         'model.discovered.unknownPrice': 'price unknown',
@@ -12620,7 +12665,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'ux.title': 'UX Insights',
         // Login screen
         'login.title': 'Welcome to Labaik',
-        'login.sub': 'Every frontier AI on your Mac — private, no subscription, no account.',
+        'login.sub': 'Every frontier AI on your Mac — private, and yours to keep.',
         'login.byok.title': 'Connect with your API key',
         'login.byok.badge': 'Smarter answers',
         'login.byok.desc': 'Claude, GPT, Gemini, Grok, Kimi, Qwen, GLM, MiniMax, Hunyuan — your keys, your choice.',
@@ -12984,7 +13029,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.reveal': '📂 在访达中显示',
         'data.backup': '💾 备份…',
         'data.leave.title': '🎒 随时带走一切离开',
-        'data.leave.body': 'Labaik 没有账号、没有锁定。一切都在上面的文件夹和你的备份文件里（纯 JSON——在任何地方、永远可读）。想彻底离开：保存备份，删除数据文件夹，把 Labaik 拖进废纸篓。什么都不会留下，也没有任何东西跟着你。',
+        'data.leave.body': 'Labaik 完全可以不用账号——本地模型和你自己的 API 密钥都不需要我们。Labaik 账号是可选的，只是在你不想自备密钥时借用我们的密钥。无论哪种方式都没有锁定：一切都在上面的文件夹和你的备份文件里（纯 JSON——在任何地方、永远可读）。想彻底离开：保存备份，删除数据文件夹，把 Labaik 拖进废纸篓。你的 Mac 上什么都不会留下；如果你登录过，删除账号也会清除我们保存的部分。',
         'data.total': '磁盘占用合计',
         'data.clear': '清除此项',
         'nudge.routine': '💡 喜欢这个？Labaik 可以定时自动完成。',
@@ -13002,6 +13047,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.rec.group': '✨ 推荐',
         'model.discovered.group': '🔎 你的密钥可用的其他模型',
         'composer.plus.title': '添加文件、文件夹，或更改 Labaik 的权限',
+        'login.labaik.title': '使用 Google 登录',
+        'login.labaik.badge': '赠 $1',
+        'login.labaik.desc': '无需 API 密钥。赠送 $1 额度（约 1,000 条消息），用完后再决定是否充值。',
+        'login.labaik.opening': '正在打开浏览器…',
+        'login.labaik.waiting': '请在浏览器中完成 Google 登录。',
+        'login.labaik.done': '已登录，正在设置…',
+        'login.labaik.welcome': '✅ 已登录 — 免费额度已到账。',
         'composer.state.title': 'Labaik 当前可以做什么（⌘⇧A 切换）',
         'composer.attach': '📎 添加文件',
         'model.discovered.unknownPrice': '价格未知',
@@ -13384,7 +13436,7 @@ footer a { color: var(--accent); text-decoration: none; }
         'data.reveal': '📂 إظهار في فايندر',
         'data.backup': '💾 نسخة احتياطية…',
         'data.leave.title': '🎒 خذ كل شيء وارحل — متى شئت',
-        'data.leave.body': 'لبيك بلا حساب وبلا احتجاز. كل شيء في المجلد أعلاه وفي ملف نسختك الاحتياطية (JSON صِرف — يُقرأ في أي مكان وإلى الأبد). للرحيل تمامًا: احفظ نسخة احتياطية، احذف مجلد البيانات، واسحب لبيك إلى المهملات. لا يبقى شيء، ولا يتبعك شيء.',
+        'data.leave.body': 'يعمل لبيك بلا حساب إطلاقًا — النماذج المحلية ومفاتيحك الخاصة لا تحتاج منّا شيئًا. حساب لبيك اختياري، وُجد فقط ليعيرك مفتاحنا إن لم ترغب في الحصول على مفتاح. في الحالتين لا يوجد احتجاز: كل شيء في المجلد أعلاه وفي ملف نسختك الاحتياطية (JSON صِرف — يُقرأ في أي مكان وإلى الأبد). للرحيل تمامًا: احفظ نسخة احتياطية، احذف مجلد البيانات، واسحب لبيك إلى المهملات. لا يبقى شيء على جهازك، وإن سجّلت الدخول فحذف حسابك يزيل ما لدينا أيضًا.',
         'data.total': 'الإجمالي على القرص',
         'data.clear': 'مسح هذا',
         'nudge.routine': '💡 أعجبك ذلك؟ يمكن للبيك تنفيذه وفق جدول.',
@@ -13402,6 +13454,13 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.rec.group': '✨ مُوصى به',
         'model.discovered.group': '🔎 نماذج أخرى يتيحها مفتاحك',
         'composer.plus.title': 'أضف ملفًا أو مجلدًا، أو غيّر ما يُسمح لـ لبيك بفعله',
+        'login.labaik.title': 'تسجيل الدخول عبر Google',
+        'login.labaik.badge': '$1 مجانًا',
+        'login.labaik.desc': 'بدون مفتاح API. احصل على رصيد مجاني بقيمة $1 — حوالي 1,000 رسالة — ثم اشحن فقط إذا أردت.',
+        'login.labaik.opening': 'جارٍ فتح المتصفح…',
+        'login.labaik.waiting': 'أكمل تسجيل الدخول عبر Google في المتصفح.',
+        'login.labaik.done': 'تم تسجيل الدخول. جارٍ الإعداد…',
+        'login.labaik.welcome': '✅ تم تسجيل الدخول — رصيدك المجاني جاهز.',
         'composer.state.title': 'ما يُسمح لـ لبيك بفعله الآن (⌘⇧A للتغيير)',
         'composer.attach': '📎 إرفاق ملف',
         'model.discovered.unknownPrice': 'السعر غير معروف',
@@ -18443,6 +18502,7 @@ Title:`
     }
     function providerOf(modelId) {
       const m = (modelId || '').toLowerCase()
+      if (m.startsWith('labaik/')) return 'labaik'
       if (m.startsWith('ollama/') || m.includes(':')) return 'ollama'
       if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) return 'openai'
       if (m.startsWith('grok-')) return 'xai'
@@ -18509,6 +18569,56 @@ Title:`
       select.insertBefore(grp, localGrp || null)
     }
 
+    // ── v0.8 · Labaik account sign-in ───────────────────────────────────
+    // The whole exchange happens in the user's own browser. This function
+    // only asks for a code, waits, and reports — it never sees a password.
+    let _labaikSigninBusy = false
+    async function loginLabaikPath() {
+      if (_labaikSigninBusy) return
+      _labaikSigninBusy = true
+      const desc = document.getElementById('login-labaik-desc')
+      const original = desc?.textContent
+      const say = (msg) => { if (desc) desc.textContent = msg }
+      try {
+        say(t('login.labaik.opening', 'Opening your browser…'))
+        const started = await window.alaude.labaikSigninStart()
+        if (!started?.ok) throw new Error(started?.error || 'Could not reach labaik.ai')
+        // The code is shown so the user can confirm the page they landed on
+        // belongs to this app — the same reason device flows print a code.
+        say(t('login.labaik.waiting', 'Finish signing in with Google in your browser.') + `  (${started.code})`)
+        const done = await window.alaude.labaikSigninWait(started.code)
+        if (!done?.ok) throw new Error(done?.error || 'Sign-in did not complete')
+        say(t('login.labaik.done', 'Signed in. Setting things up…'))
+        await checkLoginStatus?.()
+        await refreshModelReadiness?.()
+        const sel = document.getElementById('model-select')
+        if (sel) changeModel('labaik/deepseek-v4-flash')
+        renderLabaikBalance()
+        hideLogin?.()
+        showRewindToast?.(t('login.labaik.welcome', '✅ Signed in — your free credit is ready.'), false)
+      } catch (err) {
+        say(String(err?.message || err))
+        setTimeout(() => say(original), 6000)
+      } finally {
+        _labaikSigninBusy = false
+      }
+    }
+
+    // Balance lives in the topbar next to the spend meter — the account is
+    // only trustworthy if what's left is visible without hunting for it.
+    async function renderLabaikBalance(refresh = true) {
+      const el = document.getElementById('labaik-balance')
+      if (!el) return
+      let acc = null
+      try { acc = await window.alaude.labaikAccount?.({ refresh }) } catch {}
+      if (!acc) { el.style.display = 'none'; return }
+      el.style.display = ''
+      el.textContent = `${acc.balance_display}`
+      el.title = `Labaik credit — about ${Number(acc.approx_messages_left || 0).toLocaleString()} messages left. Click to manage.`
+      el.classList.toggle('low', (acc.balance_micros || 0) < 200000)   // under $0.20
+    }
+    function openLabaikAccount() { try { window.alaude.labaikOpenAccount?.() } catch {} }
+
     async function refreshModelReadiness() {
       try {
         const statuses = await window.alaude.getKeyStatuses()
@@ -18516,6 +18626,14 @@ Title:`
         if (!select) return
         // Fire-and-forget: never block the readiness pass on the network.
         insertDiscoveredModels().catch(() => {})
+        // The Labaik-account group is meaningless to someone who has not
+        // signed in — offering models that would immediately 401 is worse
+        // than not offering them. Hide the whole group until there is an
+        // account behind it.
+        try {
+          const labaikGroup = select.querySelector('#model-select-labaik')
+          if (labaikGroup) labaikGroup.style.display = statuses.labaik === 'set' ? '' : 'none'
+        } catch {}
         for (const opt of select.options) {
           if (!opt.value && !opt.text) continue
           // Local Ollama options are always ready once installed — mark them
@@ -18813,6 +18931,10 @@ Title:`
         // fight the .hidden class. Force-hide inline as well.
         loginScreen.style.display = 'none'
         refreshModelReadiness?.()
+        // Show remaining credit as soon as the app is usable. Cached value
+        // first (instant, works offline), then a refresh in the background.
+        renderLabaikBalance?.(false)
+        renderLabaikBalance?.(true)
         maybeShowFirstRunCoach?.()
       } else {
         loginScreen.classList.remove('hidden')
@@ -19189,6 +19311,13 @@ Title:`
       'kimi-k2.6':              { in: 0.95,   out: 4.00 },
       'kimi-k2':                { in: 0.15,   out: 2.50 },
       'moonshot-v1-8k':         { in: 0.14,   out: 0.14 },
+      // Labaik account — what the USER is charged, which is 2x the upstream
+      // DeepSeek rate (labaik.ai keeps 50%). Listing the real user-facing
+      // number matters: the spend meter is the app's honesty feature, and
+      // showing the wholesale price to someone paying retail would be a lie
+      // in their favour right up until their balance ran out early.
+      'labaik/deepseek-v4-flash': { in: 0.28,   out: 0.56 },
+      'labaik/deepseek-v4-pro':   { in: 0.87,   out: 1.74 },
       // DeepSeek — NOTE: list price DOUBLES during Beijing peak hours
       // (09:00–12:00 and 14:00–18:00 daily). Off-peak cache-miss quoted.
       'deepseek-v4-pro':        { in: 0.435,  out: 0.87 },

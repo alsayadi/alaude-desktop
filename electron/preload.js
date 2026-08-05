@@ -189,6 +189,12 @@ contextBridge.exposeInMainWorld('alaude', {
   // v0.8 cycle 6 — voice dictation: recorded audio → STT engine in main.
   voiceTranscribe: (payload) => ipcRenderer.invoke('voice-transcribe', payload),
   modelsDiscover: (opts) => ipcRenderer.invoke('models-discover', opts),
+  // Labaik account (labaik.ai) — sign in with Google, ride on Labaik's key.
+  labaikSigninStart: () => ipcRenderer.invoke('labaik-signin-start'),
+  labaikSigninWait: (code) => ipcRenderer.invoke('labaik-signin-wait', code),
+  labaikAccount: (opts) => ipcRenderer.invoke('labaik-account', opts),
+  labaikSignout: () => ipcRenderer.invoke('labaik-signout'),
+  labaikOpenAccount: () => ipcRenderer.invoke('labaik-open-account'),
   // v0.8 cycle 12 — print a clean document (Paperwork reply letters).
   printHtml: (html) => ipcRenderer.invoke('print-html', html),
   // v0.8 cycle 23 — share a reply as a clipboard image (for chat apps).

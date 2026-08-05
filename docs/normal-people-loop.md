@@ -875,3 +875,40 @@
   main script failed to parse, so the app booted with no `newSession`.
   Then again in the E2E fixture. Lesson: prose inside a template literal
   is code, not prose. Keep explanatory comments outside the backticks.
+
+### Cycle 47 — Labaik accounts: the third door (2026-08-05)
+- Owner goal: user accounts on labaik.ai — Google sign-in, starting
+  credit, $10/$30/$50 plans, DeepSeek V4 Flash server-side, 50% margin.
+- **Stated once and then built:** this reverses the positioning line ("no
+  subscription, no account"), the do-not-do list's first entry ("no cloud
+  backend, accounts, or billing") and cycle 35's survival guarantee. The
+  owner's call; the honest response is to build it AND stop the product
+  claiming otherwise.
+- labaik.ai had no backend at all — a static folder. Now `server/`:
+  Google device-link sign-in, an append-only credit ledger, Stripe
+  subscriptions, and a metered DeepSeek proxy. 83 offline tests.
+- **Margin is metered, not assumed.** DeepSeek doubles its price during
+  Beijing peak hours, so a flat per-message rate would earn ~50% off-peak
+  and ~0% on-peak — losing money exactly when usage peaks. Charging 2x the
+  REAL cost of each request holds 50% around the clock, and passes
+  cache-hit savings (~50x) to the user. Verified on a live key: charged 42
+  micro-dollars against a 21 micro-dollar cost.
+- **Client integration cost almost nothing** because the proxy is mounted
+  at the OpenAI-compatible path: one row in provider-registry, and the
+  existing streaming/tool plumbing worked untouched.
+- **The honesty pass.** "Labaik has no account and no lock-in" is no
+  longer true unconditionally, so it now says the account is optional,
+  that local models and BYO keys still need nothing from us, and that
+  deleting the account removes what we hold. Changed in all three locales.
+- Four bugs caught before deploy — three by the server tests (a zero
+  welcome-grant crashed signup; a redeemed link code reported "pending"
+  forever, hiding replay behind a status that looks like progress; a
+  bodyless upstream response hung the request and billed nothing), and one
+  only by driving the real app: the WORKER resolves credentials
+  independently of main.js, so teaching only main about accounts left
+  every chat failing "your API key was rejected" while the account page
+  cheerfully showed a balance.
+- Display bug found on the first real charge: `formatUsd` used two decimal
+  places, so a genuine 42-micro charge rendered as "-$0.00". A usage
+  history where every line reads zero is indistinguishable from a broken
+  meter. Precision is now adaptive.
