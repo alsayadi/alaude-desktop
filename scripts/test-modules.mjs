@@ -1203,6 +1203,26 @@ console.log('\n[23/24] chat UI — offline-clean, and inline code stays inline')
   check('no other fixed overlay is hidden by opacity yet still hit-testable',
     fixedOpacityZero.length === 0, fixedOpacityZero.join(', '))
 
+  // ── the Labaik account must be visible and leaveable ──────────
+  // Signing in worked and then vanished: the credit chip rendered on one
+  // code path only, and there was nowhere at all to see who you were
+  // signed in as, what you had left, how to top up, or how to sign out.
+  // An account you cannot see or leave is worse than no account.
+  check('the settings hub has a slot for the account', /id="hub-account-slot"/.test(html))
+  check('the hub renders it on open', /renderHubAccount\(\)/.test(html))
+  check('signed-out state offers sign-in', /hub\.account\.signedOut/.test(html))
+  check('balance and remaining messages are shown', /hub\.account\.left/.test(html))
+  check('there is a way to top up', /onclick="openLabaikAccount\(\)"/.test(html))
+  check('there is a way to sign out', /labaikSignOutFromHub/.test(html))
+  check('signing out refreshes the UI rather than leaving stale credit on screen',
+    /async function labaikSignOutFromHub[\s\S]{0,400}renderLabaikBalance/.test(html))
+  check('the credit chip exists in the topbar', /id="labaik-balance"/.test(html))
+  for (const key of ['hub.account.topup', 'hub.account.signOut', 'hub.account.left',
+                     'login.labaik.title', 'login.labaik.desc']) {
+    check(`  "${key}" translated in all 3 locales`,
+      (html.match(new RegExp(`'${key.replace(/\./g, '\\.')}':`, 'g')) || []).length === 3)
+  }
+
   // The three new strings must exist in all three locales.
   for (const key of ['composer.plus.title', 'composer.state.title', 'composer.attach']) {
     check(`  "${key}" translated in all 3 locales`,

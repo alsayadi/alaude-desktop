@@ -12626,6 +12626,14 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.discovered.group': '🔎 Other models your key can use',
         'composer.plus.title': 'Add a file, a folder, or change what Labaik may do',
         'login.labaik.title': 'Sign in with Google',
+        'hub.account.signedOut': 'Labaik account',
+        'hub.account.free': 'Free credit',
+        'hub.account.renews': 'renews monthly',
+        'hub.account.left': 'about {n} messages left',
+        'hub.account.topup': 'Top up',
+        'hub.account.signOut': 'Sign out',
+        'hub.account.signOutDesc': 'Your keys and local models keep working.',
+        'hub.account.signedOutToast': 'Signed out of your Labaik account.',
         'login.labaik.badge': '$1 FREE',
         'login.labaik.desc': 'No API key needed. Get $1 of free credit — about 1,000 messages — then top up only if you want to.',
         'login.labaik.opening': 'Opening your browser…',
@@ -13048,6 +13056,14 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.discovered.group': '🔎 你的密钥可用的其他模型',
         'composer.plus.title': '添加文件、文件夹，或更改 Labaik 的权限',
         'login.labaik.title': '使用 Google 登录',
+        'hub.account.signedOut': 'Labaik 账号',
+        'hub.account.free': '免费额度',
+        'hub.account.renews': '每月续费',
+        'hub.account.left': '大约还剩 {n} 条消息',
+        'hub.account.topup': '充值',
+        'hub.account.signOut': '退出登录',
+        'hub.account.signOutDesc': '你的密钥和本地模型仍可正常使用。',
+        'hub.account.signedOutToast': '已退出 Labaik 账号。',
         'login.labaik.badge': '赠 $1',
         'login.labaik.desc': '无需 API 密钥。赠送 $1 额度（约 1,000 条消息），用完后再决定是否充值。',
         'login.labaik.opening': '正在打开浏览器…',
@@ -13455,6 +13471,14 @@ footer a { color: var(--accent); text-decoration: none; }
         'model.discovered.group': '🔎 نماذج أخرى يتيحها مفتاحك',
         'composer.plus.title': 'أضف ملفًا أو مجلدًا، أو غيّر ما يُسمح لـ لبيك بفعله',
         'login.labaik.title': 'تسجيل الدخول عبر Google',
+        'hub.account.signedOut': 'حساب لبيك',
+        'hub.account.free': 'رصيد مجاني',
+        'hub.account.renews': 'يتجدد شهريًا',
+        'hub.account.left': 'يتبقى نحو {n} رسالة',
+        'hub.account.topup': 'شحن الرصيد',
+        'hub.account.signOut': 'تسجيل الخروج',
+        'hub.account.signOutDesc': 'مفاتيحك والنماذج المحلية تستمر في العمل.',
+        'hub.account.signedOutToast': 'تم تسجيل الخروج من حساب لبيك.',
         'login.labaik.badge': '$1 مجانًا',
         'login.labaik.desc': 'بدون مفتاح API. احصل على رصيد مجاني بقيمة $1 — حوالي 1,000 رسالة — ثم اشحن فقط إذا أردت.',
         'login.labaik.opening': 'جارٍ فتح المتصفح…',
@@ -21219,6 +21243,7 @@ Title:`
       const langBtn = (code, label) => `<button class="key-save-btn" style="${i18n.lang === code ? '' : 'background:var(--bg-sidebar);color:var(--text);'}padding:5px 14px" onclick="i18n.apply('${code}'); toggleSettingsHub(); toggleSettingsHub()">${label}</button>`
       const voiceStatus = (typeof VOICE_ENABLED !== 'undefined' && VOICE_ENABLED) ? t('hub.voice.ready') : t('hub.voice.needsKey')
       body.innerHTML = `
+        <div class="hub-inline" id="hub-account-slot"></div>
         <div class="hub-inline">
           <div class="hub-inline-row"><span class="hub-card-icon">🌐</span><span class="hub-card-name">${escapeHtml(t('hub.lang'))}</span>
             <span style="display:flex;gap:6px;margin-left:auto">${langBtn('en', 'English')}${langBtn('zh', '中文')}${langBtn('ar', 'العربية')}</span></div>
@@ -21231,7 +21256,78 @@ Title:`
             <button class="key-save-btn" style="margin-left:auto;${document.documentElement.dataset.easy === '1' ? '' : 'background:var(--bg-sidebar);color:var(--text);'}padding:5px 14px" onclick="toggleEasyMode(); toggleSettingsHub(); toggleSettingsHub()">${escapeHtml(t(document.documentElement.dataset.easy === '1' ? 'hub.easy.on' : 'hub.easy.off'))}</button></div>
         </div>
         <div class="hub-grid">${cards}</div>`
+      // Rendered async because it asks the server for the live balance —
+      // the hub must open instantly, not wait on the network.
+      renderHubAccount()
       m.classList.add('show')
+    }
+
+    /**
+     * v0.8 — the Labaik account panel.
+     *
+     * Signing in worked and then vanished: the credit chip only appeared on
+     * one code path, and there was nowhere at all to see who you were
+     * signed in as, what plan you were on, how to top up, or how to sign
+     * out. An account you cannot see or leave is worse than no account.
+     */
+    async function renderHubAccount() {
+      const slot = document.getElementById('hub-account-slot')
+      if (!slot) return
+      let acc = null
+      try { acc = await window.alaude.labaikAccount?.({ refresh: true }) } catch {}
+
+      if (!acc) {
+        slot.innerHTML = `
+          <div class="hub-inline-row">
+            <span class="hub-card-icon">🔵</span>
+            <span class="hub-card-body">
+              <span class="hub-card-name">${escapeHtml(t('hub.account.signedOut', 'Labaik account'))}</span>
+              <span class="hub-card-desc">${escapeHtml(t('login.labaik.desc'))}</span>
+            </span>
+            <button class="key-save-btn" style="margin-left:auto;padding:5px 14px"
+                    onclick="toggleSettingsHub(); loginLabaikPath()">${escapeHtml(t('login.labaik.title'))}</button>
+          </div>`
+        return
+      }
+
+      const planLabel = acc.plan && acc.plan !== 'free'
+        ? `${acc.plan} · ${t('hub.account.renews', 'renews monthly')}`
+        : t('hub.account.free', 'Free credit')
+      const low = (acc.balance_micros || 0) < 200000
+      slot.innerHTML = `
+        <div class="hub-inline-row">
+          ${acc.picture ? `<img src="${escapeHtml(acc.picture)}" alt="" style="width:26px;height:26px;border-radius:50%;flex-shrink:0">` : '<span class="hub-card-icon">🔵</span>'}
+          <span class="hub-card-body">
+            <span class="hub-card-name">${escapeHtml(acc.name || acc.email)}</span>
+            <span class="hub-card-desc">${escapeHtml(acc.email)} · ${escapeHtml(planLabel)}</span>
+          </span>
+        </div>
+        <div class="hub-inline-row">
+          <span class="hub-card-icon">${low ? '⚠️' : '💳'}</span>
+          <span class="hub-card-body">
+            <span class="hub-card-name" style="${low ? 'color:#e0994a' : ''}">${escapeHtml(acc.balance_display)}</span>
+            <span class="hub-card-desc">${escapeHtml(t('hub.account.left', 'about {n} messages left').replace('{n}', Number(acc.approx_messages_left || 0).toLocaleString()))}</span>
+          </span>
+          <button class="key-save-btn" style="margin-left:auto;padding:5px 14px"
+                  onclick="openLabaikAccount()">${escapeHtml(t('hub.account.topup', 'Top up'))}</button>
+        </div>
+        <div class="hub-inline-row">
+          <span class="hub-card-icon">🚪</span>
+          <span class="hub-card-body">
+            <span class="hub-card-name">${escapeHtml(t('hub.account.signOut', 'Sign out'))}</span>
+            <span class="hub-card-desc">${escapeHtml(t('hub.account.signOutDesc', 'Your keys and local models keep working.'))}</span>
+          </span>
+          <button class="key-save-btn" style="margin-left:auto;background:var(--bg-sidebar);color:var(--text);padding:5px 14px"
+                  onclick="labaikSignOutFromHub()">${escapeHtml(t('hub.account.signOut', 'Sign out'))}</button>
+        </div>`
+    }
+
+    async function labaikSignOutFromHub() {
+      try { await window.alaude.labaikSignout?.() } catch {}
+      await refreshModelReadiness?.()
+      await renderLabaikBalance?.(false)
+      renderHubAccount()
+      showRewindToast?.(t('hub.account.signedOutToast', 'Signed out of your Labaik account.'), false)
     }
     // ⌘, — the universal macOS settings shortcut.
     document.addEventListener('keydown', (e) => {

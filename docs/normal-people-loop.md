@@ -912,3 +912,31 @@
   places, so a genuine 42-micro charge rendered as "-$0.00". A usage
   history where every line reads zero is indistinguishable from a broken
   meter. Precision is now adaptive.
+
+### Cycle 48 — the account you could not see (2026-08-06)
+- Owner, after signing in successfully: "these are not presented on the
+  client UI, i mean the account". Correct, and the audit was blunt:
+  balance chip empty and hidden, Labaik model group `display:none`, no
+  sign-out anywhere, no top-up anywhere, no account panel at all.
+- **An account you cannot see or leave is worse than no account.** Cycle
+  47 built the whole money path — sign-in, credit, metering, plans — and
+  then surfaced almost none of it. The server knew the user's name, plan
+  and balance; the app showed a blank chip.
+- Settings (⌘,) now opens with an account panel: Google avatar, name and
+  email, plan, balance with "about N messages left", a **Top up** button,
+  and **Sign out** (which says plainly that keys and local models keep
+  working). Signed out, the same slot offers Sign in with Google.
+- Signing out refreshes the model list and clears the credit chip in the
+  same breath — leaving a stale balance on screen after signing out would
+  be its own small lie.
+- Verified live end-to-end against the local server: real Google account
+  (device-link handshake), real Stripe TEST checkout session, a genuinely
+  signed webhook granting $10 (and a redelivery correctly ignored), a
+  tampered signature rejected with 400, and a metered chat on the paid
+  account. EN/中文/العربية. 378 → 391 checks.
+- **Guard added the same day, before it could bite:** with a live Stripe
+  key but no webhook secret, checkout would have created a real Checkout
+  Session — a real card charged — while the webhook that grants credit
+  returned 503. Money in, credit never. Checkout now fails closed, and
+  the E2E suite is configured into that exact half-set-up state so the
+  guard is proven rather than assumed.
